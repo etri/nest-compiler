@@ -46,6 +46,7 @@ template <> struct MappingTraits<glow::DeviceConfigHelper> {
   static void mapping(IO &io, glow::DeviceConfigHelper &info) {
     io.mapRequired("name", info.name_);
     io.mapRequired("backendName", info.backendName_);
+    io.mapRequired("dramMemory", info.dramMemory_);
     io.mapRequired("parameters", info.parameters_);
   }
 };
@@ -192,7 +193,7 @@ const char *getDotFileNodeColor(size_t index) {
 
 template <typename T> static T deserializeFromYaml(llvm::StringRef fileName) {
   T result;
-  llvm::outs() << fileName << "\n";
+//  llvm::outs() << fileName << "\n";
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> text =
       llvm::MemoryBuffer::getFileAsStream(fileName);
   assert(!text.getError() && "Unable to open file");

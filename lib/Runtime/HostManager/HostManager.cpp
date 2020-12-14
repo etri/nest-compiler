@@ -33,6 +33,8 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
 
+#include "glow/Partitioner/NestPartitioner.h"
+
 #include <glog/logging.h>
 
 #include "folly/String.h"
@@ -236,6 +238,24 @@ void HostManager::cleanupAddNetwork(llvm::ArrayRef<std::string> names) {
     processingNetworks_.erase(name);
   }
   exportMemoryCounters();
+}
+
+#include <boost/algorithm/string.hpp>
+std::vector<DeviceInfo> HostManager::getDeviceInfoList() {
+  std::vector<DeviceInfo> deviceInfoList;
+
+  for (auto &device : devices_) {
+    DeviceInfo info = device.second->getDeviceInfo();
+    info.availableMemory = device.second->getAvailableMemory();
+    info.backendName = device.second->getBackendName();
+    info.nonSupportedNodes = device.second->getParamByName("nonSupportedNodes");
+    info.supportedNodes = device.second->getParamByName("supportedNodes");
+    info.deviceID = std::atol(device.second->getParamByName("deviceID").data());
+    info.pysicalUnitCount = std::atol(device.second->getParamByName("pysicalUnitCount").data());
+
+    deviceInfoList.push_back(info);
+  }
+  return deviceInfoList;
 }
 
 Error HostManager::addNetwork(std::unique_ptr<Module> module,
@@ -571,6 +591,7 @@ Error HostManager::addNetwork(std::unique_ptr<Module> module,
   return Error::success();
 }
 
+
 std::unordered_map<std::string, std::vector<DeviceIDTy>>
 HostManager::getDevicePartitionMapping(llvm::StringRef network) {
   std::unordered_map<std::string, std::vector<DeviceIDTy>> mapping;
@@ -587,6 +608,345 @@ HostManager::getDevicePartitionMapping(llvm::StringRef network) {
   }
   return mapping;
 }
+
+Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
+                              CompilationContext &cctx, size_t exeType,std::string profilePath,
+                                            std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode) {
+  ScopeGuard debugDumpDAGGuard([&]() {
+    if (cctx.dumpFinalGraph) {
+      for (Function *F : module->getFunctions()) {
+        auto fname = strFormat("%sfinal_graph_dbg_err_%s.dot",
+                               cctx.dumpGraphPath.c_str(), F->getName().data());
+        LOG(INFO) << "Dumping final graph due to error to " << fname;
+        F->dumpDAG(fname);
+      }
+    }
+  });
+
+  /// If specified in the cctx, this will prevent Constants from being modified
+  /// until the current scope ends or the preventer is dismissed. Does so by
+  /// swapping in temporary Placeholders instead of Constants.
+  ConstantModificationPreventer constModPreventer(*module, cctx);
+  if (cctx.optimizationOpts.delayAndRecordConstantModification) {
+    constModPreventer.activate();
+  }
+
+  std::vector<std::string> names;
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    auto functions = module->getFunctions();
+    for (auto &F : functions) {
+      std::string name = F->getName();
+      auto it = networks_.find(name);
+      if (it != networks_.end() ||
+          processingNetworks_.find(name) != processingNetworks_.end()) {
+        cleanupAddNetwork(names);
+        return MAKE_ERR(
+            ErrorValue::ErrorCode::RUNTIME_ERROR,
+            "Failed to add network: already have a function called " + name);
+      }
+      // Add the network to processingNetworks_ so we know it's being worked on.
+      processingNetworks_.insert(name);
+      names.push_back(name);
+    }
+  }
+
+  // Issue a warning when loading backend specific options from the command line
+  // and the compile context also contains backend specific options.
+  if (!loadBackendSpecificOptionsOpt.empty()) {
+    if (cctx.backendOpts.backendSpecificOpts.size() != 0) {
+      VLOG_EVERY_N(1, 1000) << "Warning: backendSpecificOpts is set via the "
+                               "HostManager, ignoring previously set options.";
+    }
+    cctx.backendOpts.backendSpecificOpts =
+        deserializeStrStrMapFromYaml(loadBackendSpecificOptionsOpt);
+  } else {
+    auto ctxLoadBackendSpecificOpt =
+        cctx.backendOpts.backendSpecificOpts.find("loadBackendSpecificOptions");
+
+    if (ctxLoadBackendSpecificOpt !=
+        cctx.backendOpts.backendSpecificOpts.end()) {
+      cctx.backendOpts.backendSpecificOpts =
+          deserializeStrStrMapFromYaml(ctxLoadBackendSpecificOpt->second);
+    }
+  }
+
+  std::vector<DeviceInfo> deviceInfo = getDeviceInfoList();
+//  {
+//    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+//    for (auto &device : availableDevices_) {
+//      DeviceInfo info = devices_[device]->getDeviceInfo();
+//      info.availableMemory = devices_[device]->getAvailableMemory();
+//      info.backendName = devices_[device]->getBackendName();
+//      info.nonSupportedNodes =
+//          devices_[device]->getParamByName("nonSupportedNodes");
+//      info.supportedNodes = devices_[device]->getParamByName("supportedNodes");
+//      deviceInfo.push_back(info);
+//    }
+//  }
+
+  // Optimize Functions only if we don't have any backendSpecificNodeInfo,
+  // because if we do then the Functions were already optimized and Nodes had
+  // extra info mapped to them, so we don't want to mutate the Function. Also
+  // skip optimizations if we're loading an AOT optimized model.
+  const bool skipOptimizations =
+      cctx.loadingAOTModel || !cctx.backendOpts.backendSpecificNodeInfo.empty();
+
+  // Flag to check whether we are in profiling mode.
+  bool profilingMode =
+      (cctx.precisionConfig.quantMode == QuantizationMode::Profile);
+
+  // Perform a round of target-independent graph optimizations. This helps the
+  // partitioner to do its job more efficiently.
+  // When profiling we skip the optimization since in order for the quantization
+  // to be done properly same optimizations must be performed until the lowering
+  // stage for both the profiling and quantization path. Since the quantization
+  // for Ahead Of Time mode lacks this optimization we must disable it also.
+  if (!skipOptimizations && !profilingMode) {
+    for (Function *F : module->getFunctions()) {
+      auto err = optimizeFunctionBeforeLowering(F, cctx);
+      if (err) {
+        {
+          std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+          cleanupAddNetwork(names);
+        }
+        return err;
+      }
+    }
+  }
+  NestPartitioner partitioner(module.get(), deviceInfo, skipOptimizations, PartitionConfig(), quantFileName);
+  if (cctx.enableP2P || cctx.enableDRT) {
+    partitioner.setContextCount(cctx.maxActiveRequestsPerInstance);
+  } else {
+    partitioner.setContextCount(2);
+  }
+  DAGListTy nodeList;
+  //auto result = partitioner.partition(cctx);
+  std::cout << "bundle dir = " << bundleDir << std::endl;
+  partitioner.getAppGenerator()->setOutputDir(bundleDir);
+  auto result = partitioner.partition(cctx, exeType, profilePath, partitionPlanFile, profileMode);
+  if (result) {
+    nodeList = std::move(result.get());
+  } else {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    cleanupAddNetwork(names);
+    return result.takeError();
+  }
+
+  if (cctx.precisionConfig.quantMode == QuantizationMode::Profile) {
+    // Since for profiling the provisioner will be reset, we only allow one
+    // network in one HM.
+    if (networks_.size() > 0) {
+      return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
+                      "For quantization profiling flow, there can't be other "
+                      "registered networks before this one");
+    }
+    // For profiling, we use CPU backend. Overwrite Provisioner and Executor
+    // to force the network is compiled and run in profilingBackend. backend.
+    size_t devicesNum = devices_.size();
+    for (size_t i = 0; i < devicesNum; i++) {
+      auto name = devices_[i]->getDeviceConfig().name;
+      auto config = glow::make_unique<DeviceConfig>(profilingBackend, name);
+      devices_[i] = std::unique_ptr<DeviceManager>(
+          DeviceManager::createDeviceManager(*config));
+      RETURN_IF_ERR(devices_[i]->init());
+    }
+    provisioner_.reset(new Provisioner(devices_));
+    executor_.reset(new ThreadPoolExecutor(devices_, config_.executorThreads));
+  }
+
+  // Now that we've partitioned and optimized, do some verification based on the
+  // dummy mode we're using, if any.
+  if (cctx.precisionConfig.replaceDummyTQPs ||
+      cctx.precisionConfig.loadUniquedDummyQParams) {
+    RETURN_IF_ERR(module->verifyDummyQParams(
+        cctx.precisionConfig.loadUniquedDummyQParams));
+  }
+
+  // If we prevented constant modification then run constant folding with
+  // recording now. Record so that if we are going to serialize we can embed the
+  // constant folding subgraphs in the Glow ONNX model.
+  ConstantFoldingRecordMap record;
+  if (cctx.optimizationOpts.delayAndRecordConstantModification) {
+    constModPreventer.deactivateAndCleanup();
+
+    RETURN_ERR_IF_NOT(nodeList.size() == 1, "Expect only one DAG.");
+    const auto &dag = *nodeList.begin();
+    for (auto &dagNode : dag.nodes) {
+      Function *F = module->getFunction(dagNode->name);
+      RETURN_ERR_IF_NOT(
+          F, strFormat("Function %s not found", dagNode->name.data()));
+
+      ConstantFoldingRecordMap currRecord = constantFoldAndRecord(F, cctx);
+      record.insert(currRecord.begin(), currRecord.end());
+      runDCEPass(F, cctx);
+
+      // Verify the Function is valid after constant folding takes place.
+      Backend &B = provisioner_->getBackend(dagNode->backendName);
+      RETURN_ERR_IF_NOT(
+          B.verify(*F, cctx.verboseCompile),
+          "Unsupported node(s) found after delayed constant folding Function " +
+          F->getName().str() + " for backend " + B.getBackendName());
+    }
+  }
+
+  if (!cctx.loadingAOTModel) {
+    if (cctx.callDAGOptimizer) {
+#if FACEBOOK_INTERNAL
+      auto optDagErr = optimizeDAG(nodeList, *provisioner_, *module, deviceInfo,
+                                   cctx, record);
+      if (optDagErr) {
+        std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+        cleanupAddNetwork(names);
+        return optDagErr;
+      }
+#endif /* FACEBOOK_INTERNAL */
+    } else {
+      // If not using the DAG optimizer, iterate over the DAGs and call
+      // transformPostOptPipeline() on the Functions.
+      for (const auto &dag : nodeList) {
+        for (auto &dagNode : dag.nodes) {
+          Function *F = module->getFunction(dagNode->name);
+          RETURN_ERR_IF_NOT(
+              F, strFormat("Function %s not found", dagNode->name.data()));
+
+          if (cctx.optimizationOpts.onlyLowerFuns.count(F)) {
+            continue;
+          }
+
+          Backend &B = provisioner_->getBackend(dagNode->backendName);
+          RETURN_IF_EXPECTED_IS_ERR(B.transformPostOptPipeline(F, cctx));
+
+          RETURN_ERR_IF_NOT(
+              B.verify(*F, cctx.verboseCompile),
+              "Unsupported node(s) found after transformPostOptPipeline() " +
+              F->getName().str() + " for backend " + B.getBackendName());
+        }
+      }
+    }
+  }
+
+  // If requested, serialize the resulting DAG that was just optimized and
+  // partitioned.
+  if (cctx.serializeCompiledDAG) {
+    std::string loc;
+    char *envSpecifiedSerializationPath = getenv("GLOW_DAG_SERIALIZATION_LOC");
+    if (!envSpecifiedSerializationPath) {
+      loc = nodeList.begin()->root->name + ".onnxtxt";
+    } else {
+      loc = std::string(envSpecifiedSerializationPath);
+    }
+
+    LOG(INFO) << "Serializing final compiled DAG to " << loc;
+    {
+      llvm::StringMap<std::string> extraMetadataProps;
+      if (cctx.precisionConfig.originNameToTQPMap) {
+        RETURN_IF_ERR(ONNXModelWriter::insertLoaderNameUniqueOffsetMetadata(
+            extraMetadataProps, *cctx.precisionConfig.originNameToTQPMap));
+      }
+      Error writeErr = Error::empty();
+      ONNXModelWriter onnxWR(
+          loc, nodeList, 7, 9, &writeErr,
+          /* textMode */ true, /* zipMode */ false,
+          /* includeConstantData */ false, extraMetadataProps, record,
+          cctx.backendOpts.backendSpecificNodeInfo, &cctx.loadedPHNames,
+          &cctx.staticPlaceholderTypesForAOT);
+      RETURN_IF_ERR(writeErr);
+    }
+
+    // If we're using AOT DAG optimizer then skip provisioning.
+    if (cctx.callDAGOptimizer && cctx.useDAGOptimizerAOTMode) {
+      LOG(INFO) << "Skipping provisioning because DAG optimizer and AOT mode "
+                   "were enabled.";
+      {
+        std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+        cleanupAddNetwork(names);
+      }
+      debugDumpDAGGuard.dismiss();
+      cleanupConstantFolding(*module, record);
+      if (cctx.dumpFinalGraph) {
+        for (Function *F : module->getFunctions()) {
+          auto fname =
+              strFormat("%sfinal_graph_aot_%s.dot", cctx.dumpGraphPath.c_str(),
+                        F->getName().data());
+          LOG(INFO) << "Dumping final graph to " << fname;
+          F->dumpDAG(fname);
+        }
+      }
+      return Error::success();
+    }
+  }
+
+  // Now that we've serialized the model if requested, cleanup the temporary
+  // Functions and PHs used for constant folding.
+  cleanupConstantFolding(*module, record);
+
+  //auto err = provisioner_->provision(nodeList, *module, cctx);
+  auto err = provisioner_->provisionForNestPartition(nodeList, *module, cctx, bundleDir);
+  if (err) {
+    {
+      std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+      cleanupAddNetwork(names);
+    }
+    return err;
+  }
+  debugDumpDAGGuard.dismiss();
+
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    /// Calculate networkMaxActive requests. Then update
+    /// config_.maxActiveRequests This will be maxActiveRequestsPerInstance *
+    /// instanceCount * minReplications or config_.maxActiveRequests whichever
+    /// is smaller.
+
+    // Find the minimum on device replication.
+    unsigned minReplications{1};
+    for (auto &node : nodeList) {
+      for (auto &dag : node.nodes) {
+        minReplications = std::min(dag->replicationCount, minReplications);
+      }
+    }
+    unsigned product{0};
+    if (nodeList.size() && nodeList[0].nodes.size()) {
+      product = nodeList[0].nodes[0]->instanceCount *
+                cctx.maxActiveRequestsPerInstance * minReplications;
+    } else {
+      return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
+                      "NodeList is empty.");
+    }
+    unsigned maxActiveRequests = config_.maxActiveRequests;
+    config_.maxActiveRequests = std::min(product, maxActiveRequests);
+
+    // Create pool of cachedExecutionStates.
+    for (auto &node : nodeList) {
+      // Note: currently getNextNetworkExecutionState assumes that pool size is
+      // >= currentInFlight requests, so we set pool size to maxActiveRequests.
+      executor_->createPool(node.root.get(), config_.maxActiveRequests,
+                            cctx.enableP2P || GlowEnableP2P,
+                            cctx.enableDRT || GlowEnableDRT);
+    }
+  }
+  // Clear constants contents from the module then put it in a
+  // shared_ptr to be shared between all of the networks created from each
+  // function in the module.
+  if (!cctx.skipModuleStrip) {
+    module->strip();
+  }
+  auto sharedModule = std::shared_ptr<Module>(std::move(module));
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    for (auto &node : nodeList) {
+      LOG(INFO) << "Successfully compiled and provisioned " << node.root->name;
+      auto &networkData = networks_[(node.root)->name];
+      networkData.dag = std::move(node);
+      networkData.module = sharedModule;
+    }
+    cleanupAddNetwork(names);
+  }
+
+  return Error::success();
+}
+
 
 Error HostManager::removeNetwork(llvm::StringRef networkName) {
   std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
@@ -926,7 +1286,9 @@ bool runtime::loadDeviceConfigsFromFile(
     auto parameters = getBackendParams(lists[i].parameters_.str);
     auto config = glow::make_unique<runtime::DeviceConfig>(configBackendName,
                                                            name, parameters);
-    config->setDeviceMemory(memSize);
+    //msyu
+    //config->setDeviceMemory(memSize);
+    config->setDeviceMemory(stoi(lists[i].dramMemory_));
     configs.push_back(std::move(config));
   }
   return true;

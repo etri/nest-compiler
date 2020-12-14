@@ -4948,10 +4948,11 @@ template <class T> bool fuseActivation(T *N, Function *F, const Backend *B) {
   }
 
   // currently not to support asymmetric quantization fusion.
-  if (N->getResult().getType()->isQuantizedType() &&
-      ((N->getResult().getType()->getOffset() != 0) ||
-       (activationNV.getType()->getOffset() != 0))) {
-    return false;
+  if (N->getResult().getType()->isQuantizedType()) {
+    if ((N->getResult().getType()->getOffset() != 0) ||
+        (activationNV.getType()->getOffset() != 0)) {
+      return false;
+    }
   }
 
   N->setFusedActivation(activationType);
@@ -5134,9 +5135,11 @@ void glow::transformForPrecisionMode(const Backend &B, Function *F,
   case QuantizationMode::Quantize: {
     LOG_SCOPE(F->getLogContext(), "quantization::quantizeFunction")
 
-    quantization::quantizeFunction(F, precConfig.quantConfig, B,
-                                   *cctx.loweredInfoMap,
-                                   precConfig.precisionModeKindSet);
+    if(B.getBackendName().compare("CPU")) {
+      quantization::quantizeFunction(F, precConfig.quantConfig, B,
+                                     *cctx.loweredInfoMap,
+                                     precConfig.precisionModeKindSet);
+    }
     break;
   }
 
@@ -5240,6 +5243,7 @@ Error glow::optimizeFunction(Function *F, const Backend &B,
           "Unsupported node(s) found after only-lowering path for Function " +
               F->getName().str() + " for backend " + B.getBackendName());
     }
+
     return Error::success();
   }
 
@@ -5255,18 +5259,20 @@ Error glow::optimizeFunction(Function *F, const Backend &B,
   if (precConfig.quantMode == QuantizationMode::Profile) {
     cctx.info.graphPreLowerHash = F->getHash();
   } else if (precConfig.quantMode == QuantizationMode::Quantize) {
-    const auto &quantConfig = cctx.precisionConfig.quantConfig;
-    if (quantConfig.checkGraphPreLowerHash) {
-      auto profileHash = quantConfig.graphPreLowerHash;
-      auto currentHash = F->getHash();
-      auto profileHashStr =
-          strFormat("Profile graph hash: 0x%" PRIX64, (uint64_t)(profileHash));
-      auto currentHashStr =
-          strFormat("Current graph hash: 0x%" PRIX64, (uint64_t)(currentHash));
-      RETURN_ERR_IF_NOT(profileHash == currentHash,
-                        strFormat(graphPreLowerHashCheckErrMsg,
-                                  profileHashStr.c_str(),
-                                  currentHashStr.c_str()));
+    if(B.getBackendName().compare("CPU")) {
+      const auto &quantConfig = cctx.precisionConfig.quantConfig;
+      if (quantConfig.checkGraphPreLowerHash) {
+        auto profileHash = quantConfig.graphPreLowerHash;
+        auto currentHash = F->getHash();
+        auto profileHashStr = strFormat("Profile graph hash: 0x%" PRIX64,
+                                        (uint64_t)(profileHash));
+        auto currentHashStr = strFormat("Current graph hash: 0x%" PRIX64,
+                                        (uint64_t)(currentHash));
+        RETURN_ERR_IF_NOT(profileHash == currentHash,
+                          strFormat(graphPreLowerHashCheckErrMsg,
+                                    profileHashStr.c_str(),
+                                    currentHashStr.c_str()));
+      }
     }
   }
 
@@ -5294,9 +5300,9 @@ Error glow::optimizeFunction(Function *F, const Backend &B,
   // before folding Activation into Conv.
   ::glow::optimize(F, cctx);
 
-  // Fold activations before lowering to enable cases which would not fuse after
-  // lowering. This concerns particularly convolution&relu since relu will be
-  // lowered to max(0, x).
+  // Fold activations after optimization.
+  // Quantization nodes should be optimized before folding Activation in to
+  // Conv.
   foldActivations(F, cctx, &B);
 
   // Lower once more, in case precision transform has introduced operators that

@@ -1,0 +1,18 @@
+INCLUDE_DIRECTORIES(include ../vtalib/3rdparty/dlpack/include)
+INCLUDE_DIRECTORIES(include ../vtalib/3rdparty/dmlc-core/include)
+
+if(GLOW_WITH_VTASIM)
+    INCLUDE_DIRECTORIES(include ../vtalib/include/simulator)
+else()
+    INCLUDE_DIRECTORIES(include ../vtalib/include/zcu102)
+endif()
+
+
+INCLUDE_DIRECTORIES(include ../vtalib/include/Bundle)
+FILE(GLOB subdirs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/*)
+foreach(object ${subdirs})
+    if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${object})
+        message(STATUS "Adding ${object} Bundles.")
+        add_subdirectory(${object})
+    endif()
+endforeach()

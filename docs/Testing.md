@@ -1,6 +1,6 @@
-## Testing the Glow compiler
+## Testing the NEST-C
 
-The Glow test suite contains four major categories: unit tests, regression
+NEST-C test suite contains four major categories: unit tests, regression
 tests, the model loader, integrated tests and example programs.  
 
 Unit tests are the small tests that stress specific parts of the compiler.  
@@ -15,7 +15,7 @@ and regression tests run "ninja test".
 
 ## Model Loader
 
-We test the correctness of the Glow implementation by loading Caffe2 and ONNX
+We test the correctness of the NEST-C implementation by loading Caffe2 and ONNX
 models and executing them end-to-end.
 
 ### Image Classification
@@ -28,7 +28,7 @@ between zero and one, or negative 128 to positive 128? The user needs to be
 aware of these things when running the models. The script in the directory
 'utils/' downloads a number of pre-trained networks that we can use for testing.
 
-The Glow build scripts copy a few sample images and a run script that tests the
+NEST-C build scripts copy a few sample images and a run script that tests the
 `image-classifier` program. The script can be executed with the command:
 
   ```
@@ -77,7 +77,7 @@ Enter a sentence in English to translate to German: My favorite sport is basketb
 mein Lieblingssport ist Basketball .
 ```
 
-This program expects a sequence-to-sequence model with beam search. Because Glow
+This program expects a sequence-to-sequence model with beam search. Because NEST-C
 currently does not support models that contain control flow (e.g. the
 [RecurrentNetwork operator from
 Caffe2](https://caffe2.ai/docs/operators-catalogue.html#recurrentnetwork)), the
@@ -112,7 +112,7 @@ False`. This script is heavily based on the MNIST.py tutorial from Caffe2.
 
 The `caffe2_pb_runner.py` script in `utils/` loads and runs a pre-trained model
 using the protobuf files saved using `caffe2_train_and_dump_pb.py`. This can be
-used to compare the output from Glow to Caffe2. Its usage is similar to running
+used to compare the output from NEST-C to Caffe2. Its usage is similar to running
 the `image-classifier`, which is found in the `run.sh` script in `tests/images/`. For
 example, the following command will run the pre-trained resnet50 model using
 Caffe2:
@@ -120,30 +120,6 @@ Caffe2:
 ```
 python caffe2_pb_runner.py -i [location_of_image] -d resnet50
 ```
-
-## Integrated testing
-
-Glow also comes with tests integrated with the build environment for our command
-line tools. We run those tests as part of our continuous integration (CI).
-
-Run them as part of your local build using the following
-```bash
-cmake -G Ninja <glow_src>  -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_PREFIX_PATH=/usr/local/opt/llvm         \
-      -DGLOW_MODELS_DIR=<downloaded_c2_models>
-```
-Followed by
-```bash
-ninja check_expensive
-```
-
-Note: `ninja check_expensive` runs all of the tests that `ninja check` runs plus
-any tests that have been marked as EXPENSIVE using add_glow_test(EXPENSIVE ...)
-such as the integration tests.
-
-Note: The difference between `ninja test` and `ninja check` is that
-`ninja check` makes sure the build dependencies are current before
-running the tests.
 
 ## Example programs
 

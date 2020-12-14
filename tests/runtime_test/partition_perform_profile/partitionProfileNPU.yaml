@@ -1,0 +1,25 @@
+---
+backendName: NestPU
+commCost: 0.3
+Add: |
+    4-float:2.85
+Sub: |
+    4-float:2.85
+Reshape: |
+    50176-float:1
+Relu: |
+    3211264-float:1.84
+Transpose: |
+    451584-float:1
+Reshape: |
+    451584-float:1
+Save: |
+    451584-float:1
+# input-size CompCost(ms)
+Convolution: |
+    50176-float-64-5-1:5
+# input-size channel kernel_shape stride computation_cost
+Convolution-Relu: |
+    50176-float-64-5-1:6
+...
+

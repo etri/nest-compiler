@@ -58,6 +58,8 @@ protected:
   /// Link to the function holding this node.
   Function *parent_{nullptr};
 
+  std::string varName_;
+
 public:
   Node(Kinded::Kind k, llvm::StringRef name)
       : Named(name), Kinded(k), predicate_(this, nullptr), parent_(nullptr) {}
@@ -182,6 +184,13 @@ public:
   ElemKind getElementType(unsigned resNo) const;
   llvm::ArrayRef<dim_t> dims(unsigned resNo) const;
   /// @}
+  //for C/C++ code generation
+  std::string getVarName(){
+      if(varName_.size() == 0) {
+          varName_ = "var" + getName().str();
+      }
+      return varName_;
+  }
 
 protected:
   /// When constructing the node, add a new result of type \p T.

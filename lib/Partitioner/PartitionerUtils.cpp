@@ -547,4 +547,105 @@ void logPartitionInfo(const NodeToFunctionMap &partitions) {
     }
   }
 }
+
+
+    int getDataType(const char* typeStr)
+    {
+        int kind = 0;
+        std::string type(typeStr);
+        if (!type.compare("float")) {
+            kind = (int)ElemKind::FloatTy;
+        } else if (!type.compare("float16")) {
+            kind = (int)ElemKind::Float16Ty;
+        } else if (!type.compare("int8q")) {
+            kind = (int)ElemKind::Int8QTy;
+        } else if (!type.compare("int16q")) {
+            kind = (int)ElemKind::Int16QTy;
+        } else if (!type.compare("int32q")) {
+            kind = (int)ElemKind::Int32QTy;
+        } else if (!type.compare("int32")) {
+            kind = (int)ElemKind::Int32ITy;
+        } else if (!type.compare("int64")) {
+            kind = (int)ElemKind::Int64ITy;
+        } else if (!type.compare("bool")) {
+            kind = (int)ElemKind::BoolTy;
+        } else {
+            LOG(FATAL) << strFormat("Model input type \"%s\" not supported",
+                                    std::string(type).c_str());
+        }
+
+        return kind;
+    }
+
+    std::string getDataTypeStr(ElemKind type)
+    {
+        // string type(typeStr);
+        if (type == ElemKind::FloatTy) {
+            return "float";
+        } else if (type == ElemKind::Float16Ty) {
+            return "float16";
+        } else if (type == ElemKind::Int8QTy) {
+            return "int8q";
+        } else if (type == ElemKind::Int16QTy) {
+            return "int16q";
+        } else if (type == ElemKind::Int32QTy) {
+            return "int32q";
+        } else if (type == ElemKind::Int32ITy) {
+            return "int32";
+        } else if (type == ElemKind::Int64ITy) {
+            return "int64";
+        } else if (type == ElemKind::BoolTy) {
+            return "bool";
+        } else {
+            LOG(FATAL) << strFormat("Model input type \"%s\" not supported");
+        }
+
+        return "";
+    }
+
+    std::string getDimArrayStr(TypeRef value)
+    {
+        std::string str ="";
+        if(value->numSizes_ <= 0) return str;
+
+        for(int i = 0; i < value->numSizes_; i++) {
+            std::string dimstr = std::to_string(value->sizes_[i]);
+
+            if(i > 0) {
+                str = str + "-";
+            }
+            str = str + dimstr;
+
+        }
+        return str;
+    }
+
+    void printGraphNodes(Function* function)
+    {
+        std::cout << "--------- printGraphNodes -----------" << std::endl;
+
+        BFSLevel bfs = getBFSLevel(function);
+        size_t level = bfs.size();
+
+        //Get initial partition based on the cost of each node (operation)
+        for (int i = level - 1; i >= 0; i--) {
+            std::cout << "i = " << i << std::endl;
+            for (size_t j = 0; j < bfs[i].size(); j++) {
+                //std::cout << "i = " << i << std::endl;
+                //std::cout << "j = " << j << std::endl;
+
+                Node *node = bfs[i][j];
+
+                if (bfs[i].size() > 1) {
+                    std::cout << "==  Parallel  Nodes == " << std::endl;
+                }
+                std::cout << "j = " << j << std::endl;
+                std::cout << "kind name = " << node->getKindName() << std::endl;
+//        std::cout << "size = " << node->getNumInputs() << std::endl;
+                std::cout << "node name = " << node->getName().str() << std::endl;
+
+            }
+        }
+    }
+
 } // namespace glow

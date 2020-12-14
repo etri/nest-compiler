@@ -74,6 +74,11 @@ struct DeviceInfo {
   float peakSramBw;
   /// Peak ingress/egress PCI-E bandwidth from device in bytes/second.
   float peakPCIeBw;
+
+  //for the NEST compiloer
+  std::vector<std::string> fusionNodes;
+  size_t deviceID;
+  size_t pysicalUnitCount;
 };
 
 /// Data structure that tracks how many outstanding work items remain for a

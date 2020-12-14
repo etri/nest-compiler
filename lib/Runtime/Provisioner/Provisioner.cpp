@@ -663,6 +663,427 @@ Error Provisioner::provision(DAGListTy &networks, Module &module,
   return Error::success();
 };
 
+Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module,
+                              CompilationContext &cctx, std::string bundleDir) {
+
+  // Check that the requested networks don't collide with the names of any other
+  // networks being added.
+  std::vector<std::string> localActiveNames;
+  RETURN_IF_ERR(checkActiveNetworks(networks, localActiveNames));
+
+  // Walk the networks and group by logicalDeviceId.
+  auto logicalDevices = generateLogicalDevices(networks);
+
+  if (cctx.backendOpts.collectConstants) {
+    VLOG(1) << "Warning: collectConstants is set in a Runtime compile, "
+               "ignoring it.";
+  }
+  if (cctx.backendOpts.backendHints.SRAMPrioritization.size() != 0 ||
+      cctx.backendOpts.backendHints.executionUnits) {
+    VLOG(1) << "Warning: backendHints is set in a Runtime compile, "
+               "ignoring it.";
+  }
+
+  // Set collectConstants to false, this is because the DeviceManager will
+  // handle moving constants to the device, this way we can eliminate one
+  // copy operation.
+  cctx.backendOpts.collectConstants = false;
+
+  // Calculate the size of each logical device.
+  auto logicalDeviceSize = calculateLogicalDeviceSize(logicalDevices);
+
+  // Get available memory for all devices.
+  std::vector<std::pair<DeviceIDTy, uint64_t>> deviceMemory;
+  for (unsigned i = 0; i < devices_.size(); i++) {
+    uint64_t availableMemory = devices_[i]->getAvailableMemory();
+    deviceMemory.push_back(std::make_pair(i, availableMemory));
+  }
+
+  // Get available device memory, create a map of vectors for each backend kind
+  std::map<std::string, std::vector<std::pair<DeviceIDTy, uint64_t>>>
+      deviceMemoryMap;
+  for (unsigned i = 0; i < devices_.size(); i++) {
+    uint64_t availableMemory = devices_[i]->getAvailableMemory();
+
+    deviceMemoryMap[devices_[i]->getBackendName()].push_back(
+        std::make_pair(i, availableMemory));
+  }
+
+  // Sort all vectors in descending order of available memory.
+  for (auto &sizes : deviceMemoryMap) {
+    std::sort(sizes.second.begin(), sizes.second.end(), sortMostMemory);
+  }
+
+  // Generate assignments between physical and logical devices.
+  auto deviceAssignments = generateDeviceAssignments(
+      logicalDeviceSize, deviceMemoryMap, logicalDevices);
+
+  // Check for errors.
+  if (!deviceAssignments) {
+    // If and error occured, clean up provisioning state and return
+    // the error.
+    cleanupProvision(localActiveNames, {});
+    return deviceAssignments.takeError();
+  }
+  auto assignments = std::move(*deviceAssignments);
+
+  // Container for duplicated functions and map tracking remaining installs for
+  // a duplicated function.
+  std::map<std::string, std::unique_ptr<CompiledFunction>> duplicatedFunctions;
+  std::map<DAGNode *, unsigned> remainingDuplications;
+
+  // Map from Placeholder* to DeviceManager, this is used for deferred weight
+  // loading.
+  std::unordered_map<Placeholder *, std::vector<unsigned>>
+      placeholderToDeviceManager;
+  if (cctx.deferredWeightLoader) {
+    // Populate placeholdeToDeviceManager map.
+    for (auto &assignment : assignments) {
+      for (const auto &node : logicalDevices[assignment.first]) {
+        Function *function = module.getFunction(node->name);
+        for (auto PH : function->findPlaceholders()) {
+          if (PH->isStatic()) {
+            placeholderToDeviceManager[PH].push_back(assignment.second);
+          }
+        }
+      }
+    }
+  } else {
+    // Make sure there are no static placeholders.
+    for (auto PH : module.getPlaceholders()) {
+      if (PH->isStatic()) {
+        return MAKE_ERR(
+            ErrorValue::ErrorCode::RUNTIME_ERROR,
+            llvm::formatv("Error Placholder: {0} is marked as static but no "
+                          "deferredWeightLoader is provided.",
+                          PH->getName())
+                .str());
+        ;
+      }
+    }
+  }
+
+  std::cout << std::endl << "Generating partition code.." << std::endl << std::endl;
+
+  // Compile and load.
+  // This is done one logical device at a time. All functions in a logical
+  // device are compiled and then added to their assigned device. If a function
+  // is in multiple logical devices it is stored so that it only needs to be
+  // compiled once.
+  std::map<DeviceIDTy, std::vector<std::string>> addedNetworks;
+  for (auto &assignment : assignments) {
+    auto logicalDevice = assignment.first;
+    auto physicalDevice = assignment.second;
+    auto deviceBackendName = logicalDevices[logicalDevice][0]->backendName;
+    FunctionMapTy functionMap;
+    // Container for the compiledFunctions for this logicalDevice.
+    std::map<std::string, std::unique_ptr<CompiledFunction>> compiledFunctions;
+
+    for (auto &node : logicalDevices[logicalDevice]) {
+      // Check if this is a duplicated function that has already been compiled.
+      if (duplicatedFunctions.find(node->name) != duplicatedFunctions.end()) {
+        functionMap.emplace(node->name, duplicatedFunctions[node->name].get());
+        // Add replications.
+        for (unsigned i = 1; i < node->replicationCount; i++) {
+          auto replicatedName = getReplicatedName(node->name, i);
+          functionMap.emplace(replicatedName,
+                              duplicatedFunctions[replicatedName].get());
+        }
+
+        remainingDuplications[node] -= 1;
+      } else {
+        // Compile and add to function map.
+        auto options = cctx.backendOpts;
+        options.backendHints = node->backendHints;
+        // Insert all options loaded in the Partitioner alongside options
+        // previously inserted, with Partitioner options taking precedence in
+        // case of a collision of keys.
+        for (auto &it : node->backendSpecificOpts) {
+          options.backendSpecificOpts[it.first] = it.second;
+        }
+
+        Function *function = module.getFunction(node->name);
+        if (backends_.find(deviceBackendName) == backends_.end()) {
+          // Return error requested device type not found.
+          return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_DEVICE_NOT_FOUND,
+                          "Unable to find device of type: " +
+                          deviceBackendName);
+        }
+
+        std::unordered_map<std::string, std::unique_ptr<glow::CompiledFunction>>
+            compiledReplications;
+        // Before we compile clone the function so we can replicate it on the
+        // device.
+        for (unsigned i = 1; i < node->replicationCount; i++) {
+          std::string replicatedName =
+              getReplicatedName(function->getName(), i);
+          llvm::DenseMap<const Node *, Node *> oldToNewMap;
+          auto *clonedFunction = function->clone(replicatedName, &oldToNewMap);
+          RETURN_IF_ERR(propagateBackendSpecificNodeInfo(
+              function, clonedFunction, oldToNewMap,
+              options.backendSpecificNodeInfo,
+              cctx.backendOpts.backendSpecificNodeInfo));
+          auto compiledOrErr2 =
+              backends_[deviceBackendName]->compile(clonedFunction, options);
+          if (!compiledOrErr2) {
+            cleanupProvision(localActiveNames, {});
+            return compiledOrErr2.takeError();
+          }
+          auto compiled2 = std::move(*compiledOrErr2);
+          functionMap.emplace(replicatedName, compiled2.get());
+          compiledReplications.emplace(replicatedName, std::move(compiled2));
+        }
+
+        auto compiledOrErr =
+            backends_[deviceBackendName]->compile(function, options);
+
+        // here!, msyu
+        if (deviceBackendName.compare("Interpreter") &&
+            deviceBackendName.compare("VTAInterpreter")) {
+
+          // Create bundle directory if not exists.
+          if (!llvm::sys::fs::is_directory(bundleDir)) {
+            llvm::sys::fs::create_directory(bundleDir);
+          }
+
+          std::cout << "Partition name = " << function->getName().str() << std::endl;
+
+          backends_[deviceBackendName]->save(function, bundleDir + "/",
+                                             function->getName(),
+                                             function->getName());
+        }
+
+        // Note: This needs to come after compile above because compile may
+        // modify the Function as well.
+        if (cctx.dumpFinalGraph) {
+          auto fname = strFormat(
+              "%sfinal_graph_%s_%s.dot", cctx.dumpGraphPath.c_str(),
+              deviceBackendName.c_str(), function->getName().str().c_str());
+          LOG(INFO) << "Dumping final graph to " << fname;
+          function->dumpDAG(fname);
+        }
+
+        if (GlowDumpCompilationLog) {
+          llvm::SmallString<64> path;
+          std::string prefix =
+              llvm::formatv("{0}-{1}", cctx.compilationLogPrefix,
+                            function->getName())
+                  .str();
+          auto tempFileRes =
+              llvm::sys::fs::createTemporaryFile(prefix, "log", path);
+          if (tempFileRes.value() != 0) {
+            LOG(ERROR)
+                << "Failed to create temp file for Glow compilation log: "
+                << tempFileRes;
+          }
+
+          function->getLogContext()->dumpLog(path);
+        }
+
+        // Check to see if an error was encountered while compiling.
+        if (!compiledOrErr) {
+          // If and error occured, clean up provisioning state and return
+          // the error.
+          cleanupProvision(localActiveNames, {});
+          return compiledOrErr.takeError();
+        }
+        auto compiled = std::move(*compiledOrErr);
+
+        // Dump backend-specific IR
+        if (GlowDumpBackendSpecificIRJSON) {
+          compiled->dumpJSON(strFormat("%sbackend_specific_ir_%s.json",
+                                       cctx.dumpGraphPath.c_str(),
+                                       function->getName().str().c_str()));
+        }
+
+        node->runtimeBundle =
+            glow::make_unique<RuntimeBundle>(compiled->getRuntimeBundle());
+
+        functionMap.emplace(node->name, compiled.get());
+        // If this function is in more than one logical device store it for
+        // reuse.
+        if (node->logicalDevices.size() > 1) {
+          duplicatedFunctions.emplace(node->name, std::move(compiled));
+          for (unsigned i = 1; i < node->replicationCount; i++) {
+            std::string replicatedName =
+                getReplicatedName(function->getName(), i);
+            auto compiled2 = std::move(compiledReplications[replicatedName]);
+            duplicatedFunctions.emplace(replicatedName, std::move(compiled2));
+          }
+
+          remainingDuplications[node] = node->logicalDevices.size() - 1;
+        } else {
+          compiledFunctions.emplace(node->name, std::move(compiled));
+          for (unsigned i = 1; i < node->replicationCount; i++) {
+            std::string replicatedName =
+                getReplicatedName(function->getName(), i);
+            auto compiled2 = std::move(compiledReplications[replicatedName]);
+            compiledFunctions.emplace(replicatedName, std::move(compiled2));
+          }
+        }
+      }
+    }
+    // Now that the functions are compiled add them to their assigned device
+    // then cleanup.
+    std::promise<void> addPromise;
+    auto ready = addPromise.get_future();
+    std::unique_ptr<Error> addErr;
+    devices_[physicalDevice]->addNetwork(
+        &module, functionMap,
+        [&addErr, &addPromise](const Module *, Error err) {
+          addErr = glow::make_unique<Error>(std::move(err));
+          addPromise.set_value();
+        });
+    ready.wait();
+    DCHECK_NOTNULL(addErr.get());
+    if (*addErr.get()) {
+      cleanupProvision(localActiveNames, addedNetworks);
+      return std::move(*addErr.get());
+    }
+    // Add networks successfully loaded on device to addedNetworks, this way if
+    // we fail later we can evict them.
+    for (auto &node : logicalDevices[logicalDevice]) {
+      addedNetworks[physicalDevice].push_back(node->name);
+    }
+
+    // Free up memory no longer needed by the compiledFunction.
+    for (auto &func : compiledFunctions) {
+      func.second->freeCompilationResources();
+    }
+    {
+      // Move compiled functions from compiledFunctions to functions_.
+      std::lock_guard<std::mutex> functionsLock(functionsLock_);
+      for (auto &func : compiledFunctions) {
+        functions_.emplace(func.first, std::move(func.second));
+      }
+      // Check if any of the duplicated functions can also be moved.
+      for (auto iter = remainingDuplications.begin();
+           iter != remainingDuplications.end();) {
+        const auto &func = *iter;
+        if (func.second == 0) {
+
+          for (unsigned i = 1; i < func.first->replicationCount; i++) {
+            std::string replicatedName = getReplicatedName(func.first->name, i);
+            duplicatedFunctions[replicatedName]->freeCompilationResources();
+            functions_.emplace(replicatedName,
+                               std::move(duplicatedFunctions[replicatedName]));
+            duplicatedFunctions.erase(replicatedName);
+          }
+
+          duplicatedFunctions[func.first->name]->freeCompilationResources();
+          functions_.emplace(func.first->name,
+                             std::move(duplicatedFunctions[func.first->name]));
+          duplicatedFunctions.erase(func.first->name);
+          iter = remainingDuplications.erase(iter);
+        } else {
+          ++iter;
+        }
+      }
+    }
+  }
+
+  // If a deferredWeightLoader is provided, create a deferredWeightLoader and
+  // load deferred weights.
+  if (cctx.deferredWeightLoader) {
+    const size_t totalNumDeferredWeights = placeholderToDeviceManager.size();
+    LOG(INFO) << "Loading " << totalNumDeferredWeights << " deferred weights";
+
+    auto startTime = std::chrono::steady_clock::now();
+    auto loader = cctx.deferredWeightLoader;
+    // Load the first weight.
+    auto err = loader->loadNextWeight();
+    if (err) {
+      cleanupProvision(localActiveNames, addedNetworks);
+      return err;
+    }
+    std::string weightName = loader->getName();
+    // Load weights while there are weights to be loaded.
+    unsigned int weightCount = 0;
+    while (weightName != "") {
+      LOG(INFO) << "Loading deferred weight (" << ++weightCount << " / "
+                << totalNumDeferredWeights << "): " << weightName;
+      const auto PH = module.getPlaceholderByNameSlow(weightName);
+      if (!PH) {
+        cleanupProvision(localActiveNames, addedNetworks);
+        return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
+                        llvm::formatv("Error loading deferred weight. Name: "
+                                      "{0} not found in module.",
+                                      weightName)
+                            .str());
+      }
+      // Convert the weight if needed.
+      auto newTy = PH->getType();
+      auto weight = loader->getTensor();
+      auto oldKind = weight->getElementType();
+      // Ensure we are working with a static PH.
+      assert(PH->isStatic());
+      if (!weight->getType().isEqual(newTy)) {
+        ElemKind newK = newTy->getElementType();
+
+        if (!isQuantizedElemKind(oldKind) && isQuantizedElemKind(newK)) {
+          Tensor QT = quantization::quantizeTensor(
+              *weight, {newTy->getScale(), newTy->getOffset()}, newK);
+          weight->assign(&QT);
+        } else {
+          weight->convertToType(newK);
+        }
+      }
+      // Transfer weight to all devices needed.
+      std::list<Error> errors;
+      std::list<std::future<void>> futures;
+      for (const auto &device : placeholderToDeviceManager[PH]) {
+        std::promise<void> transferPromise;
+        errors.emplace_back(Error::empty());
+        futures.emplace_back(transferPromise.get_future());
+        devices_[device]->transferStaticPlaceholderToDevice(
+            PH, weight,
+            [&transferPromise, &error = errors.back()](Error err) mutable {
+              error = std::move(err);
+              transferPromise.set_value();
+            });
+      }
+
+      for (auto &done : futures) {
+        done.get();
+      }
+
+      for (auto &error : errors) {
+        RETURN_IF_ERR(error);
+      }
+
+      err = loader->loadNextWeight();
+      if (err) {
+        cleanupProvision(localActiveNames, addedNetworks);
+        return err;
+      }
+      weightName = loader->getName();
+      // Remove PH from map, this way we can know that we've added all static
+      // PH's
+      placeholderToDeviceManager.erase(PH);
+    }
+    if (placeholderToDeviceManager.size()) {
+      return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
+                      "Error not all static placeholders were initialized.");
+    }
+
+    std::chrono::duration<double> duration =
+        std::chrono::steady_clock::now() - startTime;
+    LOG(INFO) << "Done loading deferred weights in " << duration.count()
+              << " seconds";
+  }
+  // Init alternate name states.
+  for (auto &network : networks) {
+    for (auto &node : network.nodes) {
+      node->initAlternateState();
+    }
+  }
+
+  std::cout << "Partition-code generation is done." << std::endl<< std::endl;
+
+  cleanupProvision(localActiveNames, {}, false);
+  return Error::success();
+};
+
 Backend &Provisioner::getBackend(llvm::StringRef backendName) const {
   assert(backends_.count(backendName) &&
          "No backend created by specified name.");

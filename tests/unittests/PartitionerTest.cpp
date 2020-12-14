@@ -20,10 +20,16 @@
 #include "glow/Importer/ONNXModelLoader.h"
 #include "glow/Optimizer/GraphOptimizer/GraphOptimizer.h"
 #include "glow/Partitioner/PartitionerUtils.h"
+#include "glow/LLVMIRCodeGen/LLVMBackend.h"
 
 #include "llvm/Support/FileSystem.h"
+#include "glow/Support/Support.h"
 
 #include "gtest/gtest.h"
+
+#ifndef GLOW_DATA_PATH
+#define GLOW_DATA_PATH
+#endif
 
 using namespace glow;
 
@@ -262,6 +268,8 @@ static void verifyDAGSerialization(
       bindings.get(bindings.getPlaceholderByNameSlow(resultName))->clone();
   EXPECT_TRUE(ref.isEqual(test, 0.0f));
 }
+
+
 
 /// This one tests the model with this feature: after BFS, the memory
 /// consumption of all the nodes in each level won't exceed the device memory
@@ -1108,7 +1116,7 @@ TEST_F(PartitionerTest, logicalIDTest1) {
   BackendWithoutSub backendWithoutSub1, backendWithoutSub2;
   BackendWithoutMul backendWithoutMul1, backendWithoutMul2;
   // Create two backends which support different ops, then do the partition by
-  // assigning the ops to the corresponding abackends.
+  // assigning the ops to the corresponding backends.
   std::vector<Backend *> backends;
   backends.emplace_back(&backendWithoutMul1);
   backends.emplace_back(&backendWithoutSub1);
@@ -1606,6 +1614,8 @@ TEST_F(PartitionerTest, partitionFromConfigWithLogicalDevicesFp16) {
   }
 }
 
+
+
 /// This one tests calling PartitionFromConfig directly.
 TEST_F(PartitionerTest, partitionFromConfigDirectCall) {
 #ifndef GLOW_WITH_CPU
@@ -1961,3 +1971,205 @@ TEST_F(PartitionerTest, RecordedConstantFolding) {
       bindings_.get(bindings_.getPlaceholderByNameSlow("ret"))->clone();
   EXPECT_TRUE(ref.isEqual(test, 0.0f));
 }
+
+//#include <boost/algorithm/string.hpp>
+//#include <boost/filesystem.hpp>
+//#include <iostream>
+//#include <dirent.h>
+
+//TEST_F(PartitionerTest, loadPerformProfileFromYaml) {
+//
+//  auto *input1 =
+//      mod_.createPlaceholder(ElemKind::FloatTy, {2, 2}, "input1", false);
+//  auto *input2 =
+//      mod_.createConstant(ElemKind::FloatTy, {2, 2}, "input2");
+//  auto *input3 =
+//      mod_.createConstant(ElemKind::FloatTy, {2, 2}, "input3");
+//
+//  for (size_t i = 0; i < input2->getHandle().size(); i++) {
+//    input2->getHandle().raw(i) = 1;
+//    input3->getHandle().raw(i) = 1;
+//  }
+//
+//  auto *add1 = F_->createAdd("add1", input1, input2);
+//  auto *add2 = F_->createAdd("add2", add1, input3);
+//  auto *sub1 = F_->createSub("sub1", add1, add2);
+//  F_->createSave("save", sub1);
+//
+//  struct dirent *entry;
+//  std::string partitionProfileDirectory = "/home/msyu/CLionProjects/nest-compiler/tests/runtime_test/partition_profile";
+//  DIR *dir = opendir(partitionProfileDirectory.c_str());
+//
+//  if (dir == NULL) {
+//    std::cout << "Partition profile directory is not found: " + partitionProfileDirectory;
+//    return;
+//  }
+//
+//  std::map<std::string, std::map<std::string, std::map<std::string, int>>> puProfileMap;
+//
+//  while ((entry = readdir(dir)) != NULL) {
+//    std::string fn (entry->d_name);
+//
+//    if(fn.substr(fn.find_last_of(".") + 1) == "yaml") {
+//      std::cout << entry->d_name << std::endl;
+//      std::map<std::string, std::string> puMap = deserializeStrStrMapFromYaml(partitionProfileDirectory+"/"+fn);
+//      std::string backendName = puMap["backendName"];
+//
+////      for(int i = 0; i < 2; i++) {
+//        std::map<std::string, std::map<std::string, int>> puvalues;
+//        puProfileMap[backendName] = puvalues;
+//        for(auto it=puMap.begin();it!=puMap.end();it++) {
+//
+//          if(!it->first.compare("backendName")) continue;
+//
+//          std::map<std::string, int> values;
+//          puProfileMap[backendName][it->first] = values;
+//
+//          std::vector<std::string> data;
+//          boost::split(data, puMap[it->first], [](char c) { return (c == ':'); });
+//
+//          size_t index = 0;
+//          for (auto &s : data) {
+//            switch (index) {
+//            case 0:
+//              puProfileMap[backendName][it->first]["input"] = std::atoi(s.c_str());
+//              //           std::cout << "input = " << std::atoi(s.c_str()) << std::endl;
+//              break;
+//
+//            case 1:
+//              puProfileMap[backendName][it->first]["output"] = std::atoi(s.c_str());
+////            std::cout << "output = " << std::atoi(s.c_str()) << std::endl;
+//              break;
+//            case 2:
+//              puProfileMap[backendName][it->first]["compCost"] = std::atoi(s.c_str());
+////            std::cout << "compCost = " << std::atoi(s.c_str()) << std::endl;
+//              break;
+//            case 3:
+//              puProfileMap[backendName][it->first]["commCost"] = std::atoi(s.c_str());
+////            std::cout << "commCost = " << std::atoi(s.c_str()) << std::endl;
+//              break;
+//            default:
+//              break;
+//            }
+//            index++;
+//          }
+//        }
+////      }
+//    }
+//  }
+//  closedir(dir);
+//
+//  EXPECT_EQ(puProfileMap["CPU"]["Add"]["compCost"], 2);
+//  EXPECT_EQ(puProfileMap["NPU"]["Add"]["compCost"], 1);
+//
+//
+//}
+
+//TEST_F(PartitionerTest, partitionFromConfigAndSaveBundle) {
+//  auto *input1 =
+//      mod_.createPlaceholder(ElemKind::FloatTy, {2}, "input1", false);
+//  auto *input2 =
+//      mod_.createConstant(ElemKind::FloatTy, {2}, "input2");
+//  auto *input3 =
+//      mod_.createConstant(ElemKind::FloatTy, {2}, "input3");
+//
+//  for (size_t i = 0; i < input2->getHandle().size(); i++) {
+//    input2->getHandle().raw(i) = 1;
+//    input3->getHandle().raw(i) = 1;
+//  }
+//
+//
+//  auto *add1 = F_->createAdd("add1", input1, input2);
+//  auto *add2 = F_->createAdd("add2", add1, input3);
+//  auto *sub1 = F_->createSub("sub1", add1, add2);
+//  F_->createSave("save", sub1);
+//
+//  std::vector<DeviceInfo> PUs = {
+//      {3072, "CPU"}, {3072, "CPU"}, {3072, "CPU"}};
+//
+//  //---------partition config loading---------------//
+//
+//  std::string relPath = "tests/runtime_test/partitionPlan.yaml";
+//  namespace fs = boost::filesystem;
+//  auto baseDir = fs::current_path();
+//  auto fullPath = baseDir.string() + "/" + relPath;
+//
+//  while(baseDir.has_parent_path()) {
+//    if(fs::exists(fullPath)) {
+//      break;
+//    }
+//    baseDir = baseDir.parent_path();
+//    fullPath = baseDir.string() + "/" + relPath;
+//  }
+//
+//  //std::string yamlFilename("/home/msyu/CLionProjects/nest-compiler/tests/runtime_test/partitionPlan.yaml");
+//  std::cout << baseDir << std::endl;
+//  std::string yamlFilename(fullPath);
+//
+//  auto map = deserializeStrStrMapFromYaml(yamlFilename);
+//
+//  PartitionConfig partitionConfig;
+//  partitionConfig.funcName = map["funcName"];
+//  partitionConfig.numOfPartitions = std::atoi(map["numOfPartitions"].c_str());
+//  boost::split(partitionConfig.backendNames, map["backendNames"], [](char c){return c == ':';});
+//  boost::split(partitionConfig.partitionNames, map["partitionNames"], [](char c){return c == ':';});
+//
+//  std::vector<std::string> results;
+//  boost::split(results, map["nodeToPartition"], [](char c){return c == ':';});
+//  for (auto &s : results) {
+//    std::vector<std::string> nodesStr;
+//    boost::split(nodesStr, s, [](char c){return c == '-';});
+//    partitionConfig.nodeToPartition[nodesStr[0]] = std::atoi(nodesStr[1].c_str());
+//  }
+//
+//  results.clear();
+//  boost::split(results, map["logicalIDs"], [](char c){return c == ':';});
+//  for (auto &s : results) {
+//    std::vector<std::string> idsStr;
+//    boost::split(idsStr, s, [](char c){return c == '-';});
+//
+//    std::vector<unsigned int> ids;
+//    for (auto &s : idsStr) {
+//      ids.push_back(std::atoi(s.c_str()));
+//    }
+//    partitionConfig.logicalIDs.push_back(ids);
+//  }
+//
+//  //---------graph partitioning---------------//
+////  std::cout << "[before] mod_.getFunctions().size() = " << mod_.getFunctions().size() << std::endl;
+//  auto partitioner = Partitioner(&mod_, PUs);
+//  CompilationContext cctx;
+//  cctx.partitionConfig = &partitionConfig;
+//  auto result = partitioner.partition(cctx);
+//
+//  // Check that p2 has both 0 and 1 for logicalDevices.
+////  EXPECT_EQ(nodeList[0].nodes[2]->logicalDevices[0], 0);
+////  EXPECT_EQ(nodeList[0].nodes[2]->logicalDevices[1], 1);
+//
+////  DAGListTy nodeList;
+//  EXPECT_FALSE(ERR_TO_BOOL(result.takeError()));
+//
+//
+//  std::cout << "[after] mod_.getFunctions().size() = " << mod_.getFunctions().size() << std::endl;
+//
+//  //---------bundle saving---------------//
+//  llvm::StringRef outputDir = "../bundles/partition_net";
+//  std::unique_ptr<LLVMBackend> backend(
+//      reinterpret_cast<LLVMBackend *>(createBackend("CPU")));
+//  backend->getOptions().setBundleAPI(BundleApiType::Dynamic);
+//
+//  FunctionList::iterator iter;
+//  int idx = 0;
+//  for(iter = mod_.getFunctions().begin(); iter != mod_.getFunctions().end(); iter++, idx++) {
+//
+//    auto func = *iter;
+////    std::cout << func << std::endl;
+////    std::cout << "func name = " << func->getName().str() << std::endl;
+//
+//    llvm::StringRef bundleName = "testPartitionBundle" + std::to_string(idx);
+//    std::vector<BundleEntry> bundleEntries;
+//    bundleEntries.emplace_back(BundleEntry{"testPartitionEntry" + std::to_string(idx), func});
+//    backend->saveFunctions(bundleEntries, outputDir, bundleName);
+//  }
+//
+//}

@@ -161,6 +161,37 @@ void partitionsCombine(NodeToFunctionMap &partitions,
 }
 
 DeviceIDTy
+assignLogicalDeviceIDWithoutMemSize(NodeToFunctionMap &mapping,
+                      const std::map<std::string, BackendInfo> &backendMap) {
+  DeviceIDTy logicalDeviceID = 0;
+
+  std::map<std::string, std::vector<Function *>> backendFuncMap;
+  for (auto &func : mapping.getPartitions()) {
+    // Traverse the partitions, and get list of partitions with each
+    // backendName.
+    auto backendName = mapping.getPartitionBackendName(func);
+    if (backendFuncMap.find(backendName) == backendFuncMap.end()) {
+      backendFuncMap.emplace(backendName, std::vector<Function *>{func});
+    } else {
+      backendFuncMap[backendName].push_back(func);
+    }
+  }
+
+  // For each type of the backend, assign the logicalDevice ID.
+  for (const auto &p : backendFuncMap) {
+    if (mapping.getPartitions().size() <= backendMap.at(p.first).num) {
+      // There is enough device with this backendName, no need to adjust the
+      // logical ID.
+      for (auto &func : p.second) {
+        mapping.appendLogicalDeviceID(func, logicalDeviceID++);
+      }
+      continue;
+    }
+  }
+  return logicalDeviceID;
+}
+
+DeviceIDTy
 assignLogicalDeviceID(NodeToFunctionMap &mapping,
                       const std::map<std::string, BackendInfo> &backendMap) {
   DeviceIDTy logicalDeviceID = 0;

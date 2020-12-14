@@ -1,0 +1,14 @@
+---
+- name:    PU1
+  backendName: CPU
+  parameters: |
+    "nonSupportedNodes":""
+    "deviceID" : "0"
+  dramMemory: 200000000
+- name:    PU2
+  backendName: VTA
+  parameters: |
+    "nonSupportedNodes":""
+    "deviceID" : "1"
+  dramMemory: 200000000
+...

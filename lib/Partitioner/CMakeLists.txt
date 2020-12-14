@@ -3,7 +3,9 @@ add_library(Partitioner
               PartitionerUtils.cpp
               PartitionerOptimizer.cpp
               PartitionerValidation.cpp
-              Partitioner.cpp)
+              Partitioner.cpp
+              NestPartitionerSchedule.cpp
+              NestPartitioner.cpp)
 
 target_link_libraries(Partitioner
                       PRIVATE

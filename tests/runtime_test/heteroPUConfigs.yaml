@@ -1,0 +1,14 @@
+---
+- name:     Device1
+  backendName: CPU
+  parameters: |
+    "fusionNodes":"Relu,BatchNormalization"
+    "deviceID" : "0"
+  dramMemory: 20000000
+- name:     Device2
+  backendName: VTAInterpreter
+  parameters: |
+    "fusionNodes":"Relu,BatchNormalization"
+    "deviceID" : "1"
+  dramMemory: 20000000
+...

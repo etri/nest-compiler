@@ -93,6 +93,11 @@ Instruction *IRGenVisitor::getNodeToIR(Node *N) {
 }
 
 void IRGenVisitor::post(Node *parent, Node *N) {
+  if(N->getKind() == Kinded::Kind::GemmNodeKind) {
+    std::cout << N->getKindName() << std::endl;
+  }
+
+
   visited_.insert(N);
 
   // Allows backend to generate their custom instrution IR.

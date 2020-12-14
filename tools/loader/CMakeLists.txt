@@ -1,3 +1,20 @@
+add_executable(nnfc
+        Loader.cpp
+        NNFC.cpp)
+
+target_link_libraries(nnfc
+        PRIVATE
+        Backends
+        Base
+        Converter
+        Graph
+        HostManager
+        Importer
+        ExecutionEngine
+        GraphOptimizer
+        Quantization
+        LLVMSupport)
+
 add_executable(image-classifier
   Loader.cpp
   ImageClassifier.cpp
@@ -35,6 +52,23 @@ target_link_libraries(object-detector
                       GraphOptimizer
                       Quantization
                       LLVMSupport)
+
+add_executable(ccode-generator
+        Loader.cpp
+        CCodeGenerator.cpp)
+
+target_link_libraries(ccode-generator
+        PRIVATE
+        Backends
+        Base
+        Converter
+        ExecutionEngine
+        HostManager
+        Graph
+        Importer
+        GraphOptimizer
+        Quantization
+        LLVMSupport)
 
 add_executable(text-translator
   Loader.cpp
@@ -103,6 +137,23 @@ target_link_libraries(model-compiler
                         GraphOptimizer
                         Quantization
                         LLVMSupport)
+
+add_executable(model-partition-tuner
+        Loader.cpp
+        ModelPartitionTuner.cpp)
+
+target_link_libraries(model-partition-tuner
+        PRIVATE
+        Backends
+        Base
+        Converter
+        Graph
+        HostManager
+        Importer
+        ExecutionEngine
+        GraphOptimizer
+        Quantization
+        LLVMSupport)
 
 add_executable(model-profiler
   Loader.cpp

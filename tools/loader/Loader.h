@@ -110,6 +110,13 @@ class Loader {
   /// Info produced after calling the \ref compile function.
   CompilationInfo compilationInfo_;
 
+  //for C/C++ generator
+  std::vector<const char *> inputNameRefs_;
+  std::vector<TypeRef> inputTypeRefs_;
+
+  std::vector<std::string> inputNames_;
+  std::vector<Type> inputTypes_;
+
 public:
   /// Getter for the hostManager, this can be useful for calling into the
   /// HostManager directly.
@@ -121,6 +128,7 @@ public:
 
   /// Getter for function name.
   std::string getFunctionName() { return functionName_; }
+  void setFunctionName(std::string fname) { functionName_ = fname; }
 
   /// Getter for the Module. This should not be called after compile since the
   /// compile process is destructive on the original function and module.
@@ -134,7 +142,11 @@ public:
     return caffe2NetWeightFilename_;
   }
 
-  /// Getter for the ONNX model file name.
+  std::vector<std::string> getInputNames() {return inputNames_;}
+  std::vector<Type> getInputTypes() {return inputTypes_;}
+
+
+    /// Getter for the ONNX model file name.
   llvm::StringRef getOnnxModelFilename() { return onnxModelFilename_; }
 
   /// Getter for the TensorFlowLite model file name.
@@ -188,6 +200,7 @@ public:
   /// Compiles the Function F_. Handles quantization, emitting bundles, and
   /// dumping debug information. \p cctx is used for compiling F_.
   void compile(CompilationContext &cctx);
+  void compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlan, int profileMode);
 
   /// Runs inference, unless emit bundle mode is enabled. \p bindings
   /// binds specific placeholders to concrete tensors. The concrete

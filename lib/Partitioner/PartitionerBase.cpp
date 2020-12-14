@@ -24,8 +24,8 @@ using namespace glow;
 using llvm::isa;
 
 /// Creates and \returns a new DAGNode from \p F given \p mapping.
-static std::unique_ptr<DAGNode>
-createDAGNodeFromFun(Function *F, NodeToFunctionMap &mapping) {
+std::unique_ptr<DAGNode>
+PartitionerBase::createDAGNodeFromFun(Function *F, NodeToFunctionMap &mapping) {
   std::unique_ptr<DAGNode> DN = glow::make_unique<DAGNode>();
   DN->name = F->getName();
   DN->logicalDevices = mapping.getLogicalDeviceIDList(F);

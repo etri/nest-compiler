@@ -74,3 +74,22 @@ TEST(BundleSaver, testSaveMultipleFunctions) {
   bundleEntries.emplace_back(BundleEntry{"testMainEntry2", F2});
   backend->saveFunctions(bundleEntries, outputDir, bundleName);
 }
+
+
+TEST(BundleSaver, testAPINestPU) {
+    Module M;
+    Function *F = M.createFunction("F");
+
+    // Create a simple graph.
+    Node *inputPH = M.createPlaceholder(ElemKind::FloatTy, {1}, "input", false);
+    Node *addConst = M.createConstant(ElemKind::FloatTy, {1}, "const");
+    Node *addNode = F->createAdd("add", inputPH, addConst);
+    F->createSave("output", addNode);
+
+    // Save bundle.
+    llvm::StringRef outputDir = ".";
+    llvm::StringRef bundleName = "testBundle";
+    llvm::StringRef mainEntryName = "testMainEntry";
+    std::unique_ptr<Backend> backend(createBackend("NestPU"));
+    backend->save(F, outputDir, bundleName, mainEntryName);
+}

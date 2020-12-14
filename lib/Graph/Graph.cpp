@@ -602,6 +602,19 @@ Placeholder *Module::createPlaceholder(TypeRef T, llvm::StringRef name,
   return ph;
 }
 
+Placeholder *Module::createPartitionPlaceholder(TypeRef T, llvm::StringRef name,
+                                       bool isTrainable,
+                                       const std::string &layout) {
+  auto FT = uniqueType(*T);
+  auto *ph = new Placeholder(name, FT, isTrainable, layout);
+  //ph->setName(uniqueName(ph->getName(), usedNodeNames_, usedStorageNames_,
+  //                       originalNames_));
+  ph->setName(name);
+  placeholders_.push_back(ph);
+  logStorageCreation(functions_, ph);
+  return ph;
+}
+
 Placeholder *Module::createPlaceholder(ElemKind T, llvm::ArrayRef<dim_t> dims,
                                        llvm::StringRef name, bool isTrainable,
                                        const std::string &layout) {
@@ -796,6 +809,35 @@ static void assertConvDims(NodeValue input, NodeValue filter, NodeValue bias,
   assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
 }
 
+#ifdef GLOW_WITH_VTA
+/// Check that the dimensions that are passed in when the vtaconvolution is
+/// constructed are correct.
+static void assertVTAConvDims(NodeValue input, NodeValue filter, NodeValue bias,
+                           llvm::ArrayRef<unsigned_t> kernels,
+                           llvm::ArrayRef<unsigned_t> strides,
+                           llvm::ArrayRef<unsigned_t> pads, unsigned_t group) {
+  ShapeVTAIO idim = ShapeVTAIO(input.dims());
+  ShapeHW kdim(kernels);
+  (void)kdim;
+  //checkKernelSize(idim, kernels, pads);
+  //assert(idim.c % group == 0 && "channels number must be divisible by groups");
+
+  // NOTE: here the N in NHWC is abnormal because it is the number of filters
+  // (and therefore the number of output channels of the conv) and not the
+  // batch size. The rest of the dimensions are representative of the input
+  // dimensions to the convolution.
+  //ShapeNHWC filterDims(filter.dims());
+  //(void)filterDims;
+
+  /*
+  assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
+         filterDims.w == kdim.width && filterDims.c == idim.c / group &&
+         "Invalid filter dims");
+*/
+  //assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
+}
+#endif
+
 /// Check that the dimensions that are passed in when the 3D convolution is
 /// constructed are correct.
 static void assertConv3DDims(NodeValue input, NodeValue filter, NodeValue bias,
@@ -828,7 +870,6 @@ ConvolutionNode *Function::createConv(
     TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
     unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
-  assertConvDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
 
   // If the input is quantized but the bias is not then auto-quantize the
@@ -854,6 +895,56 @@ ConvolutionNode *Function::createConv(
                                      strides, pads, group, dilation, layout,
                                      FusedActivation::NONE));
 }
+
+#ifdef GLOW_WITH_VTA
+VTAConvolutionNode *Function::createVTAConv(
+    llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
+    TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
+    llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
+    unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
+  assertConvDims(input, filter, bias, kernels, strides, pads, group);
+  auto OT = getParent()->uniqueType(*outTy);
+
+  // If the input is quantized but the bias is not then auto-quantize the
+  // bias.
+  if (input.getType()->isQuantizedType()) {
+    auto biasType = bias.getElementType();
+    if (biasType == ElemKind::Int32QTy || biasType == ElemKind::Int8QTy) {
+      // Nothing to do
+    } else if (biasType == ElemKind::FloatTy) {
+      auto biasTy = getParent()->uniqueType(
+          glow::ElemKind::Int32QTy, bias.dims(),
+          input.getType()->getScale() * filter.getType()->getScale(),
+          /* offset */ 0);
+      bias = createQuantize("quantized_bias", bias, biasTy);
+    } else {
+      LOG(DFATAL)
+          << "Unsupported element type for bias of quantized convolution: "
+          << Type::getElementName(biasType).str();
+    }
+  }
+
+  return addNode(new VTAConvolutionNode(name, OT, input, filter, bias, kernels,
+                                        strides, pads, group, false));
+
+
+}
+
+VTAConvolutionNode *Function::createVTAConv(llvm::StringRef name, NodeValue input,
+                                      NodeValue filter, NodeValue bias,
+                                      TypeRef outTy, unsigned_t kernel,
+                                      unsigned_t stride, unsigned_t pad,
+                                      unsigned_t group, unsigned_t dilation,
+                                      ConvolutionLayout layout) {
+  llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
+  llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
+  llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
+  return createVTAConv(name, input, filter, bias, outTy, kernels, strides, pads,
+                    group, dilation, layout);
+}
+
+#endif
+
 
 ConvolutionNode *Function::createConv(llvm::StringRef name, NodeValue input,
                                       NodeValue filter, NodeValue bias,
@@ -2352,6 +2443,11 @@ SaveNode *Function::createSave(llvm::StringRef name, NodeValue input,
                                Placeholder *output, bool skipSuffix) {
   return addNode(new SaveNode(skipSuffix ? name.str() : (name + "_save").str(),
                               input, output));
+}
+
+SaveNode *Function::createPartitionSave(llvm::StringRef name, NodeValue input) {
+  auto *dest = getParent()->createPartitionPlaceholder(input.getType(), name, false);
+  return createSave(name, input, dest);
 }
 
 QuantizationProfileNode *

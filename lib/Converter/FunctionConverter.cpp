@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "glow/Converter/FunctionConverter.h"
+#include <fstream>
 
 #include "glow/Graph/Graph.h" // For Function.
 #include "glow/Graph/Node.h"  // For Node.
@@ -103,7 +104,7 @@ void FunctionConverter::convertOutputs(Node &node) {
       if (saveNode && saveNode->getOutput() == val) {
         NodeValue input = saveNode->getInput();
         Node *conversion = createConversion(*parent, node, input, targetTy,
-                                            /* isInput */ false);
+            /* isInput */ false);
         saveNode->setNthInput(SaveNode::InputIdx,
                               getConversionOutput(*conversion));
         continue;
@@ -190,6 +191,49 @@ void FunctionConverter::convert() {
     if (!canConvert(node)) {
       continue;
     }
+    std::string quantFileName("./VTASkipQuantizeNodes.txt");
+    std::ifstream inTuneFs(quantFileName);
+    std::string inStr;
+
+    std::string filter_node = (std::string)node.getName();
+
+    bool isExist = false;
+    while(getline(inTuneFs, inStr)){
+      if(inStr.compare(filter_node)==0) {
+        isExist = true;
+        break;
+      }
+    }
+    if(isExist) continue;
+//    // googlenet_v4_slim
+//    std::string filter_node = (std::string)node.getName();
+//    if (filter_node.compare("InceptionV4_InceptionV4_Conv2d_1a_3x3_BatchNorm_batchnorm_mul__2") == 0){
+//      continue;
+//    }
+//    if (filter_node.compare("InceptionV4_InceptionV4_Conv2d_1a_3x3_Relu_max") == 0){
+//      continue;
+//    }
+//    if (filter_node.compare("InceptionV4_Logits_Logits_MatMul__1") == 0){
+//      continue;
+//    }
+//    if (filter_node.compare("InceptionV4_Logits_Logits_MatMul__1_bias") == 0){
+//      continue;
+//    }
+//    // shufflenet
+//    std::string filter_node = (std::string)node.getName();
+//    if (filter_node.compare("Conv_gpu_0_conv3_0_1__2") == 0){
+//      continue;
+//    }
+//    if (filter_node.compare("Relu_gpu_0_conv3_0_bn_2__1") == 0){
+//      continue;
+//    }
+//    if (filter_node.compare("Gemm_gpu_0_pred_1__1_dot") == 0){
+//      continue;
+//    }
+//    if (filter_node.compare("Gemm_gpu_0_pred_1__1_bias") == 0){
+//      continue;
+//    }
+
     // Mutate the output types and insert the conversion to keep our
     // invariant.
     convertOutputs(node);

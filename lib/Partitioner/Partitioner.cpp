@@ -807,6 +807,8 @@ Partitioner::partitionFromConfig(const PartitionConfig &partitionConfig,
   std::vector<Backend *> backends;
   genBackendMap(backendMap_, backendHolder_, backends);
   Function *F = module_->getFunction(partitionConfig.funcName);
+  std::string fname = module_->getFunctions().front()->getName();
+  std::cout << "Partitioner function name = " << fname << std::endl;
   if (!F) {
     return MAKE_ERR(ErrorValue::ErrorCode::PARTITIONER_ERROR,
                     strFormat("Can't find function %s in current module.",
@@ -1488,3 +1490,5 @@ Expected<DAGListTy> Partitioner::partition(CompilationContext &cctx) {
   // Call heterogeneous partition flow.
   return heterogeneousPartition(cctx);
 }
+
+

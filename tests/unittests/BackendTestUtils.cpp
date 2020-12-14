@@ -72,9 +72,10 @@ static Placeholder *createQuantizedPlaceholder(Module &mod,
                                                PlaceholderBindings &bindings,
                                                Tensor *tensor, float scale,
                                                int32_t offset,
-                                               llvm::StringRef name) {
+                                               llvm::StringRef name,
+                                               const std::string &layout = ANY_LAYOUT) {
   auto *P = mod.createPlaceholder(tensor->getElementType(), tensor->dims(),
-                                  scale, offset, name, false);
+                                  scale, offset, name, false, layout);
   auto *PTensor = bindings.allocate(P);
   PTensor->assign(tensor);
 
@@ -570,6 +571,8 @@ int inferConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
   out->assign(resultTensor);
   return conv->getFusedActivation();
 }
+
+
 
 void trainConvNet(Tensor *inputs, Tensor *kernel1, Tensor *bias1,
                   Tensor *kernel2, Tensor *bias2, Tensor *selected,

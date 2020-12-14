@@ -1,0 +1,5 @@
+vtaMxnetResnet18Bundle
+vtaCaffe2Resnet50Bundle
+ResNet18PartitionBundle
+ResNet18VTAPartitionBundle
+MobileNetBundle

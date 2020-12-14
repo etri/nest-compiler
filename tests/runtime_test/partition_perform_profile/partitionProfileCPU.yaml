@@ -1,0 +1,21 @@
+---
+backendName: CPU
+commCost:0
+Add: |
+    4:1
+Sub: |
+    4:1
+Relu: |
+    3211264:2
+Transpose: |
+    3211264:1
+Reshape: |
+    3211264:1
+--- # input-size CompCost(ms)
+Conv: |
+    50176:64:5:10
+--- # input-size channel kernel_shape stride computation_cost
+Conv-Relu: |
+    50176:64:5:11
+...
+

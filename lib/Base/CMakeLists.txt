@@ -28,4 +28,8 @@ if(PNG_FOUND)
   endif()
 endif()
 
-add_dependencies(Base AutoGen)
+add_dependencies(Base AutoGen )
+
+if (GLOW_WITH_VTA)
+  add_dependencies(Base VTALibsDownload)
+endif()

@@ -61,5 +61,8 @@ void partitionsCombine(NodeToFunctionMap &partitions,
 DeviceIDTy
 assignLogicalDeviceID(NodeToFunctionMap &mapping,
                       const std::map<std::string, BackendInfo> &backendMap);
+DeviceIDTy
+assignLogicalDeviceIDWithoutMemSize(NodeToFunctionMap &mapping,
+                      const std::map<std::string, BackendInfo> &backendMap);
 } // namespace glow
 #endif // GLOW_PARTITIONER_PARTITIONEROPTIMIZER_H

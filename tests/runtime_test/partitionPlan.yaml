@@ -1,0 +1,8 @@
+---
+funcName: main
+numOfPartitions: 3
+backendNames: CPU:CPU:CPU
+partitionNames: p0:p1:p2
+nodeToPartition: add1-0:add2-1
+logicalIDs: 0:1:1
+...

@@ -259,7 +259,8 @@ enum PaddingMode { CONSTANT = 0, REFLECT, EDGE };
 enum class LengthsMode { Variable, AllOne };
 
 /// Convolution Layouts.
-enum ConvolutionLayout { NHWC = 0, NCHW, NTHWC, NCTHW };
+
+enum ConvolutionLayout { NHWC = 0, NCHW, NTHWC, NCTHW, VTA_LAYOUT };
 inline bool is3DData(ConvolutionLayout layout) {
   return (layout == NTHWC || layout == NCTHW);
 }

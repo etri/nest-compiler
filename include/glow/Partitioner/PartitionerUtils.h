@@ -63,5 +63,10 @@ std::set<Kinded::Kind> generateNodeKindsSet(llvm::StringRef names);
 
 /// Log the info of current partition \p partitions.
 void logPartitionInfo(const NodeToFunctionMap &partitions);
+
+int getDataType(const char* typeStr);
+std::string getDataTypeStr(ElemKind type);
+std::string getDimArrayStr(TypeRef value);
+
 } // namespace glow
 #endif // GLOW_PARTITIONER_PARTITIONUTILS_H

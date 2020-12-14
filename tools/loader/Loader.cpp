@@ -27,6 +27,9 @@
 #include "glow/Quantization/Serialization.h"
 #include "glow/Runtime/RuntimeTypes.h"
 
+#include "glow/Partitioner/NestPartitioner.h"
+#include "glow/Partitioner/PartitionerUtils.h"
+
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
@@ -175,6 +178,18 @@ llvm::cl::opt<std::string> loadProfileFileOpt(
     llvm::cl::value_desc("profile.yaml"), llvm::cl::Optional,
     llvm::cl::cat(loaderCat));
 
+llvm::cl::opt<std::string> loadVTAProfileFileOpt(
+    "load-vta-profile",
+    llvm::cl::desc("Load quantization profile file for VTA and quantize the graph"),
+    llvm::cl::value_desc("profile.yaml"), llvm::cl::Optional,
+    llvm::cl::cat(loaderCat));
+
+//llvm::cl::opt<std::string> loadNestProfileFileOpt(
+//    "load-nest-profile",
+//    llvm::cl::desc("Load quantization profile file and quantize the graph"),
+//    llvm::cl::value_desc("profile.yaml"), llvm::cl::Optional,
+//    llvm::cl::cat(loaderCat));
+
 llvm::cl::list<std::string> keepOriginalPrecisionForNodesOpt(
     "keep-original-precision-for-nodes",
     llvm::cl::desc(
@@ -218,6 +233,12 @@ llvm::cl::opt<std::string> dumpGraphDAGFileBeforeCompilationOpt(
 llvm::cl::opt<std::string> dumpGraphDAGFileOpt(
     "dump-graph-DAG",
     llvm::cl::desc("Specify the file to export the Graph in DOT format"),
+    llvm::cl::value_desc("file.dot"), llvm::cl::cat(modelExportCat));
+
+//Jemin
+llvm::cl::opt<std::string> dumpPlainSTCNN(
+    "dump-plain-stcnn",
+    llvm::cl::desc("Specify the file to export the Graph in Plain STCNN format"),
     llvm::cl::value_desc("file.dot"), llvm::cl::cat(modelExportCat));
 
 llvm::cl::opt<bool> dumpGraphOpt("dump-graph",
@@ -307,6 +328,7 @@ llvm::cl::opt<unsigned> iterationsOpt(
     "iterations", llvm::cl::desc("Number of iterations to perform"),
     llvm::cl::Optional, llvm::cl::init(0), llvm::cl::cat(loaderCat));
 
+
 std::string Loader::getModelOptPath() {
   // If given a single path, return it.
   if (modelPathOpt.size() == 1 &&
@@ -327,7 +349,6 @@ llvm::StringRef Loader::getModelOptDir() {
 }
 
 bool glow::emittingBundle() { return !emitBundle.empty(); }
-
 bool glow::profilingGraph() { return !dumpProfileFileOpt.empty(); }
 
 /// Parse the 'modelInputsOpt' option and get the model input names and types.
@@ -433,21 +454,21 @@ static void getModelInputs(std::vector<std::string> &inputNames,
 void Loader::loadModel(TypeRef inputType) {
 
   // Get model input names and types.
-  std::vector<std::string> inputNames;
-  std::vector<Type> inputTypes;
-  getModelInputs(inputNames, inputTypes);
-  std::vector<const char *> inputNameRefs;
-  std::vector<TypeRef> inputTypeRefs;
-  for (size_t idx = 0, e = inputNames.size(); idx < e; idx++) {
-    inputNameRefs.push_back(inputNames[idx].c_str());
-    inputTypeRefs.push_back(&inputTypes[idx]);
+  //std::vector<std::string> inputNames;
+  //std::vector<Type> inputTypes;
+  getModelInputs(inputNames_, inputTypes_);
+  //std::vector<const char *> inputNameRefs;
+  //std::vector<TypeRef> inputTypeRefs;
+  for (size_t idx = 0, e = inputNames_.size(); idx < e; idx++) {
+    inputNameRefs_.push_back(inputNames_[idx].c_str());
+    inputTypeRefs_.push_back(&inputTypes_[idx]);
   }
 
   // Use explicit input type if given.
   if (inputType != nullptr) {
-    CHECK(inputNameRefs.size() == 1)
+    CHECK(inputNameRefs_.size() == 1)
         << "Model is expected to have only 1 input!";
-    inputTypeRefs = {inputType};
+    inputTypeRefs_ = {inputType};
   }
 
   // Load the model based on the model format.
@@ -456,8 +477,8 @@ void Loader::loadModel(TypeRef inputType) {
     // explicitly (mandatory).
     std::unique_ptr<ProtobufLoader> protoLoader;
     protoLoader.reset(new Caffe2ModelLoader(
-        getCaffe2NetDescFilename(), getCaffe2NetWeightFilename(), inputNameRefs,
-        inputTypeRefs, *getFunction()));
+    getCaffe2NetDescFilename(), getCaffe2NetWeightFilename(), inputNameRefs_,
+        inputTypeRefs_, *getFunction()));
     // Load the maps between original model names and the placeholders.
     inputPlaceholderByName_ = protoLoader->getInputVarsMapping();
     outputPlaceholderByName_ = protoLoader->getOutputVarsMapping();
@@ -492,8 +513,8 @@ void Loader::loadModel(TypeRef inputType) {
     // the input placeholder types in order to override the placeholder sizes
     // (one such example is the batch size).
     std::unique_ptr<ProtobufLoader> protoLoader;
-    protoLoader.reset(new ONNXModelLoader(getOnnxModelFilename(), inputNameRefs,
-                                          inputTypeRefs, *getFunction()));
+    protoLoader.reset(new ONNXModelLoader(getOnnxModelFilename(), inputNameRefs_,
+                                          inputTypeRefs_, *getFunction()));
     // Load the maps between original model names and the placeholders.
     inputPlaceholderByName_ = protoLoader->getInputVarsMapping();
     outputPlaceholderByName_ = protoLoader->getOutputVarsMapping();
@@ -682,6 +703,11 @@ void Loader::compile(CompilationContext &cctx) {
     F_->dumpDAG(dumpGraphDAGFileBeforeCompilationOpt.c_str());
   }
 
+  // Jemin STCNN
+  if (!dumpPlainSTCNN.empty()) {
+    llvm::outs() <<"STCNN option test" <<"\n";
+  }
+
   // Store a raw pointer to the Module, we pass the unique_ptr to HostManager
   // but the Module is stored by Hostmanager so the pointer will remain valid.
   auto module = M_.get();
@@ -705,6 +731,64 @@ void Loader::compile(CompilationContext &cctx) {
     // F_.
     F_ = module->getFunctions().front();
   }
+  if (dumpGraphOpt) {
+    for (auto function : module->getFunctions()) {
+      function->dump();
+    }
+  }
+  if (!dumpGraphDAGFileOpt.empty()) {
+    for (auto function : module->getFunctions()) {
+      std::string filename =
+          function->getFilename() + "_" + dumpGraphDAGFileOpt;
+      if (module->getFunctions().size() == 1) {
+        filename = dumpGraphDAGFileOpt;
+      }
+      function->dumpDAG(filename.c_str());
+    }
+  }
+  // Store compilation info in the Loader.
+  compilationInfo_ = cctx.info;
+}
+
+void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode) {
+//  std::cout << "=== compileForNestProfile ===" << std::endl;
+
+  // Dump the DAG before compilation if needed.
+  if (!dumpGraphDAGFileBeforeCompilationOpt.empty()) {
+    F_->dumpDAG(dumpGraphDAGFileBeforeCompilationOpt.c_str());
+  }
+
+  // Jemin STCNN
+  if (!dumpPlainSTCNN.empty()) {
+    llvm::outs() <<"STCNN option test" <<"\n";
+  }
+
+  // Store a raw pointer to the Module, we pass the unique_ptr to HostManager
+  // but the Module is stored by Hostmanager so the pointer will remain valid.
+  auto module = M_.get();
+
+//  if (emittingBundle()) {
+//    // Create bundle directory if not exists.
+//    if (!llvm::sys::fs::is_directory(emitBundle)) {
+//      llvm::sys::fs::create_directory(emitBundle);
+//    }
+//    // Emit IR for the graph, compile it and save as a bundle.
+//    auto error = ::glow::optimizeFunction(F_, *backend_, cctx);
+//    EXIT_ON_ERR(std::move(error));
+//    backend_->save(F_, emitBundle, networkName,
+//                   mainEntryName.empty() ? networkName : mainEntryName);
+//  } else {
+
+//  std::cout << "=== partition ===" << std::endl;
+//  std::cout << "bundle dir = " << emitBundle << std::endl;
+  // Emit IR for the graph and compile it.
+  cctx.saturateHost = !runAllInputsOnAllDevices;
+  auto error = hostManager_->addNetworkForNestPartition(std::move(M_), cctx, exeType, profilePath, partitionPlanFile, emitBundle.c_str(), loadVTAProfileFileOpt, profileMode);
+  EXIT_ON_ERR(std::move(error));
+  // After partitioning, the original function may be removed. Need to update
+  // F_.
+  F_ = module->getFunctions().front();
+//  }
   if (dumpGraphOpt) {
     for (auto function : module->getFunctions()) {
       function->dump();
@@ -860,3 +944,4 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
   F_ = M_->createFunction(modelPathOpt[0]);
   functionName_ = modelPathOpt[0];
 }
+

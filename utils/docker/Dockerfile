@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 ARG WORKDIR=/root/dev
 
@@ -7,6 +7,7 @@ RUN mkdir -p $WORKDIR
 WORKDIR $WORKDIR
 
 # Update and install tools
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y clang clang-8 cmake graphviz libpng-dev \
         libprotobuf-dev llvm-8 llvm-8-dev ninja-build protobuf-compiler wget \
@@ -14,7 +15,7 @@ RUN apt-get update && \
         libdouble-conversion-dev libevent-dev libssl-dev libgflags-dev \
         libjemalloc-dev libpthread-stubs0-dev \
         # Additional dependencies
-        git python-numpy && \
+        git python python-numpy && \
     # Delete outdated llvm to avoid conflicts
     apt-get autoremove -y llvm-6.0 && \
     apt-get clean && \
@@ -34,7 +35,7 @@ RUN update-alternatives --set cc /usr/bin/clang && \
 RUN git clone https://github.com/fmtlib/fmt && \
     mkdir fmt/build && \
     cd fmt/build && \
-    cmake .. && make && \
+    cmake .. && make -j32 && \
     make install
 
 # Clean up

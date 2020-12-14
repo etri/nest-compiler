@@ -93,6 +93,79 @@ struct ShapeNHWC {
   }
 };
 
+struct ShapeVTAIO {
+
+  enum {
+    DimNm, // Modulo of number of samples == 1
+    DimCm, // Modulo of number of channels
+    DimH,
+    DimW,
+    DimNs, // Static number of samples == 1
+    DimCs, // Static number of channels = 16
+  };
+
+  dim_t nm;
+  dim_t cm;
+  dim_t h;
+  dim_t w;
+  dim_t ns;
+  dim_t cs;
+
+  template <typename T> explicit ShapeVTAIO(llvm::ArrayRef<T> shape) {
+    assert(shape.size() == 6 && "Invalid shape");
+    nm = shape[DimNm];
+    ns = shape[DimNs];
+    cm = shape[DimCm];
+    h = shape[DimH];
+    w = shape[DimW];
+    cs = shape[DimCs];
+  }
+
+  ShapeVTAIO(dim_t nm, dim_t cm, dim_t height, dim_t width, dim_t ns, dim_t channels)
+      : nm(nm), cm(cm), h(height), w(width), ns(ns), cs(channels) {}
+
+  bool equals(const ShapeVTAIO &other) const {
+    return nm == other.nm && ns == other.ns && cm == other.cm && h == other.h && w == other.w && cs == other.cs;
+  }
+};
+
+//{N//16}{C//16}HW1616
+struct ShapeVTAKernel {
+
+  enum {
+    DimNm, // Modulo of number of kernels
+    DimCm, // Modulo of number of channels
+    DimH,
+    DimW,
+    DimNs, // Static number of kernels = 16
+    DimCs, // Static number of channels = 16
+  };
+
+  dim_t nm;
+  dim_t cm;
+  dim_t h;
+  dim_t w;
+  dim_t ns;
+  dim_t cs;
+
+  template <typename T> explicit ShapeVTAKernel(llvm::ArrayRef<T> shape) {
+    assert(shape.size() == 6 && "Invalid shape");
+    nm = shape[DimNm];
+    cm = shape[DimCm];
+    h = shape[DimH];
+    w = shape[DimW];
+    ns = shape[DimNs];
+    cs = shape[DimCs];
+  }
+
+  ShapeVTAKernel(dim_t nm, dim_t cm, dim_t height, dim_t width, dim_t ns, dim_t cs)
+      : nm(nm), cm(cm), h(height), w(width), ns(ns), cs(cs) {}
+
+  bool equals(const ShapeVTAKernel &other) const {
+    return nm == other.nm && ns == other.ns && cm == other.cm && h == other.h && w == other.w && cs == other.cs;
+  }
+};
+
 struct ShapeNTHWC {
   dim_t n; // Number of samples
   dim_t t; // Temporal frames

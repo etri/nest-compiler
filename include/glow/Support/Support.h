@@ -137,6 +137,9 @@ struct DeviceConfigHelper {
   std::string name_;
   /// Backend name.
   std::string backendName_;
+  //DRAM memory size
+  std::string dramMemory_;
+
   /// A string with multi lines. Each line represents a param.
   MultiLineStr parameters_;
   DeviceConfigHelper() = default;

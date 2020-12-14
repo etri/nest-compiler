@@ -76,6 +76,9 @@ if(GLOW_WITH_LLVMIRCODEGEN)
                     -bundle-api=static)
 endif()
 
+add_glow_test(NAME PartitionCompileTest
+              ${GLOW_BINARY_DIR}/bin/model-compiler-test -model-input=data,float,[1,3,224,224] -m=${GLOW_SOURCE_DIR}/tests/models/onnxModels/resnet18v2.onnx -backend=CPU -log-partition -cpu-memory=100000 -load-device-configs=${GLOW_SOURCE_DIR}/tests/runtime_test/heterogeneousConfigs2.yaml -emit-bundle=${GLOW_BINARY_DIR}/bin/data)
+
 add_executable(Caffe2ImporterTest
                Caffe2ImporterTest.cpp)
 target_link_libraries(Caffe2ImporterTest
@@ -505,6 +508,9 @@ foreach(backend ${GLOW_BACKENDS})
                    HostManager
                    Runtime)
 endforeach()
+
+#add_executable(VTABackendSimulatorTest ../../lib/Backends/VTA/tests/VTABackendSimulatorTest.cpp ../../lib/Backends/VTA/simulator/lib/vta_sim/sim_driver.cc ../../lib/Backends/VTA/simulator/lib/vta_sim/virtual_memory.cc ../../lib/Backends/VTA/simulator/lib/vta_sim/sim_tlpp.cc ../../lib/Backends/VTA/simulator/lib/vta_sim/runtime.cc ../../lib/Backends/VTA/simulator/src/gemm_256_test.cpp ../../lib/Backends/VTA/simulator/src/sim_test_conv1.cpp ../../lib/Backends/VTA/simulator/src/sim_test_2conv_layer.cpp ../../lib/Backends/VTA/simulator/src/sim_add_test.cpp  ../../lib/Backends/VTA/simulator/src/uops.h ../../lib/Backends/VTA/simulator/src/uops.cpp ../../lib/Backends/VTA/simulator/src/sim_gemm_test.cpp ../../lib/Backends/VTA/simulator/src/sim_gemm_gemm_test.cpp)
+#target_link_libraries(VTABackendSimulatorTest gtest)
 
 add_executable(PartitionerTest
                PartitionerTest.cpp)

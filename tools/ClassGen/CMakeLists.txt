@@ -1,3 +1,4 @@
+
 add_executable(NodeGen
                  NodeGen.cpp
                  NodeBuilder.cpp)
@@ -15,6 +16,7 @@ target_link_libraries(InstrGen
                       PUBLIC
                         MemberType
                         Support)
+
 
 add_library(MemberType
               MemberType.cpp)

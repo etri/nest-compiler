@@ -1,0 +1,2376 @@
+---
+GlowToolsVersion: 2020-10-02
+...
+---
+GraphPreLowerHash: 0x23776F928F1BC297
+...
+---
+- NodeOutputName:  'AveragePool_gpu_0_pool5_1__1:0'
+  Min:             0.0
+  Max:             8.70772266387939453125
+  Histogram:       [ 1862, 129, 31, 14, 4, 3, 3, 0, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_conv1_1__1:0'
+  Min:             -2.1179039478302001953125
+  Max:             2.6400001049041748046875
+  Histogram:       [ 2616, 3564, 5683, 8979, 11540, 12099, 11118, 8746, 
+                     5346, 80837 ]
+- NodeOutputName:  'Conv_gpu_0_conv1_1__2:0'
+  Min:             -11.37593746185302734375
+  Max:             15.22624683380126953125
+  Histogram:       [ 24, 208, 29495, 106479, 455130, 165530, 25004, 13060, 
+                     7862, 24 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__2:0'
+  Min:             -21.891693115234375
+  Max:             9.77777576446533203125
+  Histogram:       [ 1, 13, 46, 298, 3140, 61773, 455080, 224234, 56882, 
+                     1349 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             15.22624683380126953125
+  Histogram:       [ 91846, 65827, 22449, 9337, 4093, 2175, 2861, 480, 
+                     1622, 14 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__2_ReshapeOutput:0'
+  Min:             -21.891693115234375
+  Max:             9.77777576446533203125
+  Histogram:       [ 1, 13, 46, 298, 3140, 61773, 455080, 224234, 56882, 
+                     1349 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__2_ReshapeWeights:0'
+  Min:             -1.4928524494171142578125
+  Max:             0.71374809741973876953125
+  Histogram:       [ 1, 3, 3, 19, 80, 634, 13468, 2062, 99, 15 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__2_TransposeWeights:0'
+  Min:             -1.4928524494171142578125
+  Max:             0.71374809741973876953125
+  Histogram:       [ 1, 3, 3, 19, 80, 634, 13468, 2062, 99, 15 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__6:0'
+  Min:             -21.891693115234375
+  Max:             9.77777576446533203125
+  Histogram:       [ 1, 13, 46, 298, 3140, 61773, 455080, 224234, 56882, 
+                     1349 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__6_bias:0'
+  Min:             -21.891693115234375
+  Max:             9.77777576446533203125
+  Histogram:       [ 1, 13, 46, 298, 3140, 61773, 455080, 224234, 56882, 
+                     1349 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch1_1__6_dot:0'
+  Min:             -24.988239288330078125
+  Max:             10.04742336273193359375
+  Histogram:       [ 10, 41, 247, 2432, 17538, 163275, 335069, 232721, 
+                     50940, 543 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__2:0'
+  Min:             -15.4224872589111328125
+  Max:             9.15654468536376953125
+  Histogram:       [ 12, 43, 250, 993, 8443, 28860, 137936, 18385, 3806, 
+                     1976 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             15.22624683380126953125
+  Histogram:       [ 91846, 65827, 22449, 9337, 4093, 2175, 2861, 480, 
+                     1622, 14 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__2_ReshapeOutput:0'
+  Min:             -15.4224872589111328125
+  Max:             9.15654468536376953125
+  Histogram:       [ 12, 43, 250, 993, 8443, 28860, 137936, 18385, 3806, 
+                     1976 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.71606409549713134765625
+  Max:             0.504266798496246337890625
+  Histogram:       [ 5, 9, 17, 53, 214, 2372, 1327, 82, 16, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.71606409549713134765625
+  Max:             0.504266798496246337890625
+  Histogram:       [ 5, 9, 17, 53, 214, 2372, 1327, 82, 16, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__7:0'
+  Min:             -15.4224872589111328125
+  Max:             9.15654468536376953125
+  Histogram:       [ 12, 43, 250, 993, 8443, 28860, 137936, 18385, 3806, 
+                     1976 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__7_bias:0'
+  Min:             -15.4224872589111328125
+  Max:             9.15654468536376953125
+  Histogram:       [ 12, 43, 250, 993, 8443, 28860, 137936, 18385, 3806, 
+                     1976 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2a_1__7_dot:0'
+  Min:             -17.5267009735107421875
+  Max:             12.28826427459716796875
+  Histogram:       [ 16, 138, 798, 5408, 38192, 108668, 40358, 5575, 1450, 
+                     101 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2b_1__2:0'
+  Min:             -7.81734943389892578125
+  Max:             9.60829830169677734375
+  Histogram:       [ 33, 553, 2530, 31961, 105923, 39073, 10757, 4620, 
+                     3742, 1512 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__2:0'
+  Min:             -10.155040740966796875
+  Max:             9.3255138397216796875
+  Histogram:       [ 18, 483, 4523, 58247, 160760, 394858, 129725, 49766, 
+                     4424, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             9.60829830169677734375
+  Histogram:       [ 144494, 25944, 11862, 7034, 3667, 1839, 1355, 1922, 
+                     2536, 51 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__2_ReshapeOutput:0'
+  Min:             -10.155040740966796875
+  Max:             9.3255138397216796875
+  Histogram:       [ 18, 483, 4523, 58247, 160760, 394858, 129725, 49766, 
+                     4424, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.39273202419281005859375
+  Max:             1.39487171173095703125
+  Histogram:       [ 1, 4, 34, 241, 8805, 7091, 180, 24, 3, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.39273202419281005859375
+  Max:             1.39487171173095703125
+  Histogram:       [ 1, 4, 34, 241, 8805, 7091, 180, 24, 3, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__8:0'
+  Min:             -10.155040740966796875
+  Max:             9.3255138397216796875
+  Histogram:       [ 18, 483, 4523, 58247, 160760, 394858, 129725, 49766, 
+                     4424, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__8_bias:0'
+  Min:             -10.155040740966796875
+  Max:             9.3255138397216796875
+  Histogram:       [ 18, 483, 4523, 58247, 160760, 394858, 129725, 49766, 
+                     4424, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res2_0_branch2c_1__8_dot:0'
+  Min:             -12.20221424102783203125
+  Max:             9.495738983154296875
+  Histogram:       [ 67, 821, 14949, 45721, 90680, 342556, 192259, 79052, 
+                     33596, 3115 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__2:0'
+  Min:             -10.7796421051025390625
+  Max:             11.2527256011962890625
+  Histogram:       [ 45, 631, 4550, 24333, 69613, 96452, 4999, 75, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             9.7411060333251953125
+  Histogram:       [ 564847, 159304, 62143, 12297, 3448, 512, 204, 45, 
+                     14, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__2_ReshapeOutput:0'
+  Min:             -10.7796421051025390625
+  Max:             11.2527256011962890625
+  Histogram:       [ 45, 631, 4550, 24333, 69613, 96452, 4999, 75, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.40354645252227783203125
+  Max:             0.39585769176483154296875
+  Histogram:       [ 6, 10, 60, 508, 6474, 8407, 795, 101, 20, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.40354645252227783203125
+  Max:             0.39585769176483154296875
+  Histogram:       [ 6, 10, 60, 508, 6474, 8407, 795, 101, 20, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__7:0'
+  Min:             -10.7796421051025390625
+  Max:             11.2527256011962890625
+  Histogram:       [ 45, 631, 4550, 24333, 69613, 96452, 4999, 75, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__7_bias:0'
+  Min:             -10.7796421051025390625
+  Max:             11.2527256011962890625
+  Histogram:       [ 45, 631, 4550, 24333, 69613, 96452, 4999, 75, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2a_1__7_dot:0'
+  Min:             -8.8853302001953125
+  Max:             12.68963527679443359375
+  Histogram:       [ 49, 718, 8136, 65704, 94244, 28383, 3402, 64, 2, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2b_1__2:0'
+  Min:             -12.94313812255859375
+  Max:             11.768054962158203125
+  Histogram:       [ 54, 21, 681, 6090, 54773, 117391, 20885, 707, 46, 
+                     56 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__2:0'
+  Min:             -9.0799617767333984375
+  Max:             8.1022930145263671875
+  Histogram:       [ 21, 90, 904, 14733, 165190, 585684, 34253, 1633, 187, 
+                     121 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             11.768054962158203125
+  Histogram:       [ 150978, 38326, 8654, 2223, 370, 57, 37, 3, 2, 54 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__2_ReshapeOutput:0'
+  Min:             -9.0799617767333984375
+  Max:             8.1022930145263671875
+  Histogram:       [ 21, 90, 904, 14733, 165190, 585684, 34253, 1633, 187, 
+                     121 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__2_ReshapeWeights:0'
+  Min:             -0.827235519886016845703125
+  Max:             0.74843943119049072265625
+  Histogram:       [ 2, 14, 51, 267, 2715, 12512, 666, 117, 30, 10 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__2_TransposeWeights:0'
+  Min:             -0.827235519886016845703125
+  Max:             0.74843943119049072265625
+  Histogram:       [ 2, 14, 51, 267, 2715, 12512, 666, 117, 30, 10 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__8:0'
+  Min:             -9.0799617767333984375
+  Max:             8.1022930145263671875
+  Histogram:       [ 21, 90, 904, 14733, 165190, 585684, 34253, 1633, 187, 
+                     121 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__8_bias:0'
+  Min:             -9.0799617767333984375
+  Max:             8.1022930145263671875
+  Histogram:       [ 21, 90, 904, 14733, 165190, 585684, 34253, 1633, 187, 
+                     121 ]
+- NodeOutputName:  'Conv_gpu_0_res2_1_branch2c_1__8_dot:0'
+  Min:             -11.40293598175048828125
+  Max:             8.95379638671875
+  Histogram:       [ 28, 137, 1022, 8190, 42130, 668894, 73559, 7976, 836, 
+                     44 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__2:0'
+  Min:             -8.44578266143798828125
+  Max:             7.881368160247802734375
+  Histogram:       [ 48, 435, 2997, 15503, 57781, 100346, 21649, 1663, 
+                     260, 22 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             11.155109405517578125
+  Histogram:       [ 568062, 188593, 35017, 8822, 1714, 337, 219, 44, 5, 
+                     3 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__2_ReshapeOutput:0'
+  Min:             -8.44578266143798828125
+  Max:             7.881368160247802734375
+  Histogram:       [ 48, 435, 2997, 15503, 57781, 100346, 21649, 1663, 
+                     260, 22 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.622084319591522216796875
+  Max:             0.454372346401214599609375
+  Histogram:       [ 1, 3, 5, 87, 1032, 10819, 4122, 288, 22, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.622084319591522216796875
+  Max:             0.454372346401214599609375
+  Histogram:       [ 1, 3, 5, 87, 1032, 10819, 4122, 288, 22, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__7:0'
+  Min:             -8.44578266143798828125
+  Max:             7.881368160247802734375
+  Histogram:       [ 48, 435, 2997, 15503, 57781, 100346, 21649, 1663, 
+                     260, 22 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__7_bias:0'
+  Min:             -8.44578266143798828125
+  Max:             7.881368160247802734375
+  Histogram:       [ 48, 435, 2997, 15503, 57781, 100346, 21649, 1663, 
+                     260, 22 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2a_1__7_dot:0'
+  Min:             -14.53571319580078125
+  Max:             7.684555530548095703125
+  Histogram:       [ 11, 96, 1854, 1614, 7417, 44633, 112790, 29074, 3082, 
+                     133 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2b_1__2:0'
+  Min:             -10.974269866943359375
+  Max:             9.12749576568603515625
+  Histogram:       [ 19, 119, 954, 7293, 40129, 120975, 29954, 1192, 66, 
+                     3 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__2:0'
+  Min:             -12.2613468170166015625
+  Max:             8.2303638458251953125
+  Histogram:       [ 2, 21, 188, 2025, 17563, 476863, 300713, 5138, 278, 
+                     25 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             9.12749576568603515625
+  Histogram:       [ 162431, 27289, 8592, 1894, 369, 92, 33, 1, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__2_ReshapeOutput:0'
+  Min:             -12.2613468170166015625
+  Max:             8.2303638458251953125
+  Histogram:       [ 2, 21, 188, 2025, 17563, 476863, 300713, 5138, 278, 
+                     25 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.5399763584136962890625
+  Max:             0.938102424144744873046875
+  Histogram:       [ 1, 3, 11, 53, 226, 2617, 12938, 453, 66, 16 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.5399763584136962890625
+  Max:             0.938102424144744873046875
+  Histogram:       [ 1, 3, 11, 53, 226, 2617, 12938, 453, 66, 16 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__8:0'
+  Min:             -12.2613468170166015625
+  Max:             8.2303638458251953125
+  Histogram:       [ 2, 21, 188, 2025, 17563, 476863, 300713, 5138, 278, 
+                     25 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__8_bias:0'
+  Min:             -12.2613468170166015625
+  Max:             8.2303638458251953125
+  Histogram:       [ 2, 21, 188, 2025, 17563, 476863, 300713, 5138, 278, 
+                     25 ]
+- NodeOutputName:  'Conv_gpu_0_res2_2_branch2c_1__8_dot:0'
+  Min:             -15.53745174407958984375
+  Max:             9.02912998199462890625
+  Histogram:       [ 3, 25, 139, 1159, 9146, 85273, 693704, 13143, 219, 
+                     5 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch1_1__2:0'
+  Min:             -13.0247821807861328125
+  Max:             8.04284572601318359375
+  Histogram:       [ 4, 9, 93, 532, 6813, 133079, 247896, 12141, 763, 78 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__2:0'
+  Min:             -13.8049411773681640625
+  Max:             11.61678218841552734375
+  Histogram:       [ 3, 18, 327, 8976, 153886, 223296, 14603, 286, 10, 
+                     3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             15.9958820343017578125
+  Histogram:       [ 658573, 125178, 16292, 2286, 373, 99, 12, 2, 0, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__2_ReshapeOutput:0'
+  Min:             -13.8049411773681640625
+  Max:             11.61678218841552734375
+  Histogram:       [ 3, 18, 327, 8976, 153886, 223296, 14603, 286, 10, 
+                     3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.522882938385009765625
+  Max:             0.4348801076412200927734375
+  Histogram:       [ 4, 11, 52, 452, 5417, 23316, 3102, 352, 54, 8 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.522882938385009765625
+  Max:             0.4348801076412200927734375
+  Histogram:       [ 4, 11, 52, 452, 5417, 23316, 3102, 352, 54, 8 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__7:0'
+  Min:             -13.8049411773681640625
+  Max:             11.61678218841552734375
+  Histogram:       [ 3, 18, 327, 8976, 153886, 223296, 14603, 286, 10, 
+                     3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__7_bias:0'
+  Min:             -13.8049411773681640625
+  Max:             11.61678218841552734375
+  Histogram:       [ 3, 18, 327, 8976, 153886, 223296, 14603, 286, 10, 
+                     3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2a_1__7_dot:0'
+  Min:             -14.79276371002197265625
+  Max:             11.0542449951171875
+  Histogram:       [ 3, 16, 728, 10958, 103373, 222986, 60136, 3121, 80, 
+                     7 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2b_1__2:0'
+  Min:             -10.26547527313232421875
+  Max:             9.00968074798583984375
+  Histogram:       [ 6, 25, 362, 3590, 22187, 60358, 13110, 658, 49, 7 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__2:0'
+  Min:             -13.72363376617431640625
+  Max:             22.105712890625
+  Histogram:       [ 3, 77, 1734, 332739, 66337, 503, 12, 1, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             9.00968074798583984375
+  Histogram:       [ 76364, 17585, 4872, 1105, 295, 93, 27, 4, 5, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__2_ReshapeOutput:0'
+  Min:             -13.72363376617431640625
+  Max:             22.105712890625
+  Histogram:       [ 3, 77, 1734, 332739, 66337, 503, 12, 1, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.1379578113555908203125
+  Max:             1.37003409862518310546875
+  Histogram:       [ 2, 13, 86, 2659, 59432, 3104, 195, 39, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.1379578113555908203125
+  Max:             1.37003409862518310546875
+  Histogram:       [ 2, 13, 86, 2659, 59432, 3104, 195, 39, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__8:0'
+  Min:             -13.72363376617431640625
+  Max:             22.105712890625
+  Histogram:       [ 3, 77, 1734, 332739, 66337, 503, 12, 1, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__8_bias:0'
+  Min:             -13.72363376617431640625
+  Max:             22.105712890625
+  Histogram:       [ 3, 77, 1734, 332739, 66337, 503, 12, 1, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_0_branch2c_1__8_dot:0'
+  Min:             -12.41185474395751953125
+  Max:             22.2863826751708984375
+  Histogram:       [ 35, 316, 22285, 352405, 25283, 1072, 10, 0, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__2:0'
+  Min:             -6.6024036407470703125
+  Max:             8.1876811981201171875
+  Histogram:       [ 75, 406, 3583, 26576, 47185, 19995, 2397, 132, 2, 
+                     1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             21.74274444580078125
+  Histogram:       [ 380907, 18894, 1439, 129, 34, 3, 0, 1, 0, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__2_ReshapeOutput:0'
+  Min:             -6.6024036407470703125
+  Max:             8.1876811981201171875
+  Histogram:       [ 75, 406, 3583, 26576, 47185, 19995, 2397, 132, 2, 
+                     1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.281187832355499267578125
+  Max:             0.4745372235774993896484375
+  Histogram:       [ 10, 70, 1105, 56926, 7069, 313, 38, 3, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.281187832355499267578125
+  Max:             0.4745372235774993896484375
+  Histogram:       [ 10, 70, 1105, 56926, 7069, 313, 38, 3, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__7:0'
+  Min:             -6.6024036407470703125
+  Max:             8.1876811981201171875
+  Histogram:       [ 75, 406, 3583, 26576, 47185, 19995, 2397, 132, 2, 
+                     1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__7_bias:0'
+  Min:             -6.6024036407470703125
+  Max:             8.1876811981201171875
+  Histogram:       [ 75, 406, 3583, 26576, 47185, 19995, 2397, 132, 2, 
+                     1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2a_1__7_dot:0'
+  Min:             -6.973968982696533203125
+  Max:             10.0562648773193359375
+  Histogram:       [ 56, 392, 5072, 42081, 45455, 6287, 838, 166, 4, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2b_1__2:0'
+  Min:             -8.48387241363525390625
+  Max:             7.275997161865234375
+  Histogram:       [ 42, 183, 1278, 7617, 34110, 44533, 11184, 1173, 212, 
+                     20 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__2:0'
+  Min:             -8.4212779998779296875
+  Max:             11.47945117950439453125
+  Histogram:       [ 52, 457, 8238, 154827, 230156, 7222, 413, 40, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             7.275997161865234375
+  Histogram:       [ 82640, 11727, 3854, 1250, 512, 203, 107, 50, 6, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__2_ReshapeOutput:0'
+  Min:             -8.4212779998779296875
+  Max:             11.47945117950439453125
+  Histogram:       [ 52, 457, 8238, 154827, 230156, 7222, 413, 40, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.53607928752899169921875
+  Max:             1.2854321002960205078125
+  Histogram:       [ 6, 17, 30, 157, 3007, 60856, 1351, 98, 11, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.53607928752899169921875
+  Max:             1.2854321002960205078125
+  Histogram:       [ 6, 17, 30, 157, 3007, 60856, 1351, 98, 11, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__8:0'
+  Min:             -8.4212779998779296875
+  Max:             11.47945117950439453125
+  Histogram:       [ 52, 457, 8238, 154827, 230156, 7222, 413, 40, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__8_bias:0'
+  Min:             -8.4212779998779296875
+  Max:             11.47945117950439453125
+  Histogram:       [ 52, 457, 8238, 154827, 230156, 7222, 413, 40, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_1_branch2c_1__8_dot:0'
+  Min:             -12.7582988739013671875
+  Max:             13.78664684295654296875
+  Histogram:       [ 26, 134, 925, 13370, 353909, 31994, 965, 80, 2, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__2:0'
+  Min:             -5.518586635589599609375
+  Max:             8.10516357421875
+  Histogram:       [ 81, 1395, 14142, 43197, 33530, 6991, 805, 187, 19, 
+                     5 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             21.642421722412109375
+  Histogram:       [ 383612, 16461, 1166, 153, 9, 4, 1, 1, 0, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__2_ReshapeOutput:0'
+  Min:             -5.518586635589599609375
+  Max:             8.10516357421875
+  Histogram:       [ 81, 1395, 14142, 43197, 33530, 6991, 805, 187, 19, 
+                     5 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.631106853485107421875
+  Max:             0.454735457897186279296875
+  Histogram:       [ 1, 1, 2, 17, 652, 52668, 11898, 269, 22, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.631106853485107421875
+  Max:             0.454735457897186279296875
+  Histogram:       [ 1, 1, 2, 17, 652, 52668, 11898, 269, 22, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__7:0'
+  Min:             -5.518586635589599609375
+  Max:             8.10516357421875
+  Histogram:       [ 81, 1395, 14142, 43197, 33530, 6991, 805, 187, 19, 
+                     5 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__7_bias:0'
+  Min:             -5.518586635589599609375
+  Max:             8.10516357421875
+  Histogram:       [ 81, 1395, 14142, 43197, 33530, 6991, 805, 187, 19, 
+                     5 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2a_1__7_dot:0'
+  Min:             -7.1327648162841796875
+  Max:             7.437385082244873046875
+  Histogram:       [ 18, 359, 3795, 22760, 48416, 20648, 3662, 567, 116, 
+                     11 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2b_1__2:0'
+  Min:             -8.71895313262939453125
+  Max:             7.83554553985595703125
+  Histogram:       [ 30, 241, 2170, 11622, 36189, 39850, 9316, 863, 58, 
+                     13 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__2:0'
+  Min:             -9.2447566986083984375
+  Max:             7.002368450164794921875
+  Histogram:       [ 27, 73, 313, 2843, 37078, 326154, 32514, 2184, 200, 
+                     22 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             7.83554553985595703125
+  Histogram:       [ 83114, 10544, 4544, 1546, 440, 107, 31, 15, 6, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__2_ReshapeOutput:0'
+  Min:             -9.2447566986083984375
+  Max:             7.002368450164794921875
+  Histogram:       [ 27, 73, 313, 2843, 37078, 326154, 32514, 2184, 200, 
+                     22 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.341980457305908203125
+  Max:             1.169042110443115234375
+  Histogram:       [ 5, 5, 30, 245, 5510, 58192, 1407, 115, 20, 7 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.341980457305908203125
+  Max:             1.169042110443115234375
+  Histogram:       [ 5, 5, 30, 245, 5510, 58192, 1407, 115, 20, 7 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__8:0'
+  Min:             -9.2447566986083984375
+  Max:             7.002368450164794921875
+  Histogram:       [ 27, 73, 313, 2843, 37078, 326154, 32514, 2184, 200, 
+                     22 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__8_bias:0'
+  Min:             -9.2447566986083984375
+  Max:             7.002368450164794921875
+  Histogram:       [ 27, 73, 313, 2843, 37078, 326154, 32514, 2184, 200, 
+                     22 ]
+- NodeOutputName:  'Conv_gpu_0_res3_2_branch2c_1__8_dot:0'
+  Min:             -9.7522830963134765625
+  Max:             6.915287017822265625
+  Histogram:       [ 26, 74, 336, 2884, 23515, 292834, 76015, 5008, 638, 
+                     78 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__2:0'
+  Min:             -8.462711334228515625
+  Max:             13.9599514007568359375
+  Histogram:       [ 6, 449, 16815, 65924, 16681, 441, 30, 3, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             21.933986663818359375
+  Histogram:       [ 383097, 17025, 1112, 127, 37, 5, 3, 0, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__2_ReshapeOutput:0'
+  Min:             -8.462711334228515625
+  Max:             13.9599514007568359375
+  Histogram:       [ 6, 449, 16815, 65924, 16681, 441, 30, 3, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.2901425063610076904296875
+  Max:             0.4216782748699188232421875
+  Histogram:       [ 9, 78, 1413, 28834, 32738, 2140, 244, 60, 17, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.2901425063610076904296875
+  Max:             0.4216782748699188232421875
+  Histogram:       [ 9, 78, 1413, 28834, 32738, 2140, 244, 60, 17, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__7:0'
+  Min:             -8.462711334228515625
+  Max:             13.9599514007568359375
+  Histogram:       [ 6, 449, 16815, 65924, 16681, 441, 30, 3, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__7_bias:0'
+  Min:             -8.462711334228515625
+  Max:             13.9599514007568359375
+  Histogram:       [ 6, 449, 16815, 65924, 16681, 441, 30, 3, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2a_1__7_dot:0'
+  Min:             -7.900386333465576171875
+  Max:             13.64137935638427734375
+  Histogram:       [ 36, 1979, 24877, 59606, 12889, 866, 82, 12, 3, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2b_1__2:0'
+  Min:             -11.167125701904296875
+  Max:             9.6633853912353515625
+  Histogram:       [ 3, 43, 422, 4399, 36115, 53659, 5443, 245, 19, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__2:0'
+  Min:             -11.4456462860107421875
+  Max:             6.928142547607421875
+  Histogram:       [ 4, 8, 52, 414, 5814, 115081, 275521, 4360, 131, 23 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             9.6633853912353515625
+  Histogram:       [ 89939, 8028, 1814, 415, 108, 32, 12, 0, 1, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__2_ReshapeOutput:0'
+  Min:             -11.4456462860107421875
+  Max:             6.928142547607421875
+  Histogram:       [ 4, 8, 52, 414, 5814, 115081, 275521, 4360, 131, 23 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__2_ReshapeWeights:0'
+  Min:             -0.7177584171295166015625
+  Max:             1.070071697235107421875
+  Histogram:       [ 9, 108, 1410, 26993, 35821, 1015, 148, 22, 7, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__2_TransposeWeights:0'
+  Min:             -0.7177584171295166015625
+  Max:             1.070071697235107421875
+  Histogram:       [ 9, 108, 1410, 26993, 35821, 1015, 148, 22, 7, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__8:0'
+  Min:             -11.4456462860107421875
+  Max:             6.928142547607421875
+  Histogram:       [ 4, 8, 52, 414, 5814, 115081, 275521, 4360, 131, 23 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__8_bias:0'
+  Min:             -11.4456462860107421875
+  Max:             6.928142547607421875
+  Histogram:       [ 4, 8, 52, 414, 5814, 115081, 275521, 4360, 131, 23 ]
+- NodeOutputName:  'Conv_gpu_0_res3_3_branch2c_1__8_dot:0'
+  Min:             -11.025051116943359375
+  Max:             7.100250244140625
+  Histogram:       [ 4, 16, 100, 827, 8272, 133900, 255903, 2273, 102, 
+                     11 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch1_1__2:0'
+  Min:             -4.9945850372314453125
+  Max:             7.29747772216796875
+  Histogram:       [ 50, 906, 13869, 98533, 74682, 10837, 1479, 248, 81, 
+                     19 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__2:0'
+  Min:             -10.6701507568359375
+  Max:             8.32764720916748046875
+  Histogram:       [ 5, 28, 443, 8881, 69254, 104081, 17125, 838, 43, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             14.69208812713623046875
+  Histogram:       [ 357091, 37796, 5320, 925, 191, 39, 37, 4, 3, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__2_ReshapeOutput:0'
+  Min:             -10.6701507568359375
+  Max:             8.32764720916748046875
+  Histogram:       [ 5, 28, 443, 8881, 69254, 104081, 17125, 838, 43, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.4723211824893951416015625
+  Max:             0.55286037921905517578125
+  Histogram:       [ 3, 26, 265, 8815, 105240, 15798, 783, 122, 15, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.4723211824893951416015625
+  Max:             0.55286037921905517578125
+  Histogram:       [ 3, 26, 265, 8815, 105240, 15798, 783, 122, 15, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__7:0'
+  Min:             -10.6701507568359375
+  Max:             8.32764720916748046875
+  Histogram:       [ 5, 28, 443, 8881, 69254, 104081, 17125, 838, 43, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__7_bias:0'
+  Min:             -10.6701507568359375
+  Max:             8.32764720916748046875
+  Histogram:       [ 5, 28, 443, 8881, 69254, 104081, 17125, 838, 43, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2a_1__7_dot:0'
+  Min:             -10.895435333251953125
+  Max:             8.340057373046875
+  Histogram:       [ 3, 34, 464, 8663, 66637, 100654, 22190, 1956, 90, 
+                     13 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2b_1__2:0'
+  Min:             -6.9714603424072265625
+  Max:             7.31984996795654296875
+  Histogram:       [ 17, 101, 846, 5386, 18943, 21019, 3530, 288, 37, 9 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__2:0'
+  Min:             -7.321343898773193359375
+  Max:             9.62264537811279296875
+  Histogram:       [ 13, 173, 2863, 51781, 133504, 11622, 664, 69, 11, 
+                     4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             7.31984996795654296875
+  Histogram:       [ 35680, 9585, 3547, 970, 252, 94, 25, 14, 4, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__2_ReshapeOutput:0'
+  Min:             -7.321343898773193359375
+  Max:             9.62264537811279296875
+  Histogram:       [ 13, 173, 2863, 51781, 133504, 11622, 664, 69, 11, 
+                     4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__2_ReshapeWeights:0'
+  Min:             -0.6302325725555419921875
+  Max:             0.774917781352996826171875
+  Histogram:       [ 10, 65, 765, 25558, 215082, 19723, 833, 90, 14, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__2_TransposeWeights:0'
+  Min:             -0.6302325725555419921875
+  Max:             0.774917781352996826171875
+  Histogram:       [ 10, 65, 765, 25558, 215082, 19723, 833, 90, 14, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__8:0'
+  Min:             -7.321343898773193359375
+  Max:             9.62264537811279296875
+  Histogram:       [ 13, 173, 2863, 51781, 133504, 11622, 664, 69, 11, 
+                     4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__8_bias:0'
+  Min:             -7.321343898773193359375
+  Max:             9.62264537811279296875
+  Histogram:       [ 13, 173, 2863, 51781, 133504, 11622, 664, 69, 11, 
+                     4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_0_branch2c_1__8_dot:0'
+  Min:             -9.04660511016845703125
+  Max:             9.04122066497802734375
+  Histogram:       [ 15, 219, 1889, 16593, 98132, 79141, 4467, 228, 16, 
+                     4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__2:0'
+  Min:             -7.18683338165283203125
+  Max:             15.815265655517578125
+  Histogram:       [ 20, 843, 20428, 27325, 1458, 71, 26, 2, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             11.7235107421875
+  Histogram:       [ 172904, 20562, 5449, 1280, 364, 107, 23, 6, 5, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__2_ReshapeOutput:0'
+  Min:             -7.18683338165283203125
+  Max:             15.815265655517578125
+  Histogram:       [ 20, 843, 20428, 27325, 1458, 71, 26, 2, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.272620499134063720703125
+  Max:             0.3498041331768035888671875
+  Histogram:       [ 9, 14, 157, 19608, 235848, 6175, 257, 58, 13, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.272620499134063720703125
+  Max:             0.3498041331768035888671875
+  Histogram:       [ 9, 14, 157, 19608, 235848, 6175, 257, 58, 13, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__7:0'
+  Min:             -7.18683338165283203125
+  Max:             15.815265655517578125
+  Histogram:       [ 20, 843, 20428, 27325, 1458, 71, 26, 2, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__7_bias:0'
+  Min:             -7.18683338165283203125
+  Max:             15.815265655517578125
+  Histogram:       [ 20, 843, 20428, 27325, 1458, 71, 26, 2, 0, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2a_1__7_dot:0'
+  Min:             -10.05834102630615234375
+  Max:             19.6184101104736328125
+  Histogram:       [ 12, 251, 11197, 36188, 2421, 77, 7, 19, 1, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2b_1__2:0'
+  Min:             -6.7742099761962890625
+  Max:             6.16451263427734375
+  Histogram:       [ 14, 233, 1877, 9435, 19829, 14810, 3380, 506, 77, 
+                     15 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__2:0'
+  Min:             -10.90267181396484375
+  Max:             8.253681182861328125
+  Histogram:       [ 5, 3, 33, 471, 14497, 170555, 14278, 776, 73, 13 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             6.16451263427734375
+  Histogram:       [ 43443, 3980, 1676, 591, 295, 120, 44, 12, 11, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__2_ReshapeOutput:0'
+  Min:             -10.90267181396484375
+  Max:             8.253681182861328125
+  Histogram:       [ 5, 3, 33, 471, 14497, 170555, 14278, 776, 73, 13 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.12099635601043701171875
+  Max:             1.44045817852020263671875
+  Histogram:       [ 7, 23, 232, 13639, 245011, 3112, 97, 21, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.12099635601043701171875
+  Max:             1.44045817852020263671875
+  Histogram:       [ 7, 23, 232, 13639, 245011, 3112, 97, 21, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__8:0'
+  Min:             -10.90267181396484375
+  Max:             8.253681182861328125
+  Histogram:       [ 5, 3, 33, 471, 14497, 170555, 14278, 776, 73, 13 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__8_bias:0'
+  Min:             -10.90267181396484375
+  Max:             8.253681182861328125
+  Histogram:       [ 5, 3, 33, 471, 14497, 170555, 14278, 776, 73, 13 ]
+- NodeOutputName:  'Conv_gpu_0_res4_1_branch2c_1__8_dot:0'
+  Min:             -13.3845005035400390625
+  Max:             10.29731845855712890625
+  Histogram:       [ 5, 2, 51, 496, 10902, 180632, 8321, 251, 36, 8 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__2:0'
+  Min:             -8.00362110137939453125
+  Max:             8.655780792236328125
+  Histogram:       [ 5, 31, 647, 9525, 27706, 11262, 906, 76, 15, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             11.10584735870361328125
+  Histogram:       [ 172919, 20227, 5514, 1430, 411, 148, 38, 12, 3, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__2_ReshapeOutput:0'
+  Min:             -8.00362110137939453125
+  Max:             8.655780792236328125
+  Histogram:       [ 5, 31, 647, 9525, 27706, 11262, 906, 76, 15, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.3414843976497650146484375
+  Max:             0.53212153911590576171875
+  Histogram:       [ 6, 22, 631, 182345, 78338, 723, 62, 10, 5, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.3414843976497650146484375
+  Max:             0.53212153911590576171875
+  Histogram:       [ 6, 22, 631, 182345, 78338, 723, 62, 10, 5, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__7:0'
+  Min:             -8.00362110137939453125
+  Max:             8.655780792236328125
+  Histogram:       [ 5, 31, 647, 9525, 27706, 11262, 906, 76, 15, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__7_bias:0'
+  Min:             -8.00362110137939453125
+  Max:             8.655780792236328125
+  Histogram:       [ 5, 31, 647, 9525, 27706, 11262, 906, 76, 15, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2a_1__7_dot:0'
+  Min:             -7.93548870086669921875
+  Max:             8.8390102386474609375
+  Histogram:       [ 5, 57, 1082, 10606, 26679, 10156, 1352, 187, 41, 11 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2b_1__2:0'
+  Min:             -12.93042850494384765625
+  Max:             6.055774688720703125
+  Histogram:       [ 10, 16, 41, 75, 1220, 11769, 28826, 8022, 184, 13 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__2:0'
+  Min:             -7.614029407501220703125
+  Max:             7.107572078704833984375
+  Histogram:       [ 9, 40, 296, 5298, 115401, 77824, 1625, 175, 28, 8 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             6.055774688720703125
+  Histogram:       [ 44508, 3741, 1389, 407, 83, 26, 11, 4, 5, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__2_ReshapeOutput:0'
+  Min:             -7.614029407501220703125
+  Max:             7.107572078704833984375
+  Histogram:       [ 9, 40, 296, 5298, 115401, 77824, 1625, 175, 28, 8 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.36549270153045654296875
+  Max:             1.39438784122467041015625
+  Histogram:       [ 8, 6, 56, 788, 173248, 87445, 532, 43, 13, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.36549270153045654296875
+  Max:             1.39438784122467041015625
+  Histogram:       [ 8, 6, 56, 788, 173248, 87445, 532, 43, 13, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__8:0'
+  Min:             -7.614029407501220703125
+  Max:             7.107572078704833984375
+  Histogram:       [ 9, 40, 296, 5298, 115401, 77824, 1625, 175, 28, 8 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__8_bias:0'
+  Min:             -7.614029407501220703125
+  Max:             7.107572078704833984375
+  Histogram:       [ 9, 40, 296, 5298, 115401, 77824, 1625, 175, 28, 8 ]
+- NodeOutputName:  'Conv_gpu_0_res4_2_branch2c_1__8_dot:0'
+  Min:             -8.49332523345947265625
+  Max:             8.02339935302734375
+  Histogram:       [ 3, 31, 285, 3183, 76187, 119460, 1452, 75, 19, 9 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__2:0'
+  Min:             -5.91690731048583984375
+  Max:             8.4750823974609375
+  Histogram:       [ 35, 622, 7257, 25344, 14840, 1863, 183, 25, 4, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             10.42067432403564453125
+  Histogram:       [ 176094, 17442, 5052, 1425, 468, 151, 57, 10, 4, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__2_ReshapeOutput:0'
+  Min:             -5.91690731048583984375
+  Max:             8.4750823974609375
+  Histogram:       [ 35, 622, 7257, 25344, 14840, 1863, 183, 25, 4, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.302221834659576416015625
+  Max:             0.3630868494510650634765625
+  Histogram:       [ 14, 49, 292, 14281, 228467, 18131, 776, 97, 25, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.302221834659576416015625
+  Max:             0.3630868494510650634765625
+  Histogram:       [ 14, 49, 292, 14281, 228467, 18131, 776, 97, 25, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__7:0'
+  Min:             -5.91690731048583984375
+  Max:             8.4750823974609375
+  Histogram:       [ 35, 622, 7257, 25344, 14840, 1863, 183, 25, 4, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__7_bias:0'
+  Min:             -5.91690731048583984375
+  Max:             8.4750823974609375
+  Histogram:       [ 35, 622, 7257, 25344, 14840, 1863, 183, 25, 4, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2a_1__7_dot:0'
+  Min:             -6.420346736907958984375
+  Max:             8.6602935791015625
+  Histogram:       [ 22, 470, 5368, 23041, 17996, 2897, 318, 55, 6, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2b_1__2:0'
+  Min:             -8.58055210113525390625
+  Max:             7.13280773162841796875
+  Histogram:       [ 15, 77, 551, 4672, 19140, 20983, 4408, 288, 31, 11 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__2:0'
+  Min:             -9.8802089691162109375
+  Max:             7.5435924530029296875
+  Histogram:       [ 8, 23, 246, 2525, 26666, 164181, 6647, 344, 49, 15 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             7.13280773162841796875
+  Histogram:       [ 44385, 3953, 1310, 371, 88, 38, 13, 9, 7, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__2_ReshapeOutput:0'
+  Min:             -9.8802089691162109375
+  Max:             7.5435924530029296875
+  Histogram:       [ 8, 23, 246, 2525, 26666, 164181, 6647, 344, 49, 15 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__2_ReshapeWeights:0'
+  Min:             -1.0811126232147216796875
+  Max:             1.44738042354583740234375
+  Histogram:       [ 2, 21, 416, 29593, 228436, 3403, 221, 35, 14, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__2_TransposeWeights:0'
+  Min:             -1.0811126232147216796875
+  Max:             1.44738042354583740234375
+  Histogram:       [ 2, 21, 416, 29593, 228436, 3403, 221, 35, 14, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__8:0'
+  Min:             -9.8802089691162109375
+  Max:             7.5435924530029296875
+  Histogram:       [ 8, 23, 246, 2525, 26666, 164181, 6647, 344, 49, 15 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__8_bias:0'
+  Min:             -9.8802089691162109375
+  Max:             7.5435924530029296875
+  Histogram:       [ 8, 23, 246, 2525, 26666, 164181, 6647, 344, 49, 15 ]
+- NodeOutputName:  'Conv_gpu_0_res4_3_branch2c_1__8_dot:0'
+  Min:             -8.8389415740966796875
+  Max:             7.907086849212646484375
+  Histogram:       [ 8, 50, 523, 5182, 50467, 141364, 2895, 177, 27, 11 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__2:0'
+  Min:             -6.883403301239013671875
+  Max:             8.40311145782470703125
+  Histogram:       [ 8, 184, 3397, 20742, 21876, 3599, 303, 57, 5, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             13.11877155303955078125
+  Histogram:       [ 186012, 11742, 2211, 538, 149, 35, 11, 3, 1, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__2_ReshapeOutput:0'
+  Min:             -6.883403301239013671875
+  Max:             8.40311145782470703125
+  Histogram:       [ 8, 184, 3397, 20742, 21876, 3599, 303, 57, 5, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.3071686327457427978515625
+  Max:             0.429291665554046630859375
+  Histogram:       [ 5, 11, 742, 91433, 162348, 7157, 388, 51, 8, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.3071686327457427978515625
+  Max:             0.429291665554046630859375
+  Histogram:       [ 5, 11, 742, 91433, 162348, 7157, 388, 51, 8, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__7:0'
+  Min:             -6.883403301239013671875
+  Max:             8.40311145782470703125
+  Histogram:       [ 8, 184, 3397, 20742, 21876, 3599, 303, 57, 5, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__7_bias:0'
+  Min:             -6.883403301239013671875
+  Max:             8.40311145782470703125
+  Histogram:       [ 8, 184, 3397, 20742, 21876, 3599, 303, 57, 5, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2a_1__7_dot:0'
+  Min:             -7.014135837554931640625
+  Max:             9.31437206268310546875
+  Histogram:       [ 10, 203, 3188, 21076, 22030, 3238, 360, 58, 9, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2b_1__2:0'
+  Min:             -7.93608760833740234375
+  Max:             9.77983760833740234375
+  Histogram:       [ 56, 581, 4305, 18739, 22455, 3723, 255, 48, 10, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__2:0'
+  Min:             -7.874282360076904296875
+  Max:             8.89707469940185546875
+  Histogram:       [ 14, 150, 2176, 33518, 157748, 6825, 247, 23, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             9.77983760833740234375
+  Histogram:       [ 46443, 2861, 638, 151, 42, 27, 6, 4, 2, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__2_ReshapeOutput:0'
+  Min:             -7.874282360076904296875
+  Max:             8.89707469940185546875
+  Histogram:       [ 14, 150, 2176, 33518, 157748, 6825, 247, 23, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__2_ReshapeWeights:0'
+  Min:             -0.754731357097625732421875
+  Max:             0.944935739040374755859375
+  Histogram:       [ 1, 53, 726, 28277, 219768, 12435, 750, 111, 17, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__2_TransposeWeights:0'
+  Min:             -0.754731357097625732421875
+  Max:             0.944935739040374755859375
+  Histogram:       [ 1, 53, 726, 28277, 219768, 12435, 750, 111, 17, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__8:0'
+  Min:             -7.874282360076904296875
+  Max:             8.89707469940185546875
+  Histogram:       [ 14, 150, 2176, 33518, 157748, 6825, 247, 23, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__8_bias:0'
+  Min:             -7.874282360076904296875
+  Max:             8.89707469940185546875
+  Histogram:       [ 14, 150, 2176, 33518, 157748, 6825, 247, 23, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_4_branch2c_1__8_dot:0'
+  Min:             -7.91353893280029296875
+  Max:             8.6754474639892578125
+  Histogram:       [ 24, 145, 1469, 18846, 164742, 14837, 580, 52, 8, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__2:0'
+  Min:             -6.779038906097412109375
+  Max:             11.28623199462890625
+  Histogram:       [ 46, 1125, 13763, 28571, 5876, 672, 95, 24, 3, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             15.50838184356689453125
+  Histogram:       [ 191828, 7353, 1182, 254, 58, 20, 6, 2, 0, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__2_ReshapeOutput:0'
+  Min:             -6.779038906097412109375
+  Max:             11.28623199462890625
+  Histogram:       [ 46, 1125, 13763, 28571, 5876, 672, 95, 24, 3, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.24194873869419097900390625
+  Max:             0.538157522678375244140625
+  Histogram:       [ 26, 2414, 117084, 132987, 8964, 585, 66, 14, 2, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.24194873869419097900390625
+  Max:             0.538157522678375244140625
+  Histogram:       [ 26, 2414, 117084, 132987, 8964, 585, 66, 14, 2, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__7:0'
+  Min:             -6.779038906097412109375
+  Max:             11.28623199462890625
+  Histogram:       [ 46, 1125, 13763, 28571, 5876, 672, 95, 24, 3, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__7_bias:0'
+  Min:             -6.779038906097412109375
+  Max:             11.28623199462890625
+  Histogram:       [ 46, 1125, 13763, 28571, 5876, 672, 95, 24, 3, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2a_1__7_dot:0'
+  Min:             -8.03070354461669921875
+  Max:             11.45988559722900390625
+  Histogram:       [ 7, 159, 3144, 26597, 17998, 1990, 242, 33, 5, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2b_1__2:0'
+  Min:             -11.39870452880859375
+  Max:             18.830596923828125
+  Histogram:       [ 11, 274, 6278, 35556, 7681, 334, 35, 4, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__2:0'
+  Min:             -11.1437320709228515625
+  Max:             6.01994991302490234375
+  Histogram:       [ 11, 16, 115, 674, 5128, 54522, 137054, 3052, 120, 
+                     12 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             18.830596923828125
+  Histogram:       [ 48221, 1595, 266, 67, 20, 3, 1, 2, 0, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__2_ReshapeOutput:0'
+  Min:             -11.1437320709228515625
+  Max:             6.01994991302490234375
+  Histogram:       [ 11, 16, 115, 674, 5128, 54522, 137054, 3052, 120, 
+                     12 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__2_ReshapeWeights:0'
+  Min:             -0.871604382991790771484375
+  Max:             0.95691978931427001953125
+  Histogram:       [ 1, 8, 68, 3093, 228076, 30466, 405, 21, 5, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__2_TransposeWeights:0'
+  Min:             -0.871604382991790771484375
+  Max:             0.95691978931427001953125
+  Histogram:       [ 1, 8, 68, 3093, 228076, 30466, 405, 21, 5, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__8:0'
+  Min:             -11.1437320709228515625
+  Max:             6.01994991302490234375
+  Histogram:       [ 11, 16, 115, 674, 5128, 54522, 137054, 3052, 120, 
+                     12 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__8_bias:0'
+  Min:             -11.1437320709228515625
+  Max:             6.01994991302490234375
+  Histogram:       [ 11, 16, 115, 674, 5128, 54522, 137054, 3052, 120, 
+                     12 ]
+- NodeOutputName:  'Conv_gpu_0_res4_5_branch2c_1__8_dot:0'
+  Min:             -12.54856204986572265625
+  Max:             6.474521160125732421875
+  Histogram:       [ 10, 14, 92, 487, 3387, 32154, 160007, 4430, 118, 5 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch1_1__2:0'
+  Min:             -13.37532806396484375
+  Max:             23.274932861328125
+  Histogram:       [ 9, 448, 17116, 66909, 14697, 1032, 109, 26, 2, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__2:0'
+  Min:             -6.457245349884033203125
+  Max:             7.467939853668212890625
+  Histogram:       [ 51, 845, 9092, 43587, 40744, 5405, 532, 78, 16, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             12.88241291046142578125
+  Histogram:       [ 191171, 7741, 1311, 331, 103, 29, 10, 4, 3, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__2_ReshapeOutput:0'
+  Min:             -6.457245349884033203125
+  Max:             7.467939853668212890625
+  Histogram:       [ 51, 845, 9092, 43587, 40744, 5405, 532, 78, 16, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.3659682571887969970703125
+  Max:             0.497343957424163818359375
+  Histogram:       [ 2, 64, 4162, 179714, 303718, 34340, 2075, 182, 27, 
+                     4 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.3659682571887969970703125
+  Max:             0.497343957424163818359375
+  Histogram:       [ 2, 64, 4162, 179714, 303718, 34340, 2075, 182, 27, 
+                     4 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__7:0'
+  Min:             -6.457245349884033203125
+  Max:             7.467939853668212890625
+  Histogram:       [ 51, 845, 9092, 43587, 40744, 5405, 532, 78, 16, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__7_bias:0'
+  Min:             -6.457245349884033203125
+  Max:             7.467939853668212890625
+  Histogram:       [ 51, 845, 9092, 43587, 40744, 5405, 532, 78, 16, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2a_1__7_dot:0'
+  Min:             -6.631044864654541015625
+  Max:             7.4056034088134765625
+  Histogram:       [ 25, 456, 5266, 33058, 49787, 10531, 1066, 135, 25, 
+                     3 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2b_1__2:0'
+  Min:             -8.6780147552490234375
+  Max:             6.47432613372802734375
+  Histogram:       [ 3, 17, 136, 990, 6362, 14256, 3115, 185, 21, 3 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__2:0'
+  Min:             -13.09638118743896484375
+  Max:             22.2664928436279296875
+  Histogram:       [ 14, 361, 14842, 74992, 9439, 612, 67, 19, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             6.47432613372802734375
+  Histogram:       [ 22896, 1497, 487, 142, 38, 17, 5, 3, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__2_ReshapeOutput:0'
+  Min:             -13.09638118743896484375
+  Max:             22.2664928436279296875
+  Histogram:       [ 14, 361, 14842, 74992, 9439, 612, 67, 19, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__2_ReshapeWeights:0'
+  Min:             -2.902021884918212890625
+  Max:             3.6678745746612548828125
+  Histogram:       [ 4, 3, 16, 42266, 979189, 26437, 601, 49, 9, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__2_TransposeWeights:0'
+  Min:             -2.902021884918212890625
+  Max:             3.6678745746612548828125
+  Histogram:       [ 4, 3, 16, 42266, 979189, 26437, 601, 49, 9, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__8:0'
+  Min:             -13.09638118743896484375
+  Max:             22.2664928436279296875
+  Histogram:       [ 14, 361, 14842, 74992, 9439, 612, 67, 19, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__8_bias:0'
+  Min:             -13.09638118743896484375
+  Max:             22.2664928436279296875
+  Histogram:       [ 14, 361, 14842, 74992, 9439, 612, 67, 19, 4, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_0_branch2c_1__8_dot:0'
+  Min:             -14.237274169921875
+  Max:             21.5305004119873046875
+  Histogram:       [ 10, 178, 4864, 67126, 26350, 1585, 192, 37, 8, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__2:0'
+  Min:             -6.084021091461181640625
+  Max:             6.124631404876708984375
+  Histogram:       [ 5, 78, 588, 3886, 12850, 6993, 600, 70, 14, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             43.31998443603515625
+  Histogram:       [ 97060, 2703, 430, 110, 30, 14, 2, 2, 0, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__2_ReshapeOutput:0'
+  Min:             -6.084021091461181640625
+  Max:             6.124631404876708984375
+  Histogram:       [ 5, 78, 588, 3886, 12850, 6993, 600, 70, 14, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.072977721691131591796875
+  Max:             0.114179112017154693603515625
+  Histogram:       [ 4, 24, 3825, 711411, 327834, 5343, 121, 11, 1, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.072977721691131591796875
+  Max:             0.114179112017154693603515625
+  Histogram:       [ 4, 24, 3825, 711411, 327834, 5343, 121, 11, 1, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__7:0'
+  Min:             -6.084021091461181640625
+  Max:             6.124631404876708984375
+  Histogram:       [ 5, 78, 588, 3886, 12850, 6993, 600, 70, 14, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__7_bias:0'
+  Min:             -6.084021091461181640625
+  Max:             6.124631404876708984375
+  Histogram:       [ 5, 78, 588, 3886, 12850, 6993, 600, 70, 14, 4 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2a_1__7_dot:0'
+  Min:             -6.30733013153076171875
+  Max:             6.01205730438232421875
+  Histogram:       [ 7, 88, 612, 3967, 12783, 6931, 597, 82, 14, 7 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2b_1__2:0'
+  Min:             -6.097400188446044921875
+  Max:             4.02481555938720703125
+  Histogram:       [ 27, 189, 878, 3078, 7314, 9672, 3361, 491, 63, 15 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__2:0'
+  Min:             -14.02927875518798828125
+  Max:             15.79056453704833984375
+  Histogram:       [ 11, 73, 1118, 23205, 70889, 4589, 365, 64, 26, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             4.02481555938720703125
+  Histogram:       [ 23387, 909, 434, 181, 99, 41, 17, 10, 8, 2 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__2_ReshapeOutput:0'
+  Min:             -14.02927875518798828125
+  Max:             15.79056453704833984375
+  Histogram:       [ 11, 73, 1118, 23205, 70889, 4589, 365, 64, 26, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__2_ReshapeWeights:0'
+  Min:             -3.613937854766845703125
+  Max:             3.895607471466064453125
+  Histogram:       [ 2, 3, 34, 3389, 836083, 205723, 3143, 173, 19, 7 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__2_TransposeWeights:0'
+  Min:             -3.613937854766845703125
+  Max:             3.895607471466064453125
+  Histogram:       [ 2, 3, 34, 3389, 836083, 205723, 3143, 173, 19, 7 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__8:0'
+  Min:             -14.02927875518798828125
+  Max:             15.79056453704833984375
+  Histogram:       [ 11, 73, 1118, 23205, 70889, 4589, 365, 64, 26, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__8_bias:0'
+  Min:             -14.02927875518798828125
+  Max:             15.79056453704833984375
+  Histogram:       [ 11, 73, 1118, 23205, 70889, 4589, 365, 64, 26, 12 ]
+- NodeOutputName:  'Conv_gpu_0_res5_1_branch2c_1__8_dot:0'
+  Min:             -23.7128810882568359375
+  Max:             22.0937347412109375
+  Histogram:       [ 6, 6, 28, 411, 34635, 64148, 976, 112, 21, 9 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__2:0'
+  Min:             -6.766370296478271484375
+  Max:             6.89104175567626953125
+  Histogram:       [ 13, 124, 972, 5134, 12927, 5688, 201, 24, 4, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             45.48290252685546875
+  Histogram:       [ 97393, 2266, 481, 138, 42, 21, 4, 4, 2, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__2_ReshapeOutput:0'
+  Min:             -6.766370296478271484375
+  Max:             6.89104175567626953125
+  Histogram:       [ 13, 124, 972, 5134, 12927, 5688, 201, 24, 4, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__2_ReshapeWeights:0'
+  Min:             -0.06835146248340606689453125
+  Max:             0.14507500827312469482421875
+  Histogram:       [ 10, 514, 319443, 706447, 21566, 545, 43, 6, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__2_TransposeWeights:0'
+  Min:             -0.06835146248340606689453125
+  Max:             0.14507500827312469482421875
+  Histogram:       [ 10, 514, 319443, 706447, 21566, 545, 43, 6, 1, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__7:0'
+  Min:             -6.766370296478271484375
+  Max:             6.89104175567626953125
+  Histogram:       [ 13, 124, 972, 5134, 12927, 5688, 201, 24, 4, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__7_bias:0'
+  Min:             -6.766370296478271484375
+  Max:             6.89104175567626953125
+  Histogram:       [ 13, 124, 972, 5134, 12927, 5688, 201, 24, 4, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2a_1__7_dot:0'
+  Min:             -6.8706207275390625
+  Max:             6.98538112640380859375
+  Histogram:       [ 9, 108, 877, 4788, 12858, 6186, 220, 33, 8, 1 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2b_1__2:0'
+  Min:             -6.150231838226318359375
+  Max:             3.138482570648193359375
+  Histogram:       [ 15, 96, 528, 1746, 4337, 9550, 7805, 869, 118, 24 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__2:0'
+  Min:             -14.84224033355712890625
+  Max:             7.427184581756591796875
+  Histogram:       [ 4, 20, 78, 420, 4312, 61646, 32250, 1517, 91, 14 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__2_ReshapeInput:0'
+  Min:             0.0
+  Max:             3.138482570648193359375
+  Histogram:       [ 23950, 642, 242, 107, 57, 41, 25, 11, 6, 7 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__2_ReshapeOutput:0'
+  Min:             -14.84224033355712890625
+  Max:             7.427184581756591796875
+  Histogram:       [ 4, 20, 78, 420, 4312, 61646, 32250, 1517, 91, 14 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__2_ReshapeWeights:0'
+  Min:             -2.5001132488250732421875
+  Max:             5.880362033843994140625
+  Histogram:       [ 13, 839, 613761, 426972, 6542, 378, 51, 11, 3, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__2_TransposeWeights:0'
+  Min:             -2.5001132488250732421875
+  Max:             5.880362033843994140625
+  Histogram:       [ 13, 839, 613761, 426972, 6542, 378, 51, 11, 3, 6 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__8:0'
+  Min:             -14.84224033355712890625
+  Max:             7.427184581756591796875
+  Histogram:       [ 4, 20, 78, 420, 4312, 61646, 32250, 1517, 91, 14 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__8_bias:0'
+  Min:             -14.84224033355712890625
+  Max:             7.427184581756591796875
+  Histogram:       [ 4, 20, 78, 420, 4312, 61646, 32250, 1517, 91, 14 ]
+- NodeOutputName:  'Conv_gpu_0_res5_2_branch2c_1__8_dot:0'
+  Min:             -13.7439594268798828125
+  Max:             8.61247920989990234375
+  Histogram:       [ 6, 14, 92, 718, 8972, 71200, 18383, 897, 54, 16 ]
+- NodeOutputName:  'Gemm_gpu_0_pred_1:0'
+  Min:             -5.409084320068359375
+  Max:             13.00853633880615234375
+  Histogram:       [ 15, 211, 339, 265, 129, 27, 11, 0, 1, 2 ]
+- NodeOutputName:  'Gemm_gpu_0_pred_1_TransposeB:0'
+  Min:             -0.2564957141876220703125
+  Max:             0.718648612499237060546875
+  Histogram:       [ 15, 18552, 1.83289e+06, 183309, 10567, 1895, 511, 
+                     184, 62, 19 ]
+- NodeOutputName:  'Gemm_gpu_0_pred_1__1:0'
+  Min:             -5.409084320068359375
+  Max:             13.00853633880615234375
+  Histogram:       [ 15, 211, 339, 265, 129, 27, 11, 0, 1, 2 ]
+- NodeOutputName:  'Gemm_gpu_0_pred_1__1_bias:0'
+  Min:             -5.409084320068359375
+  Max:             13.00853633880615234375
+  Histogram:       [ 15, 211, 339, 265, 129, 27, 11, 0, 1, 2 ]
+- NodeOutputName:  'Gemm_gpu_0_pred_1__1_dot:0'
+  Min:             -5.3882007598876953125
+  Max:             12.99765110015869140625
+  Histogram:       [ 15, 213, 340, 264, 127, 27, 11, 0, 1, 2 ]
+- NodeOutputName:  'MaxPool_gpu_0_pool1_1__1:0'
+  Min:             0.0
+  Max:             15.22624683380126953125
+  Histogram:       [ 91846, 65827, 22449, 9337, 4093, 2175, 2861, 480, 
+                     1622, 14 ]
+- NodeOutputName:  'Relu_gpu_0_res2_0_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             9.15654468536376953125
+  Histogram:       [ 133847, 43434, 10165, 5999, 2092, 2393, 699, 311, 
+                     159, 1605 ]
+- NodeOutputName:  'Relu_gpu_0_res2_0_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             9.15654468536376953125
+  Histogram:       [ 133847, 43434, 10165, 5999, 2092, 2393, 699, 311, 
+                     159, 1605 ]
+- NodeOutputName:  'Relu_gpu_0_res2_0_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             9.60829830169677734375
+  Histogram:       [ 144494, 25944, 11862, 7034, 3667, 1839, 1355, 1922, 
+                     2536, 51 ]
+- NodeOutputName:  'Relu_gpu_0_res2_0_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             9.60829830169677734375
+  Histogram:       [ 144494, 25944, 11862, 7034, 3667, 1839, 1355, 1922, 
+                     2536, 51 ]
+- NodeOutputName:  'Relu_gpu_0_res2_0_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             9.7411060333251953125
+  Histogram:       [ 564847, 159304, 62143, 12297, 3448, 512, 204, 45, 
+                     14, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res2_0_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             9.7411060333251953125
+  Histogram:       [ 564847, 159304, 62143, 12297, 3448, 512, 204, 45, 
+                     14, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res2_1_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             11.2527256011962890625
+  Histogram:       [ 166133, 28499, 5725, 203, 136, 2, 3, 1, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res2_1_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             11.2527256011962890625
+  Histogram:       [ 166133, 28499, 5725, 203, 136, 2, 3, 1, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res2_1_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             11.768054962158203125
+  Histogram:       [ 150978, 38326, 8654, 2223, 370, 57, 37, 3, 2, 54 ]
+- NodeOutputName:  'Relu_gpu_0_res2_1_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             11.768054962158203125
+  Histogram:       [ 150978, 38326, 8654, 2223, 370, 57, 37, 3, 2, 54 ]
+- NodeOutputName:  'Relu_gpu_0_res2_1_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             11.155109405517578125
+  Histogram:       [ 568062, 188593, 35017, 8822, 1714, 337, 219, 44, 5, 
+                     3 ]
+- NodeOutputName:  'Relu_gpu_0_res2_1_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             11.155109405517578125
+  Histogram:       [ 568062, 188593, 35017, 8822, 1714, 337, 219, 44, 5, 
+                     3 ]
+- NodeOutputName:  'Relu_gpu_0_res2_2_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             7.881368160247802734375
+  Histogram:       [ 144416, 39601, 11992, 3134, 957, 392, 105, 88, 15, 
+                     4 ]
+- NodeOutputName:  'Relu_gpu_0_res2_2_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             7.881368160247802734375
+  Histogram:       [ 144416, 39601, 11992, 3134, 957, 392, 105, 88, 15, 
+                     4 ]
+- NodeOutputName:  'Relu_gpu_0_res2_2_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             9.12749576568603515625
+  Histogram:       [ 162431, 27289, 8592, 1894, 369, 92, 33, 1, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res2_2_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             9.12749576568603515625
+  Histogram:       [ 162431, 27289, 8592, 1894, 369, 92, 33, 1, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res2_2_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             15.9958820343017578125
+  Histogram:       [ 658573, 125178, 16292, 2286, 373, 99, 12, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res2_2_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             15.9958820343017578125
+  Histogram:       [ 658573, 125178, 16292, 2286, 373, 99, 12, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_0_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             11.61678218841552734375
+  Histogram:       [ 378834, 18578, 3372, 522, 78, 11, 9, 1, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_0_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             11.61678218841552734375
+  Histogram:       [ 378834, 18578, 3372, 522, 78, 11, 9, 1, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_0_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             9.00968074798583984375
+  Histogram:       [ 76364, 17585, 4872, 1105, 295, 93, 27, 4, 5, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res3_0_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             9.00968074798583984375
+  Histogram:       [ 76364, 17585, 4872, 1105, 295, 93, 27, 4, 5, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res3_0_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             21.74274444580078125
+  Histogram:       [ 380907, 18894, 1439, 129, 34, 3, 0, 1, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_0_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             21.74274444580078125
+  Histogram:       [ 380907, 18894, 1439, 129, 34, 3, 0, 1, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_1_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             8.1876811981201171875
+  Histogram:       [ 78437, 14897, 5069, 1666, 200, 78, 3, 1, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_1_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             8.1876811981201171875
+  Histogram:       [ 78437, 14897, 5069, 1666, 200, 78, 3, 1, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_1_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             7.275997161865234375
+  Histogram:       [ 82640, 11727, 3854, 1250, 512, 203, 107, 50, 6, 3 ]
+- NodeOutputName:  'Relu_gpu_0_res3_1_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             7.275997161865234375
+  Histogram:       [ 82640, 11727, 3854, 1250, 512, 203, 107, 50, 6, 3 ]
+- NodeOutputName:  'Relu_gpu_0_res3_1_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             21.642421722412109375
+  Histogram:       [ 383612, 16461, 1166, 153, 9, 4, 1, 1, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_1_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             21.642421722412109375
+  Histogram:       [ 383612, 16461, 1166, 153, 9, 4, 1, 1, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_2_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             8.10516357421875
+  Histogram:       [ 83839, 11667, 3481, 905, 260, 130, 55, 9, 5, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_2_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             8.10516357421875
+  Histogram:       [ 83839, 11667, 3481, 905, 260, 130, 55, 9, 5, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_2_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             7.83554553985595703125
+  Histogram:       [ 83114, 10544, 4544, 1546, 440, 107, 31, 15, 6, 5 ]
+- NodeOutputName:  'Relu_gpu_0_res3_2_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             7.83554553985595703125
+  Histogram:       [ 83114, 10544, 4544, 1546, 440, 107, 31, 15, 6, 5 ]
+- NodeOutputName:  'Relu_gpu_0_res3_2_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             21.933986663818359375
+  Histogram:       [ 383097, 17025, 1112, 127, 37, 5, 3, 0, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_2_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             21.933986663818359375
+  Histogram:       [ 383097, 17025, 1112, 127, 37, 5, 3, 0, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_3_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             13.9599514007568359375
+  Histogram:       [ 95944, 3967, 360, 58, 13, 6, 1, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_3_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             13.9599514007568359375
+  Histogram:       [ 95944, 3967, 360, 58, 13, 6, 1, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res3_3_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             9.6633853912353515625
+  Histogram:       [ 89939, 8028, 1814, 415, 108, 32, 12, 0, 1, 3 ]
+- NodeOutputName:  'Relu_gpu_0_res3_3_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             9.6633853912353515625
+  Histogram:       [ 89939, 8028, 1814, 415, 108, 32, 12, 0, 1, 3 ]
+- NodeOutputName:  'Relu_gpu_0_res3_3_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             14.69208812713623046875
+  Histogram:       [ 357091, 37796, 5320, 925, 191, 39, 37, 4, 3, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res3_3_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             14.69208812713623046875
+  Histogram:       [ 357091, 37796, 5320, 925, 191, 39, 37, 4, 3, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_0_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             8.32764720916748046875
+  Histogram:       [ 185278, 11037, 3275, 799, 240, 53, 12, 4, 4, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_0_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             8.32764720916748046875
+  Histogram:       [ 185278, 11037, 3275, 799, 240, 53, 12, 4, 4, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_0_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             7.31984996795654296875
+  Histogram:       [ 35680, 9585, 3547, 970, 252, 94, 25, 14, 4, 5 ]
+- NodeOutputName:  'Relu_gpu_0_res4_0_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             7.31984996795654296875
+  Histogram:       [ 35680, 9585, 3547, 970, 252, 94, 25, 14, 4, 5 ]
+- NodeOutputName:  'Relu_gpu_0_res4_0_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             11.7235107421875
+  Histogram:       [ 172904, 20562, 5449, 1280, 364, 107, 23, 6, 5, 4 ]
+- NodeOutputName:  'Relu_gpu_0_res4_0_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             11.7235107421875
+  Histogram:       [ 172904, 20562, 5449, 1280, 364, 107, 23, 6, 5, 4 ]
+- NodeOutputName:  'Relu_gpu_0_res4_1_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             15.815265655517578125
+  Histogram:       [ 46952, 2903, 244, 42, 18, 12, 2, 0, 0, 3 ]
+- NodeOutputName:  'Relu_gpu_0_res4_1_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             15.815265655517578125
+  Histogram:       [ 46952, 2903, 244, 42, 18, 12, 2, 0, 0, 3 ]
+- NodeOutputName:  'Relu_gpu_0_res4_1_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             6.16451263427734375
+  Histogram:       [ 43443, 3980, 1676, 591, 295, 120, 44, 12, 11, 4 ]
+- NodeOutputName:  'Relu_gpu_0_res4_1_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             6.16451263427734375
+  Histogram:       [ 43443, 3980, 1676, 591, 295, 120, 44, 12, 11, 4 ]
+- NodeOutputName:  'Relu_gpu_0_res4_1_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             11.10584735870361328125
+  Histogram:       [ 172919, 20227, 5514, 1430, 411, 148, 38, 12, 3, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_1_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             11.10584735870361328125
+  Histogram:       [ 172919, 20227, 5514, 1430, 411, 148, 38, 12, 3, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_2_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             8.655780792236328125
+  Histogram:       [ 44225, 4374, 1209, 250, 70, 26, 15, 4, 1, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_2_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             8.655780792236328125
+  Histogram:       [ 44225, 4374, 1209, 250, 70, 26, 15, 4, 1, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_2_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             6.055774688720703125
+  Histogram:       [ 44508, 3741, 1389, 407, 83, 26, 11, 4, 5, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_2_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             6.055774688720703125
+  Histogram:       [ 44508, 3741, 1389, 407, 83, 26, 11, 4, 5, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_2_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             10.42067432403564453125
+  Histogram:       [ 176094, 17442, 5052, 1425, 468, 151, 57, 10, 4, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_2_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             10.42067432403564453125
+  Histogram:       [ 176094, 17442, 5052, 1425, 468, 151, 57, 10, 4, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_3_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             8.4750823974609375
+  Histogram:       [ 45943, 3212, 739, 203, 48, 17, 9, 2, 1, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_3_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             8.4750823974609375
+  Histogram:       [ 45943, 3212, 739, 203, 48, 17, 9, 2, 1, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_3_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             7.13280773162841796875
+  Histogram:       [ 44385, 3953, 1310, 371, 88, 38, 13, 9, 7, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_3_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             7.13280773162841796875
+  Histogram:       [ 44385, 3953, 1310, 371, 88, 38, 13, 9, 7, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_3_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             13.11877155303955078125
+  Histogram:       [ 186012, 11742, 2211, 538, 149, 35, 11, 3, 1, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_3_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             13.11877155303955078125
+  Histogram:       [ 186012, 11742, 2211, 538, 149, 35, 11, 3, 1, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_4_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             8.40311145782470703125
+  Histogram:       [ 46697, 2540, 667, 161, 70, 29, 6, 1, 4, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_4_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             8.40311145782470703125
+  Histogram:       [ 46697, 2540, 667, 161, 70, 29, 6, 1, 4, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_4_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             9.77983760833740234375
+  Histogram:       [ 46443, 2861, 638, 151, 42, 27, 6, 4, 2, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_4_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             9.77983760833740234375
+  Histogram:       [ 46443, 2861, 638, 151, 42, 27, 6, 4, 2, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res4_4_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             15.50838184356689453125
+  Histogram:       [ 191828, 7353, 1182, 254, 58, 20, 6, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_4_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             15.50838184356689453125
+  Histogram:       [ 191828, 7353, 1182, 254, 58, 20, 6, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_5_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             11.28623199462890625
+  Histogram:       [ 47245, 2138, 566, 143, 49, 27, 4, 2, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_5_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             11.28623199462890625
+  Histogram:       [ 47245, 2138, 566, 143, 49, 27, 4, 2, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_5_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             18.830596923828125
+  Histogram:       [ 48221, 1595, 266, 67, 20, 3, 1, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_5_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             18.830596923828125
+  Histogram:       [ 48221, 1595, 266, 67, 20, 3, 1, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_5_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             12.88241291046142578125
+  Histogram:       [ 191171, 7741, 1311, 331, 103, 29, 10, 4, 3, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res4_5_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             12.88241291046142578125
+  Histogram:       [ 191171, 7741, 1311, 331, 103, 29, 10, 4, 3, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_0_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             7.467939853668212890625
+  Histogram:       [ 96382, 2814, 767, 256, 82, 32, 12, 5, 0, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res5_0_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             7.467939853668212890625
+  Histogram:       [ 96382, 2814, 767, 256, 82, 32, 12, 5, 0, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res5_0_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             6.47432613372802734375
+  Histogram:       [ 22896, 1497, 487, 142, 38, 17, 5, 3, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_0_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             6.47432613372802734375
+  Histogram:       [ 22896, 1497, 487, 142, 38, 17, 5, 3, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_0_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             43.31998443603515625
+  Histogram:       [ 97060, 2703, 430, 110, 30, 14, 2, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_0_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             43.31998443603515625
+  Histogram:       [ 97060, 2703, 430, 110, 30, 14, 2, 2, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_1_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             6.124631404876708984375
+  Histogram:       [ 22852, 1525, 466, 155, 53, 19, 9, 5, 3, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_1_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             6.124631404876708984375
+  Histogram:       [ 22852, 1525, 466, 155, 53, 19, 9, 5, 3, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_1_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             4.02481555938720703125
+  Histogram:       [ 23387, 909, 434, 181, 99, 41, 17, 10, 8, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res5_1_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             4.02481555938720703125
+  Histogram:       [ 23387, 909, 434, 181, 99, 41, 17, 10, 8, 2 ]
+- NodeOutputName:  'Relu_gpu_0_res5_1_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             45.48290252685546875
+  Histogram:       [ 97393, 2266, 481, 138, 42, 21, 4, 4, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_1_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             45.48290252685546875
+  Histogram:       [ 97393, 2266, 481, 138, 42, 21, 4, 4, 2, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_2_branch2a_bn_2__1:0'
+  Min:             0.0
+  Max:             6.89104175567626953125
+  Histogram:       [ 24065, 776, 169, 49, 16, 8, 4, 0, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_2_branch2a_bn_2__1_max:0'
+  Min:             0.0
+  Max:             6.89104175567626953125
+  Histogram:       [ 24065, 776, 169, 49, 16, 8, 4, 0, 0, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_2_branch2b_bn_2__1:0'
+  Min:             0.0
+  Max:             3.138482570648193359375
+  Histogram:       [ 23950, 642, 242, 107, 57, 41, 25, 11, 6, 7 ]
+- NodeOutputName:  'Relu_gpu_0_res5_2_branch2b_bn_2__1_max:0'
+  Min:             0.0
+  Max:             3.138482570648193359375
+  Histogram:       [ 23950, 642, 242, 107, 57, 41, 25, 11, 6, 7 ]
+- NodeOutputName:  'Relu_gpu_0_res5_2_branch2c_bn_3__1:0'
+  Min:             0.0
+  Max:             48.86968994140625
+  Histogram:       [ 98515, 1383, 316, 80, 35, 15, 3, 3, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res5_2_branch2c_bn_3__1_max:0'
+  Min:             0.0
+  Max:             48.86968994140625
+  Histogram:       [ 98515, 1383, 316, 80, 35, 15, 3, 3, 1, 1 ]
+- NodeOutputName:  'Relu_gpu_0_res_conv1_bn_2__1:0'
+  Min:             0.0
+  Max:             15.22624683380126953125
+  Histogram:       [ 466925, 244656, 45062, 18717, 7961, 4236, 8561, 1288, 
+                     5403, 7 ]
+- NodeOutputName:  'Relu_gpu_0_res_conv1_bn_2__1_max:0'
+  Min:             0.0
+  Max:             15.22624683380126953125
+  Histogram:       [ 466925, 244656, 45062, 18717, 7961, 4236, 8561, 1288, 
+                     5403, 7 ]
+- NodeOutputName:  'Reshape_OC2_DUMMY_0__1:0'
+  Min:             0.0
+  Max:             8.70772266387939453125
+  Histogram:       [ 1862, 129, 31, 14, 4, 3, 3, 0, 1, 1 ]
+- NodeOutputName:  'Softmax_gpu_0_softmax_1:0'
+  Min:             0.000000007212455965799335899646393954753875732421875
+  Max:             0.7190425395965576171875
+  Histogram:       [ 998, 0, 0, 1, 0, 0, 0, 0, 0, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res2_0_branch2c_bn_2__1:0'
+  Min:             -22.9078826904296875
+  Max:             9.7411060333251953125
+  Histogram:       [ 1, 7, 42, 376, 2634, 18077, 269209, 502829, 9541, 
+                     100 ]
+- NodeOutputName:  'Sum_gpu_0_res2_1_branch2c_bn_2__1:0'
+  Min:             -9.0799617767333984375
+  Max:             11.155109405517578125
+  Histogram:       [ 31, 349, 1989, 34242, 508815, 241714, 14663, 827, 
+                     179, 7 ]
+- NodeOutputName:  'Sum_gpu_0_res2_2_branch2c_bn_2__1:0'
+  Min:             -12.2613468170166015625
+  Max:             15.9958820343017578125
+  Histogram:       [ 2, 83, 2256, 48785, 649408, 99120, 3011, 145, 5, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res3_0_branch2c_bn_2__1:0'
+  Min:             -14.07971096038818359375
+  Max:             21.74274444580078125
+  Histogram:       [ 12, 252, 7901, 243500, 147012, 2649, 78, 2, 1, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res3_1_branch2c_bn_2__1:0'
+  Min:             -7.98584842681884765625
+  Max:             21.642421722412109375
+  Histogram:       [ 167, 10691, 314181, 74138, 2098, 123, 5, 3, 1, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res3_2_branch2c_bn_2__1:0'
+  Min:             -9.2447566986083984375
+  Max:             21.933986663818359375
+  Histogram:       [ 56, 1568, 221058, 173842, 4687, 179, 13, 3, 1, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res3_3_branch2c_bn_2__1:0'
+  Min:             -10.1545238494873046875
+  Max:             14.69208812713623046875
+  Histogram:       [ 5, 114, 2102, 114701, 268864, 14774, 761, 75, 8, 4 ]
+- NodeOutputName:  'Sum_gpu_0_res4_0_branch2c_bn_2__1:0'
+  Min:             -9.0316715240478515625
+  Max:             11.7235107421875
+  Histogram:       [ 20, 359, 6524, 67289, 103399, 21108, 1790, 193, 15, 
+                     7 ]
+- NodeOutputName:  'Sum_gpu_0_res4_1_branch2c_bn_2__1:0'
+  Min:             -10.90267181396484375
+  Max:             11.10584735870361328125
+  Histogram:       [ 5, 7, 90, 2072, 118630, 73034, 6301, 515, 45, 5 ]
+- NodeOutputName:  'Sum_gpu_0_res4_2_branch2c_bn_2__1:0'
+  Min:             -6.163108348846435546875
+  Max:             10.42067432403564453125
+  Histogram:       [ 13, 290, 12389, 141220, 40018, 5737, 863, 152, 19, 
+                     3 ]
+- NodeOutputName:  'Sum_gpu_0_res4_3_branch2c_bn_2__1:0'
+  Min:             -9.1962947845458984375
+  Max:             13.11877155303955078125
+  Histogram:       [ 3, 101, 2827, 79586, 111554, 6052, 526, 47, 5, 3 ]
+- NodeOutputName:  'Sum_gpu_0_res4_4_branch2c_bn_2__1:0'
+  Min:             -7.874282360076904296875
+  Max:             15.50838184356689453125
+  Histogram:       [ 32, 1013, 46245, 143734, 8947, 643, 74, 13, 2, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res4_5_branch2c_bn_2__1:0'
+  Min:             -11.1437320709228515625
+  Max:             12.88241291046142578125
+  Histogram:       [ 12, 80, 926, 19231, 163466, 16092, 801, 81, 11, 4 ]
+- NodeOutputName:  'Sum_gpu_0_res5_0_branch2c_bn_2__1:0'
+  Min:             -19.67254638671875
+  Max:             43.31998443603515625
+  Histogram:       [ 33, 2445, 63532, 32370, 1745, 186, 32, 6, 2, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res5_1_branch2c_bn_2__1:0'
+  Min:             -12.11891651153564453125
+  Max:             45.48290252685546875
+  Histogram:       [ 295, 68000, 29692, 1974, 290, 68, 22, 6, 4, 1 ]
+- NodeOutputName:  'Sum_gpu_0_res5_2_branch2c_bn_2__1:0'
+  Min:             -14.84224033355712890625
+  Max:             48.86968994140625
+  Histogram:       [ 45, 33103, 64979, 1861, 275, 57, 24, 5, 2, 1 ]
+- NodeOutputName:  'conv_bias:0'
+  Min:             -1.226405620574951171875
+  Max:             2.05048847198486328125
+  Histogram:       [ 2, 3, 5, 10, 15, 12, 7, 5, 2, 3 ]
+- NodeOutputName:  'conv_bias__11:0'
+  Min:             -3.86467838287353515625
+  Max:             1.53467905521392822265625
+  Histogram:       [ 1, 1, 2, 0, 5, 16, 34, 44, 19, 6 ]
+- NodeOutputName:  'conv_bias__13:0'
+  Min:             -2.3220119476318359375
+  Max:             1.51196038722991943359375
+  Histogram:       [ 1, 1, 1, 4, 17, 158, 310, 19, 0, 1 ]
+- NodeOutputName:  'conv_bias__26:0'
+  Min:             -2.4065935611724853515625
+  Max:             1.404830455780029296875
+  Histogram:       [ 3, 1, 3, 9, 56, 371, 443, 115, 17, 6 ]
+- NodeOutputName:  'conv_bias__3:0'
+  Min:             -3.571498870849609375
+  Max:             1.4516603946685791015625
+  Histogram:       [ 1, 2, 0, 2, 8, 22, 53, 96, 68, 4 ]
+- NodeOutputName:  'conv_bias__45:0'
+  Min:             -6.934812068939208984375
+  Max:             0.8094522953033447265625
+  Histogram:       [ 1, 0, 1, 0, 2, 5, 69, 793, 1068, 109 ]
+- NodeOutputName:  'conv_bias__53:0'
+  Min:             -2.27611446380615234375
+  Max:             7.013893604278564453125
+  Histogram:       [ 4, 8, 3, 13, 26, 5, 1, 2, 1, 1 ]
+- NodeOutputName:  'conv_bias__54:0'
+  Min:             -3.906807422637939453125
+  Max:             5.005031585693359375
+  Histogram:       [ 1, 2, 5, 4, 2, 7, 17, 17, 5, 4 ]
+- NodeOutputName:  'conv_bias__55:0'
+  Min:             -5.954828739166259765625
+  Max:             4.281036853790283203125
+  Histogram:       [ 1, 0, 0, 0, 5, 27, 12, 10, 5, 4 ]
+- NodeOutputName:  'conv_bias__56:0'
+  Min:             -4.636071681976318359375
+  Max:             5.591994762420654296875
+  Histogram:       [ 3, 5, 14, 54, 107, 46, 13, 10, 2, 2 ]
+- NodeOutputName:  'conv_bias__57:0'
+  Min:             -3.8055589199066162109375
+  Max:             8.8425045013427734375
+  Histogram:       [ 3, 14, 41, 63, 72, 35, 13, 8, 6, 1 ]
+- NodeOutputName:  'conv_bias__58:0'
+  Min:             -3.8899250030517578125
+  Max:             2.091982364654541015625
+  Histogram:       [ 1, 3, 2, 9, 13, 6, 7, 10, 6, 7 ]
+- NodeOutputName:  'conv_bias__59:0'
+  Min:             -3.506803035736083984375
+  Max:             4.20429134368896484375
+  Histogram:       [ 3, 4, 3, 12, 17, 9, 8, 4, 1, 3 ]
+- NodeOutputName:  'conv_bias__60:0'
+  Min:             -3.4935474395751953125
+  Max:             3.5964405536651611328125
+  Histogram:       [ 2, 5, 4, 30, 109, 79, 12, 12, 2, 1 ]
+- NodeOutputName:  'conv_bias__61:0'
+  Min:             -2.85948276519775390625
+  Max:             6.94229221343994140625
+  Histogram:       [ 2, 4, 15, 29, 10, 3, 0, 0, 0, 1 ]
+- NodeOutputName:  'conv_bias__62:0'
+  Min:             -2.6467812061309814453125
+  Max:             3.276104450225830078125
+  Histogram:       [ 4, 3, 10, 40, 148, 24, 20, 4, 2, 1 ]
+- NodeOutputName:  'conv_bias__63:0'
+  Min:             -3.8265531063079833984375
+  Max:             4.156198978424072265625
+  Histogram:       [ 2, 1, 4, 20, 42, 35, 16, 6, 1, 1 ]
+- NodeOutputName:  'conv_bias__64:0'
+  Min:             -0.867677748203277587890625
+  Max:             2.3693382740020751953125
+  Histogram:       [ 3, 12, 24, 25, 21, 19, 12, 9, 2, 1 ]
+- NodeOutputName:  'conv_bias__65:0'
+  Min:             -3.6400909423828125
+  Max:             3.91999912261962890625
+  Histogram:       [ 2, 6, 10, 52, 198, 183, 45, 12, 2, 2 ]
+- NodeOutputName:  'conv_bias__66:0'
+  Min:             -2.7601063251495361328125
+  Max:             6.2103328704833984375
+  Histogram:       [ 3, 20, 123, 227, 101, 27, 7, 1, 2, 1 ]
+- NodeOutputName:  'conv_bias__67:0'
+  Min:             -2.1013355255126953125
+  Max:             2.914025783538818359375
+  Histogram:       [ 6, 10, 14, 30, 23, 25, 14, 4, 1, 1 ]
+- NodeOutputName:  'conv_bias__68:0'
+  Min:             -4.15296077728271484375
+  Max:             5.53661346435546875
+  Histogram:       [ 1, 3, 18, 47, 34, 18, 3, 1, 2, 1 ]
+- NodeOutputName:  'conv_bias__69:0'
+  Min:             -2.397009372711181640625
+  Max:             4.3370208740234375
+  Histogram:       [ 7, 35, 130, 238, 67, 18, 10, 4, 2, 1 ]
+- NodeOutputName:  'conv_bias__70:0'
+  Min:             -2.139996051788330078125
+  Max:             1.800853729248046875
+  Histogram:       [ 2, 2, 3, 5, 20, 18, 32, 26, 13, 7 ]
+- NodeOutputName:  'conv_bias__71:0'
+  Min:             -3.2226407527923583984375
+  Max:             2.91448307037353515625
+  Histogram:       [ 1, 1, 7, 14, 38, 42, 15, 6, 0, 4 ]
+- NodeOutputName:  'conv_bias__72:0'
+  Min:             -3.8587398529052734375
+  Max:             2.2806460857391357421875
+  Histogram:       [ 1, 1, 2, 11, 31, 162, 235, 52, 11, 6 ]
+- NodeOutputName:  'conv_bias__73:0'
+  Min:             -3.00438594818115234375
+  Max:             2.875783443450927734375
+  Histogram:       [ 3, 1, 9, 12, 22, 42, 32, 5, 0, 2 ]
+- NodeOutputName:  'conv_bias__74:0'
+  Min:             -1.9517099857330322265625
+  Max:             1.8719158172607421875
+  Histogram:       [ 3, 5, 31, 64, 131, 210, 40, 19, 6, 3 ]
+- NodeOutputName:  'conv_bias__75:0'
+  Min:             -3.0506134033203125
+  Max:             1.9542324542999267578125
+  Histogram:       [ 3, 2, 4, 14, 27, 60, 79, 47, 15, 5 ]
+- NodeOutputName:  'conv_bias__76:0'
+  Min:             -1.0693767070770263671875
+  Max:             1.63624286651611328125
+  Histogram:       [ 5, 7, 11, 30, 44, 53, 65, 28, 9, 4 ]
+- NodeOutputName:  'conv_bias__77:0'
+  Min:             -4.0328044891357421875
+  Max:             3.83165645599365234375
+  Histogram:       [ 1, 1, 13, 47, 305, 420, 176, 50, 7, 4 ]
+- NodeOutputName:  'conv_bias__78:0'
+  Min:             -1.7785990238189697265625
+  Max:             2.690076351165771484375
+  Histogram:       [ 10, 40, 166, 312, 270, 138, 50, 28, 9, 1 ]
+- NodeOutputName:  'conv_bias__79:0'
+  Min:             -3.8031442165374755859375
+  Max:             5.030256748199462890625
+  Histogram:       [ 1, 1, 5, 60, 121, 59, 5, 3, 0, 1 ]
+- NodeOutputName:  'conv_bias__80:0'
+  Min:             -3.076762676239013671875
+  Max:             4.07597064971923828125
+  Histogram:       [ 4, 6, 42, 104, 77, 15, 4, 2, 0, 2 ]
+- NodeOutputName:  'conv_bias__81:0'
+  Min:             -2.42824649810791015625
+  Max:             3.223210811614990234375
+  Histogram:       [ 2, 2, 61, 406, 384, 116, 39, 10, 2, 2 ]
+- NodeOutputName:  'conv_bias__82:0'
+  Min:             -4.030155181884765625
+  Max:             1.4319269657135009765625
+  Histogram:       [ 1, 0, 0, 2, 12, 26, 56, 90, 55, 14 ]
+- NodeOutputName:  'conv_bias__83:0'
+  Min:             -2.99983310699462890625
+  Max:             1.8390796184539794921875
+  Histogram:       [ 1, 1, 5, 8, 29, 78, 86, 36, 10, 2 ]
+- NodeOutputName:  'conv_bias__84:0'
+  Min:             -1.78610384464263916015625
+  Max:             2.543680667877197265625
+  Histogram:       [ 8, 33, 217, 474, 224, 44, 17, 4, 2, 1 ]
+- NodeOutputName:  'conv_bias__85:0'
+  Min:             -1.77506554126739501953125
+  Max:             1.403825283050537109375
+  Histogram:       [ 2, 5, 21, 30, 37, 46, 44, 42, 19, 10 ]
+- NodeOutputName:  'conv_bias__86:0'
+  Min:             -3.598112583160400390625
+  Max:             1.90282237529754638671875
+  Histogram:       [ 1, 2, 2, 3, 7, 42, 107, 79, 12, 1 ]
+- NodeOutputName:  'conv_bias__87:0'
+  Min:             -1.8953015804290771484375
+  Max:             1.5727407932281494140625
+  Histogram:       [ 6, 11, 41, 112, 328, 409, 74, 30, 9, 4 ]
+- NodeOutputName:  'conv_bias__88:0'
+  Min:             -2.223214626312255859375
+  Max:             0.75627148151397705078125
+  Histogram:       [ 2, 2, 2, 10, 36, 39, 56, 53, 42, 14 ]
+- NodeOutputName:  'conv_bias__89:0'
+  Min:             -3.4570407867431640625
+  Max:             1.644597530364990234375
+  Histogram:       [ 1, 1, 1, 5, 2, 40, 72, 92, 39, 3 ]
+- NodeOutputName:  'conv_bias__90:0'
+  Min:             -3.505594730377197265625
+  Max:             1.3980243206024169921875
+  Histogram:       [ 1, 0, 2, 2, 26, 99, 518, 327, 41, 8 ]
+- NodeOutputName:  'conv_bias__91:0'
+  Min:             -1.700164794921875
+  Max:             1.25166451930999755859375
+  Histogram:       [ 5, 8, 21, 58, 60, 54, 29, 16, 4, 1 ]
+- NodeOutputName:  'conv_bias__92:0'
+  Min:             -1.2814681529998779296875
+  Max:             0.77453792095184326171875
+  Histogram:       [ 15, 15, 32, 75, 98, 108, 96, 48, 19, 6 ]
+- NodeOutputName:  'conv_bias__93:0'
+  Min:             -0.8743002414703369140625
+  Max:             0.58743035793304443359375
+  Histogram:       [ 2, 1, 3, 15, 37, 59, 119, 132, 108, 36 ]
+- NodeOutputName:  'conv_bias__94:0'
+  Min:             -9.01971530914306640625
+  Max:             2.9938571453094482421875
+  Histogram:       [ 2, 0, 1, 1, 1, 14, 571, 1249, 199, 10 ]
+- NodeOutputName:  'conv_bias__95:0'
+  Min:             -3.789546489715576171875
+  Max:             4.312465190887451171875
+  Histogram:       [ 8, 59, 321, 621, 672, 275, 67, 19, 5, 1 ]
+- NodeOutputName:  'conv_bias__96:0'
+  Min:             -1.60735321044921875
+  Max:             1.30372750759124755859375
+  Histogram:       [ 1, 1, 0, 10, 40, 166, 205, 74, 11, 4 ]
+- NodeOutputName:  'conv_bias__97:0'
+  Min:             -3.534625530242919921875
+  Max:             1.264747142791748046875
+  Histogram:       [ 2, 1, 1, 0, 3, 29, 127, 253, 84, 12 ]
+- NodeOutputName:  'conv_bias__98:0'
+  Min:             -7.636335849761962890625
+  Max:             9.68360233306884765625
+  Histogram:       [ 1, 1, 6, 1567, 470, 1, 0, 1, 0, 1 ]
+- NodeOutputName:  'conv_bias__99:0'
+  Min:             -2.3931605815887451171875
+  Max:             0.72175371646881103515625
+  Histogram:       [ 1, 0, 0, 0, 2, 10, 80, 292, 122, 5 ]
+- NodeOutputName:  'gpu_0_conv1_w_0__1:0'
+  Min:             -1.1371262073516845703125
+  Max:             1.19885838031768798828125
+  Histogram:       [ 3, 12, 66, 376, 6435, 2262, 197, 45, 9, 3 ]
+- NodeOutputName:  'gpu_0_data_0:0'
+  Min:             -2.1179039478302001953125
+  Max:             2.6400001049041748046875
+  Histogram:       [ 2616, 3564, 5683, 8979, 11540, 12099, 11118, 8746, 
+                     5346, 80837 ]
+- NodeOutputName:  'gpu_0_pred_b_0:0'
+  Min:             -0.0353043563663959503173828125
+  Max:             0.0365189574658870697021484375
+  Histogram:       [ 10, 22, 92, 185, 219, 214, 156, 60, 30, 12 ]
+- NodeOutputName:  'gpu_0_pred_w_0:0'
+  Min:             -0.2564957141876220703125
+  Max:             0.718648612499237060546875
+  Histogram:       [ 15, 18552, 1.83289e+06, 183309, 10567, 1895, 511, 
+                     184, 62, 19 ]
+- NodeOutputName:  'gpu_0_res2_0_branch1_w_0__1:0'
+  Min:             -1.4928524494171142578125
+  Max:             0.71374809741973876953125
+  Histogram:       [ 1, 3, 3, 19, 80, 634, 13468, 2062, 99, 15 ]
+- NodeOutputName:  'gpu_0_res2_0_branch2a_w_0__1:0'
+  Min:             -0.71606409549713134765625
+  Max:             0.504266798496246337890625
+  Histogram:       [ 5, 9, 17, 53, 214, 2372, 1327, 82, 16, 1 ]
+- NodeOutputName:  'gpu_0_res2_0_branch2b_w_0__1:0'
+  Min:             -0.3326393663883209228515625
+  Max:             0.2679533660411834716796875
+  Histogram:       [ 1, 3, 21, 139, 1788, 32184, 2497, 185, 35, 11 ]
+- NodeOutputName:  'gpu_0_res2_0_branch2c_w_0__1:0'
+  Min:             -1.39273202419281005859375
+  Max:             1.39487171173095703125
+  Histogram:       [ 1, 4, 34, 241, 8805, 7091, 180, 24, 3, 1 ]
+- NodeOutputName:  'gpu_0_res2_1_branch2a_w_0__1:0'
+  Min:             -0.40354645252227783203125
+  Max:             0.39585769176483154296875
+  Histogram:       [ 6, 10, 60, 508, 6474, 8407, 795, 101, 20, 3 ]
+- NodeOutputName:  'gpu_0_res2_1_branch2b_w_0__1:0'
+  Min:             -0.516130506992340087890625
+  Max:             0.62172472476959228515625
+  Histogram:       [ 4, 18, 159, 2723, 30074, 3616, 221, 38, 8, 3 ]
+- NodeOutputName:  'gpu_0_res2_1_branch2c_w_0__1:0'
+  Min:             -0.827235519886016845703125
+  Max:             0.74843943119049072265625
+  Histogram:       [ 2, 14, 51, 267, 2715, 12512, 666, 117, 30, 10 ]
+- NodeOutputName:  'gpu_0_res2_2_branch2a_w_0__1:0'
+  Min:             -0.622084319591522216796875
+  Max:             0.454372346401214599609375
+  Histogram:       [ 1, 3, 5, 87, 1032, 10819, 4122, 288, 22, 5 ]
+- NodeOutputName:  'gpu_0_res2_2_branch2b_w_0__1:0'
+  Min:             -0.472362339496612548828125
+  Max:             0.3842585384845733642578125
+  Histogram:       [ 1, 4, 36, 348, 5108, 26194, 4786, 359, 25, 3 ]
+- NodeOutputName:  'gpu_0_res2_2_branch2c_w_0__1:0'
+  Min:             -1.5399763584136962890625
+  Max:             0.938102424144744873046875
+  Histogram:       [ 1, 3, 11, 53, 226, 2617, 12938, 453, 66, 16 ]
+- NodeOutputName:  'gpu_0_res3_0_branch1_w_0__1:0'
+  Min:             -1.48483180999755859375
+  Max:             0.889656007289886474609375
+  Histogram:       [ 2, 2, 2, 28, 173, 6487, 123844, 499, 29, 6 ]
+- NodeOutputName:  'gpu_0_res3_0_branch2a_w_0__1:0'
+  Min:             -0.522882938385009765625
+  Max:             0.4348801076412200927734375
+  Histogram:       [ 4, 11, 52, 452, 5417, 23316, 3102, 352, 54, 8 ]
+- NodeOutputName:  'gpu_0_res3_0_branch2b_w_0__1:0'
+  Min:             -0.319684505462646484375
+  Max:             0.3610182702541351318359375
+  Histogram:       [ 6, 47, 443, 11617, 103150, 30374, 1653, 142, 20, 4 ]
+- NodeOutputName:  'gpu_0_res3_0_branch2c_w_0__1:0'
+  Min:             -1.1379578113555908203125
+  Max:             1.37003409862518310546875
+  Histogram:       [ 2, 13, 86, 2659, 59432, 3104, 195, 39, 4, 2 ]
+- NodeOutputName:  'gpu_0_res3_1_branch2a_w_0__1:0'
+  Min:             -0.281187832355499267578125
+  Max:             0.4745372235774993896484375
+  Histogram:       [ 10, 70, 1105, 56926, 7069, 313, 38, 3, 1, 1 ]
+- NodeOutputName:  'gpu_0_res3_1_branch2b_w_0__1:0'
+  Min:             -0.39867532253265380859375
+  Max:             0.502925336360931396484375
+  Histogram:       [ 9, 26, 268, 10452, 131622, 4733, 284, 44, 13, 5 ]
+- NodeOutputName:  'gpu_0_res3_1_branch2c_w_0__1:0'
+  Min:             -1.53607928752899169921875
+  Max:             1.2854321002960205078125
+  Histogram:       [ 6, 17, 30, 157, 3007, 60856, 1351, 98, 11, 3 ]
+- NodeOutputName:  'gpu_0_res3_2_branch2a_w_0__1:0'
+  Min:             -0.631106853485107421875
+  Max:             0.454735457897186279296875
+  Histogram:       [ 1, 1, 2, 17, 652, 52668, 11898, 269, 22, 6 ]
+- NodeOutputName:  'gpu_0_res3_2_branch2b_w_0__1:0'
+  Min:             -0.3141825497150421142578125
+  Max:             0.3480300009250640869140625
+  Histogram:       [ 7, 49, 406, 6819, 108297, 30282, 1457, 121, 12, 6 ]
+- NodeOutputName:  'gpu_0_res3_2_branch2c_w_0__1:0'
+  Min:             -1.341980457305908203125
+  Max:             1.169042110443115234375
+  Histogram:       [ 5, 5, 30, 245, 5510, 58192, 1407, 115, 20, 7 ]
+- NodeOutputName:  'gpu_0_res3_3_branch2a_w_0__1:0'
+  Min:             -0.2901425063610076904296875
+  Max:             0.4216782748699188232421875
+  Histogram:       [ 9, 78, 1413, 28834, 32738, 2140, 244, 60, 17, 3 ]
+- NodeOutputName:  'gpu_0_res3_3_branch2b_w_0__1:0'
+  Min:             -0.3576808273792266845703125
+  Max:             0.464999139308929443359375
+  Histogram:       [ 12, 81, 935, 30836, 105472, 9411, 625, 75, 5, 4 ]
+- NodeOutputName:  'gpu_0_res3_3_branch2c_w_0__1:0'
+  Min:             -0.7177584171295166015625
+  Max:             1.070071697235107421875
+  Histogram:       [ 9, 108, 1410, 26993, 35821, 1015, 148, 22, 7, 3 ]
+- NodeOutputName:  'gpu_0_res4_0_branch1_w_0__1:0'
+  Min:             -0.91449916362762451171875
+  Max:             0.635424137115478515625
+  Histogram:       [ 2, 1, 11, 71, 793, 403692, 119265, 410, 33, 10 ]
+- NodeOutputName:  'gpu_0_res4_0_branch2a_w_0__1:0'
+  Min:             -0.4723211824893951416015625
+  Max:             0.55286037921905517578125
+  Histogram:       [ 3, 26, 265, 8815, 105240, 15798, 783, 122, 15, 5 ]
+- NodeOutputName:  'gpu_0_res4_0_branch2b_w_0__1:0'
+  Min:             -0.262379467487335205078125
+  Max:             0.41549646854400634765625
+  Histogram:       [ 32, 359, 13063, 373648, 197255, 5061, 339, 46, 16, 
+                     5 ]
+- NodeOutputName:  'gpu_0_res4_0_branch2c_w_0__1:0'
+  Min:             -0.6302325725555419921875
+  Max:             0.774917781352996826171875
+  Histogram:       [ 10, 65, 765, 25558, 215082, 19723, 833, 90, 14, 4 ]
+- NodeOutputName:  'gpu_0_res4_1_branch2a_w_0__1:0'
+  Min:             -0.272620499134063720703125
+  Max:             0.3498041331768035888671875
+  Histogram:       [ 9, 14, 157, 19608, 235848, 6175, 257, 58, 13, 5 ]
+- NodeOutputName:  'gpu_0_res4_1_branch2b_w_0__1:0'
+  Min:             -0.2395905554294586181640625
+  Max:             0.3530649840831756591796875
+  Histogram:       [ 10, 57, 1008, 259103, 327413, 2103, 110, 18, 1, 1 ]
+- NodeOutputName:  'gpu_0_res4_1_branch2c_w_0__1:0'
+  Min:             -1.12099635601043701171875
+  Max:             1.44045817852020263671875
+  Histogram:       [ 7, 23, 232, 13639, 245011, 3112, 97, 21, 1, 1 ]
+- NodeOutputName:  'gpu_0_res4_2_branch2a_w_0__1:0'
+  Min:             -0.3414843976497650146484375
+  Max:             0.53212153911590576171875
+  Histogram:       [ 6, 22, 631, 182345, 78338, 723, 62, 10, 5, 2 ]
+- NodeOutputName:  'gpu_0_res4_2_branch2b_w_0__1:0'
+  Min:             -0.3915255963802337646484375
+  Max:             0.510562717914581298828125
+  Histogram:       [ 1, 12, 222, 40910, 542881, 5645, 138, 11, 2, 2 ]
+- NodeOutputName:  'gpu_0_res4_2_branch2c_w_0__1:0'
+  Min:             -1.36549270153045654296875
+  Max:             1.39438784122467041015625
+  Histogram:       [ 8, 6, 56, 788, 173248, 87445, 532, 43, 13, 5 ]
+- NodeOutputName:  'gpu_0_res4_3_branch2a_w_0__1:0'
+  Min:             -0.302221834659576416015625
+  Max:             0.3630868494510650634765625
+  Histogram:       [ 14, 49, 292, 14281, 228467, 18131, 776, 97, 25, 12 ]
+- NodeOutputName:  'gpu_0_res4_3_branch2b_w_0__1:0'
+  Min:             -0.2701719105243682861328125
+  Max:             0.34565651416778564453125
+  Histogram:       [ 12, 71, 2018, 108162, 439263, 38569, 1558, 140, 26, 
+                     5 ]
+- NodeOutputName:  'gpu_0_res4_3_branch2c_w_0__1:0'
+  Min:             -1.0811126232147216796875
+  Max:             1.44738042354583740234375
+  Histogram:       [ 2, 21, 416, 29593, 228436, 3403, 221, 35, 14, 3 ]
+- NodeOutputName:  'gpu_0_res4_4_branch2a_w_0__1:0'
+  Min:             -0.3071686327457427978515625
+  Max:             0.429291665554046630859375
+  Histogram:       [ 5, 11, 742, 91433, 162348, 7157, 388, 51, 8, 1 ]
+- NodeOutputName:  'gpu_0_res4_4_branch2b_w_0__1:0'
+  Min:             -0.69777143001556396484375
+  Max:             0.645543575286865234375
+  Histogram:       [ 1, 1, 9, 184, 146387, 439589, 3550, 83, 14, 6 ]
+- NodeOutputName:  'gpu_0_res4_4_branch2c_w_0__1:0'
+  Min:             -0.754731357097625732421875
+  Max:             0.944935739040374755859375
+  Histogram:       [ 1, 53, 726, 28277, 219768, 12435, 750, 111, 17, 6 ]
+- NodeOutputName:  'gpu_0_res4_5_branch2a_w_0__1:0'
+  Min:             -0.24194873869419097900390625
+  Max:             0.538157522678375244140625
+  Histogram:       [ 26, 2414, 117084, 132987, 8964, 585, 66, 14, 2, 2 ]
+- NodeOutputName:  'gpu_0_res4_5_branch2b_w_0__1:0'
+  Min:             -0.648652255535125732421875
+  Max:             0.656870782375335693359375
+  Histogram:       [ 1, 4, 9, 620, 349958, 237931, 1241, 48, 8, 4 ]
+- NodeOutputName:  'gpu_0_res4_5_branch2c_w_0__1:0'
+  Min:             -0.871604382991790771484375
+  Max:             0.95691978931427001953125
+  Histogram:       [ 1, 8, 68, 3093, 228076, 30466, 405, 21, 5, 1 ]
+- NodeOutputName:  'gpu_0_res5_0_branch1_w_0__1:0'
+  Min:             -1.81844770908355712890625
+  Max:             3.7726809978485107421875
+  Histogram:       [ 4, 52, 171115, 1.91885e+06, 6906, 171, 32, 13, 1, 
+                     6 ]
+- NodeOutputName:  'gpu_0_res5_0_branch2a_w_0__1:0'
+  Min:             -0.3659682571887969970703125
+  Max:             0.497343957424163818359375
+  Histogram:       [ 2, 64, 4162, 179714, 303718, 34340, 2075, 182, 27, 
+                     4 ]
+- NodeOutputName:  'gpu_0_res5_0_branch2b_w_0__1:0'
+  Min:             -0.156499683856964111328125
+  Max:             0.413197100162506103515625
+  Histogram:       [ 676, 159321, 1.56946e+06, 599210, 29156, 1332, 118, 
+                     13, 8, 2 ]
+- NodeOutputName:  'gpu_0_res5_0_branch2c_w_0__1:0'
+  Min:             -2.902021884918212890625
+  Max:             3.6678745746612548828125
+  Histogram:       [ 4, 3, 16, 42266, 979189, 26437, 601, 49, 9, 2 ]
+- NodeOutputName:  'gpu_0_res5_1_branch2a_w_0__1:0'
+  Min:             -0.072977721691131591796875
+  Max:             0.114179112017154693603515625
+  Histogram:       [ 4, 24, 3825, 711411, 327834, 5343, 121, 11, 1, 2 ]
+- NodeOutputName:  'gpu_0_res5_1_branch2b_w_0__1:0'
+  Min:             -0.22115214169025421142578125
+  Max:             0.23299230635166168212890625
+  Histogram:       [ 7, 26, 402, 59637, 1.51988e+06, 755055, 23657, 603, 
+                     31, 2 ]
+- NodeOutputName:  'gpu_0_res5_1_branch2c_w_0__1:0'
+  Min:             -3.613937854766845703125
+  Max:             3.895607471466064453125
+  Histogram:       [ 2, 3, 34, 3389, 836083, 205723, 3143, 173, 19, 7 ]
+- NodeOutputName:  'gpu_0_res5_2_branch2a_w_0__1:0'
+  Min:             -0.06835146248340606689453125
+  Max:             0.14507500827312469482421875
+  Histogram:       [ 10, 514, 319443, 706447, 21566, 545, 43, 6, 1, 1 ]
+- NodeOutputName:  'gpu_0_res5_2_branch2b_w_0__1:0'
+  Min:             -0.20898388326168060302734375
+  Max:             0.2465746104717254638671875
+  Histogram:       [ 9, 59, 4640, 337671, 1.59952e+06, 395557, 20631, 1134, 
+                     73, 5 ]
+- NodeOutputName:  'gpu_0_res5_2_branch2c_w_0__1:0'
+  Min:             -2.5001132488250732421875
+  Max:             5.880362033843994140625
+  Histogram:       [ 13, 839, 613761, 426972, 6542, 378, 51, 11, 3, 6 ]
+- NodeOutputName:  'zero:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 802816, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__10:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 401408, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__11:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__12:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 401408, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__13:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__14:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__15:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 401408, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__16:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__17:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__18:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 401408, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__19:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__1:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__20:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__21:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 401408, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__22:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__23:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__24:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__25:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__26:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__27:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__28:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__29:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__2:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__30:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__31:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__32:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__33:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__34:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__35:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__36:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__37:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__38:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 50176, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__39:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__3:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 802816, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__40:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__41:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 25088, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__42:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__43:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 25088, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__44:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 25088, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__45:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__46:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 25088, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__47:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 25088, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__48:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 100352, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__4:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__5:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__6:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 802816, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__7:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__8:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 200704, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+- NodeOutputName:  'zero__9:0'
+  Min:             0.0
+  Max:             0.0
+  Histogram:       [ 802816, 0, 0, 0, 0, 0, 0, 0, 0, 0 ]
+...

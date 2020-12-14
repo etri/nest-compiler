@@ -1,0 +1,8 @@
+---
+- name:    PU1
+  backendName: CPU
+  parameters: |
+    "nonSupportedNodes":""
+    "deviceID" : "0"
+  dramMemory: 200000000
+...

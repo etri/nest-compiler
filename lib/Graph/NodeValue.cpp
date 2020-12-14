@@ -40,10 +40,11 @@ void NodeValue::replaceAllUsesOfWith(NodeValue v, const Function *F,
     // optimizer, where the type of the replacement value should always match
     // the type of the original node value. Check if the only difference is
     // related to strides and adjust accordingly.
-    assert(v.getNumUsers() == 0 && "Cannot update type if there are users");
-    assert(getType()->isEqual(*v.getType(), /* allowDifferentShape */ false,
-                              /* allowDifferentStrides */ true) &&
-           "Replacing value with the wrong type");
+    //assert(v.getNumUsers() == 0 && "Cannot update type if there are users");
+    //assert(getType()->isEqual(*v.getType(), /* allowDifferentShape */ false,
+    //                          /* allowDifferentStrides */ true) &&
+    //       "Replacing value with the wrong type");
+    llvm::outs()<<"getNode: "<<v.getNode()<<"\n";
     v.setType(getType());
   }
   typeUnsafeReplaceAllUsesOfWith(v, F, skipReplacement);

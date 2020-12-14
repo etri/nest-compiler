@@ -225,6 +225,10 @@ public:
                                  llvm::StringRef name, bool isTrainable,
                                  const std::string &layout = ANY_LAYOUT);
 
+  Placeholder *createPartitionPlaceholder(TypeRef T, llvm::StringRef name,
+                                 bool isTrainable,
+                                 const std::string &layout = ANY_LAYOUT);
+
   Constant *createConstant(TypeRef T, llvm::StringRef name,
                            const std::string &layout = ANY_LAYOUT);
 
@@ -473,6 +477,24 @@ public:
              unsigned_t dilation = 1,
              ConvolutionLayout layout = ConvolutionLayout::NHWC);
 
+
+
+#ifdef GLOW_WITH_VTA
+  VTAConvolutionNode *
+  createVTAConv(llvm::StringRef name, NodeValue input, NodeValue filter,
+             NodeValue bias, TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
+             llvm::ArrayRef<unsigned_t> strides,
+             llvm::ArrayRef<unsigned_t> pads, unsigned_t group,
+             unsigned_t dilation = 1,
+             ConvolutionLayout layout = ConvolutionLayout::VTA_LAYOUT);
+
+  VTAConvolutionNode *
+  createVTAConv(llvm::StringRef name, NodeValue input, NodeValue filter,
+             NodeValue bias, TypeRef outTy, unsigned_t kernel,
+             unsigned_t stride, unsigned_t pad, unsigned_t group,
+             unsigned_t dilation = 1,
+             ConvolutionLayout layout = ConvolutionLayout::VTA_LAYOUT);
+#endif
   /// Creates a Convolution3DNode with the given \p name which convolves the 5D
   /// \p input with \p filter and \bias. \p kernels defines the size of the
   /// height, width, and depth dimensions of the filters. \p strides defines the
@@ -1388,6 +1410,7 @@ public:
                           NodeValue lengths, llvm::ArrayRef<dim_t> mask);
 
   SaveNode *createSave(llvm::StringRef name, NodeValue input);
+  SaveNode *createPartitionSave(llvm::StringRef name, NodeValue input);
 
   /// Creates and \returns a SaveNode of \p input to \p output. If \p skipSuffix
   /// then the name used is \p name, otherwise suffix "_save" is appended.

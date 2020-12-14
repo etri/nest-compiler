@@ -4,12 +4,15 @@
   parameters: |
     "nonSupportedNodes":"AvgPool"
     "deviceID" : "0"
+  dramMemory: 2000000
 - name:     Device2
   backendName: CPU
   parameters: |
     "nonSupportedNodes":"AvgPool"
+  dramMemory: 2000000
 - name:     Device3
   backendName: Interpreter
   parameters: |
     "supportedNodes":""
+  dramMemory: 2000000
 ...

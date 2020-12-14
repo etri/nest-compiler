@@ -574,6 +574,9 @@ public:
   /// Tensor into default output stream.
   void dump(unsigned maxNumElem) const;
 
+  /// yongin add; write out tensor in Binary form
+  void toBin(const char*) const;
+
   /// Dump a textual representation of the Tensor to std::string.
   std::string toString() const;
 

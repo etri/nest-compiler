@@ -1,81 +1,70 @@
-![Glow Logo](./docs/logo.svg)
-
-[![pytorch](https://circleci.com/gh/pytorch/glow.svg?style=shield)](https://circleci.com/gh/pytorch/glow)
+![NEST-C Logo](docs/nestc/logo_nestc.png)
 
 
-Glow is a machine learning compiler and execution engine for hardware
-accelerators.  It is designed to be used as a backend for high-level machine
+NEST Compiler (NEST-C) is an open source project led by ETRI, which is based on GLOW project.
+NEST-C is a machine learning compiler and execution engine for hardware
+accelerators. It is designed to be used as a backend for high-level machine
 learning frameworks.  The compiler is designed to allow state of the art
 compiler optimizations and code generation of neural network graphs. This
-library is in active development. The project plan is described in the Github
-issues section and in the
-[Roadmap](https://github.com/pytorch/glow/wiki/Glow-Roadmap) wiki page.
+library is in active development. 
+
+## Demo
+
+![Nestc-demo](docs/nestc/nestc_demo.gif)
 
 ## Partners
 
-Contributions to Glow are welcomed and encouraged! Glow is developed in
-collaboration with the following partners:
-
-
-<!---
-Note:
-List of partner logos sorted alphabetically column order.
--->
-
-| ![Bitmain Logo](./docs/partners/bitmain.png) | ![Habana Logo](./docs/partners/habana.png) | ![ST Logo](./docs/partners/st.png)  |
-:-------------------------:|:-------------------------:|:-------------------------:
-| ![Cadence Logo](./docs/partners/cadence.png) | ![Intel Logo](./docs/partners/intel.png) | ![Synopsys Logo](./docs/partners/synopsys.png) |
-| ![CEVA Logo](./docs/partners/ceva.png)   |  ![Marvell Logo](./docs/partners/marvell.png) |  |
-| ![Esperanto Logo](./docs/partners/esperanto.png)  | ![NXP Logo](./docs/partners/nxp.png) |  |
+Contributions to NEST-C are welcomed and encouraged! 
 
 
 ## How does it work?
 
-Glow lowers a traditional neural network dataflow graph into a two-phase
+NEST-C lowers a traditional neural network dataflow graph into a two-phase
 strongly-typed [intermediate representation (IR)](./docs/IR.md). The high-level
 IR allows the optimizer to perform domain-specific optimizations. The
 lower-level instruction-based address-only IR allows the compiler to perform
 memory-related optimizations, such as instruction scheduling, static memory
 allocation and copy elimination. At the lowest level, the optimizer performs
 machine-specific code generation to take advantage of specialized hardware
-features. Glow features a lowering phase which enables the compiler to support a
+features. NEST-C features a lowering phase which enables the compiler to support a
 high number of input operators as well as a large number of hardware targets by
 eliminating the need to implement all operators on all targets. The lowering
 phase is designed to reduce the input space and allow new hardware backends to
 focus on a small number of linear algebra primitives.
-The design philosophy is described in an [arXiv paper](https://arxiv.org/abs/1805.00907).
 
-![](./docs/3LevelIR.png)
+![](./docs/nestc/nestc_overview.png)
 
 ## Getting Started
 
 ### System Requirements
 
-Glow builds and runs on macOS and Linux. The software depends on a modern C++
+NEST-C builds and runs on macOS and Linux. The software depends on a modern C++
 compiler that supports C++11, on CMake, LLVM (>=7.0), glog, protocol buffers, and
 libpng.
 
-#### Get Glow!
+#### Get NEST-C!
 
   ```bash
-  git clone git@github.com:pytorch/glow.git  # or: git clone https://github.com/pytorch/glow.git
-  cd glow
+  git clone https://github.com/etri/nest-compiler.git
+  cd nest-compiler
   ```
 
 #### Submodules
 
-Glow depends on a few submodules: googletest, onnx, and a library
+NEST-C depends on a few submodules: googletest, onnx, and a library
 for FP16 conversions.
 
-To get them, from the glow directory, run:
+To get them, from the NEST-C directory, run:
 
   ```bash
   git submodule update --init --recursive
   ```
 
+
+
 #### Source dependencies
 
-Glow depends on `fmt`, which must be built from source:
+NEST-C depends on `fmt`, which must be built from source:
 ```bash
 git clone https://github.com/fmtlib/fmt
 mkdir fmt/build
@@ -91,7 +80,7 @@ Install the required dependencies using either [Homebrew](https://brew.sh/) or
 [MacPorts](https://www.macports.org/). If using Homebrew, run:
 
   ```bash
-  brew install cmake graphviz libpng ninja protobuf wget glog autopep8 llvm   \
+  brew install cmake graphviz libpng zlib ninja protobuf wget glog autopep8 llvm   \
       boost double-conversion gflags jemalloc libevent lz4 openssl pkg-config \
       snappy xz
   ```
@@ -99,7 +88,7 @@ Install the required dependencies using either [Homebrew](https://brew.sh/) or
 If using MacPorts, run:
 
   ```bash
-  port install cmake graphviz libpng ninja protobuf-cpp wget google-glog \
+  port install cmake graphviz libpng zlib ninja protobuf-cpp wget google-glog \
       boost double-conversion gflags jemalloc libevent lz4 openssl snappy xz
   # Choose version >= 7
   export LLVM_VERSION=7
@@ -127,7 +116,7 @@ For MacPorts, run:
 ```
 
 > **Note:** Starting with macOS Mojave, Xcode's command line tools changed header layout. 
-> In order for Glow to build on Mojave, you might need to install
+> In order for NEST-C to build on Mojave, you might need to install
 > `macOS_SDK_headers_for_macOS_10.14.pkg`, located in 
 > `/Library/Developer/CommandLineTools/Packages/`.
 > For macOS Catalina you might need to explicitly specify SDKROOT: 
@@ -138,7 +127,7 @@ For MacPorts, run:
 
 [The following instructions have been tested on Ubuntu 16.04 and 18.04]
 
-In order to build Glow on Ubuntu it is necessary to install a few packages. The
+In order to build NEST-C on Ubuntu it is necessary to install a few packages. The
 following command should install the required dependencies:
 
   ```bash
@@ -149,7 +138,7 @@ following command should install the required dependencies:
       libjemalloc-dev libpthread-stubs0-dev
   ```
 
-[Note: Ubuntu 16.04 and 18.04 ship with llvm-6 and need to be upgraded before building Glow. Building Glow on Ubuntu 16.04 with llvm-7 fails because llvm-7 xenial distribution uses an older c++ ABI, however building Glow on Ubuntu 18.04 with llvm-7 has been tested and is successful]
+[Note: Ubuntu 16.04 and 18.04 ship with llvm-6 and need to be upgraded before building NEST-C. Building NEST-C on Ubuntu 16.04 with llvm-7 fails because llvm-7 xenial distribution uses an older c++ ABI, however building NEST-C on Ubuntu 18.04 with llvm-7 has been tested and is successful]
 
 It may be desirable to use `update-alternatives` to manage the version of
 clang/clang++:
@@ -161,7 +150,7 @@ clang/clang++:
       /usr/lib/llvm-8/bin/clang++ 50
   ```
 
-Glow uses the system default C/C++ compiler (/usr/bin/c++), and so you may also
+NEST-C uses the system default C/C++ compiler (/usr/bin/c++), and so you may also
 want to switch your default C/C++ compiler to clang:
 
   ```bash
@@ -171,16 +160,14 @@ want to switch your default C/C++ compiler to clang:
       # Select the option corresponding to /usr/bin/clang++ ...
   ```
 
-Glow *should* build just fine with gcc (e.g. gcc 5.4), but we mostly use clang
+NEST-C *should* build just fine with gcc (e.g. gcc 5.4), but we mostly use clang
 and are more attentive to compatibility with clang.
 
-Finally, in order to support the ONNX net serialization format, Glow requires
+Finally, in order to support the ONNX net serialization format, NEST-C requires
 `protobuf >= 2.6.1`, but the above command may install older
 version on older Ubuntu (e.g. 14.04). If this is the case, we suggest to look
 at `utils/install_protobuf.sh` to install a newer version from source.
 
-For details on installing OpenCL on Ubuntu please see
-[these instructions](docs/Building.md#opencl-on-ubuntu).
 
 ### Configure and Build
 
@@ -192,16 +179,13 @@ good idea to build the project outside of the source directory.
   ```bash
   mkdir build_Debug
   cd build_Debug
-  cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug ../glow
+  cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug ../nest-compiler
   ninja all
   ```
 
 It's possible to configure and build the compiler with any CMake generator,
 like GNU Makefiles, Ninja and Xcode build.
 
-For platform-specific build instructions and advanced options, such as
-building with Address-Sanitizers refer to this guide:
-[Building the Compiler](docs/Building.md).
 
 If you're running macOS v10.14 (Mojave) and `ninja all` fails because it can't
 find headers (e.g. `string.h`), run this command to fix it, and try again.
@@ -221,24 +205,94 @@ For macOS v10.15 (Catalina) you might need to explicitly specify SDKROOT:
 
 #### Building with dependencies (LLVM)
 
-By default, Glow will use a system provided LLVM.  Note that Glow requires LLVM
+By default, NEST-C will use a system provided LLVM.  Note that NEST-C requires LLVM
 7.0 or later. If you have LLVM installed in a non-default location (for
 example, if you installed it using Homebrew on macOS), you need to tell CMake
 where to find llvm using `-DLLVM_DIR`. For example, if LLVM were
 installed in `/usr/local/opt`:
 
   ```bash
-  cmake -G Ninja ../glow \
+  cmake -G Ninja ../nest-compiler \
       -DCMAKE_BUILD_TYPE=Debug \
       -DLLVM_DIR=/usr/local/opt/llvm/lib/cmake/llvm
   ```
 
 If LLVM is not available on your system you'll need to build it manually.  Run
 the script '`/utils/build_llvm.sh` to clone, build and install LLVM in a local
-directory. You will need to configure Glow with the flag `-DLLVM_DIR` to tell
+directory. You will need to configure NEST-C with the flag `-DLLVM_DIR` to tell
 the build system where to find LLVM given the local directory you installed it
 in (e.g. `-DLLVM_DIR=/path/to/llvm_install/lib/cmake/llvm` if using
 `build_llvm.sh`).
+
+
+## EVTA
+![EVTA](docs/nestc/EVTA_overview.png)
+EVTA는 Ultra96-V2와 ZCU102 보드에서 다양한 특성을 가진 NPU를 타겟으로 코드 생성 실험을 할수 있도록 개발한 레퍼런스 하드웨어다. [nest-data](https://github.com/etri/nest-data/tree/master/bitstreams) 저장소에서 비트스트림을 다운로드하여 각 보드에서 실행이 가능하며, EVTA 시뮬레이터를 통한 검증도 가능하다.
+
+### EVTA 시뮬레이터를 통한 Resnet18 빌드 및 실행 방법
+```bash
+cmake -DNESTC_WITH_EVTA=ON -DNESTC_WITH_EVTA_BUNDLE_TEST=ON -DNESTC_WITH_BUNDLES=ON [소스코드 위치]
+make vtaMxnetResnet18Bundle
+```
+
+### ZCU102 보드 상에서의 Resnet18 빌드 및 실행 방법
+호환 비트스트림 [다운로드](https://github.com/etri/nest-data/blob/master/bitstreams/zcu102_1x16_i8w8a32_16_16_19_18.bit) 및 설치
+```bash
+cmake -DNESTC_WITH_EVTA=ON -DNESTC_WITH_EVTASIM=OFF -DNESTC_USE_PREBUILT_LIB=ON -DNESTC_WITH_EVTA_BUNDLE_TEST=ON -DNESTC_WITH_BUNDLES=ON -DNESTC_EVTA_RUN_ON_AARCH64=ON [소스코드 위치]
+make vtaMxnetResnet18Bundle
+```
+
+## Quantization
+
+### image-selection
+
+```bash
+python image_selection.py --file-name=test.txt --num-of-images=1 --train-images=/home/jemin/hdd/imagenet/train_processed
+```
+
+### profling
+```bash
+# resnet 18
+cd /home/jemin/development/nest_compiler/utils/profile
+./profile.sh
+```
+
+### Parameter Search
+
+```bash
+cd /home/jemin/development/nest_compiler/utils/imagenet_val_script
+
+# 1,000, Max, non-fusion
+./resnet18.sh 3
+
+# 10,000, KL, fusion
+./resnet18.sh 4
+
+# 10,000, KL, Fusion
+./resnet18.sh 7
+```
+
+#### Show explored results
+
+```bash
+# All search results of resnet18 
+ls | grep resnet18
+
+# 3
+ls | grep -E "nonfusion.*resnet18.*_1000_.*none" | xargs cat
+# 4
+ls | grep -E "nonfusion.*resnet18.*_10000_.*KL" | xargs cat
+# 7
+ls | grep -E "vtainterpreter-fusion.*resnet18.*_10000_.*KL" | xargs cat
+
+# 전체 결과
+cd /home/jemin/development/nest_compiler/utils/imagenet_val_script/quant_result
+ls | grep resnet18 | xargs more
+```
+
+## Profile-based Graph Partitioning
+See [Profile-based graph partitioning](docs/nestc/NestPartitioner-kor.md)
+
 
 ## Testing and Running
 
@@ -249,16 +303,16 @@ of them, simply run `ninja test`.
 
 ### C++ API examples
 
-A few test programs that use Glow's C++ API are found under the `examples/`
+A few test programs that use NEST-C's C++ API are found under the `examples/`
 subdirectory. The `mnist`, `cifar10`, `fr2en` and `ptb` programs train and run digit
 recognition, image classification and language modeling benchmarks,
 respectively.
 
-To run these programs, build Glow in Release mode, then run the following commands
+To run these programs, build NEST-C in Release mode, then run the following commands
 to download the cifar10, mnist and ptb databases.
 
   ```bash
-  python ../glow/utils/download_datasets_and_models.py --all-datasets
+  python ../nest-compiler/utils/download_datasets_and_models.py --all-datasets
   ```
 
 Now run the examples. Note that the databases should be in the current working
@@ -287,29 +341,21 @@ slower than that of release builds. If you wish to benchmark the compiler, run
 long benchmarks, or release the product then you should compile the compiler in
 Release mode. Check the main CMake file for more details.
 
-More details on testing and running Glow can be found in:
-[Testing the Glow Compiler](docs/Testing.md).
 
 ### Ahead-of-time Compilation
 
-Glow can be used to compile neural networks into object files containing native
-code.  We provide resnet50 (both quantized and non-quantized versions) as an
-example of this capability in `examples/bundles/resnet50`.  See [Creating
-Standalone Executable Bundles](docs/AOT.md) for more detail.
+NEST-C can be used to compile neural networks into object files containing native
+code.  We provide resnet18 and resnet50 (both quantized and non-quantized versions) as
+examples of this capability in `examples/bundles/resnet18`, `examples/bundles/resnet50` and `examples/bundles/vta_cpu_partition_net`. 
 
-## Contributing
+See [Creating Standalone Executable Bundles](docs/AOT.md) for more detail on creating a bundle for a single backend..
 
-To get started contributing, please refer to the following guides:
-* [Contributing](CONTRIBUTING.md)
-* [Coding Standards](docs/CodingStandards.md)
-* [Code of Conduct](CODE_OF_CONDUCT.md)
+See [Profile-based graph partitioning](docs/nestc/NestPartitioner-kor.md) on creating a bundle for a multiple backends.
 
-### Communication
 
-* Forums: discuss implementations, research, etc: https://discuss.pytorch.org/c/glow.
-  Make sure to label topic with the ["glow"](https://discuss.pytorch.org/c/glow) category.
-* GitHub issues: bug reports, feature requests, install issues, RFCs, thoughts, etc.
 
 ## License
 
-Glow is licensed under the [Apache 2.0 License](LICENSE).
+NEST-C is licensed under the [Apache 2.0 License](LICENSE).
+
+

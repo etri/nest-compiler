@@ -1,11 +1,11 @@
-## Design of the Glow Intermediate Representation
+## Design of NEST-C Intermediate Representation
 
 ### Introduction
 
-This document describes the motivation behind the Glow intermediate
+This document describes the motivation behind NEST-C intermediate
 representation (IR) and some implementation details.
 
-Glow is a retargetable compiler that supports a number of different backends.
+NEST-C is a retargetable compiler that supports a number of different backends.
 This means that the first few layers of the compiler are target-independent, but
 as you get closer to the different backends things start to diverge.  The first
 two levels of IR are shared between all targets. Different backends may have
@@ -24,7 +24,7 @@ strongly typed, which means that inputs and output have a known tensor type
 are verified by the compiler. For example, the element-wise add instruction must
 operate on operands of the same type.
 
-The Glow graph is structured as a module that contains multiple functions that
+The NEST-C graph is structured as a module that contains multiple functions that
 contain multiple nodes. Placeholders and Constants, which are similar to global
 variables in C programs, are nodes that are shared between the functions. Nodes
 inside functions are able to reference Placeholders and Constants which are
@@ -36,12 +36,12 @@ weights.
 
 ![](module.png)
 
-Glow functions contain nodes that represent the different operations of a neural
+NEST-C functions contain nodes that represent the different operations of a neural
 network. The function owns the nodes and has access to the placeholders and
 constants in the module. The image below depicts the compute graph that
 represents the expression "A / B". The graph is automatically differentiated by
-Glow, and the value of variable A is updated with the gradient of the
-expression. Glow lowers the nodes that compute the gradient of the expression
+NEST-C, and the value of variable A is updated with the gradient of the
+expression. NEST-C lowers the nodes that compute the gradient of the expression
 and the stochastic gradient descent (SGD) node into a sequence of low-level
 operators (Div, Mul, Add and Save). The different compiler backends do not need
 to implement support for the DivGrad, ReLUGrad or SGD nodes.
@@ -98,7 +98,7 @@ them before the execution of the program.
 ### Placeholders
 
 Placeholders are symbolic nodes that are not backed by a concrete tensor during
-the compilation of the program. Inputs and outputs of Glow programs should be
+the compilation of the program. Inputs and outputs of NEST-C programs should be
 modeled using Placeholder nodes. Concrete tensors are attached to placeholder
 nodes during the compilation of the program, and not before. This means that
 unlike constants, the optimizer can't inspect or mutate the content of
@@ -117,7 +117,7 @@ Predication is a well-known technique to control the execution of some node or
 instruction by means of a boolean flag. If the value of the flag at runtime is
 set to 'false' then the predicated node or instructions may return any value.
 
-Glow's approach to predication is to support it as an optimization. In other
+NEST-C's approach to predication is to support it as an optimization. In other
 words, if honoring the predicates does not give a performance boost, then
 a backend is free to ignore them. As such predication **cannot** be used
 to model control flow, since potentially the last write could win.
@@ -140,7 +140,7 @@ do not need to perform the same amount of computation.
 
 ### Node Lowering
 
-Instead of compiling high-level operators directly, Glow performs "node
+Instead of compiling high-level operators directly, NEST-C performs "node
 lowering". In this phase, the compiler breaks the high-level operator nodes into
 low-level linear algebra operator nodes. For example, the FullyConnected layer
 is represented as a matrix multiplication followed by broadcasted add. Different
@@ -148,7 +148,7 @@ compiler backends do not have to implement the FullyConnected layer and a dozen
 other high-level opcodes, just the low-level matrix multiplication.
 
 This lowering phase drives many of the design decisions of the compiler. In
-Glow, lowering is performed as part of the high-level graph as described above,
+NEST-C, lowering is performed as part of the high-level graph as described above,
 prior to moving to low-level IR. This is due to a number of reasons. First, the
 new lowered graph may allow for additional graph-level optimizations. Second,
 the new graph structure may affect the decisions of the instruction
@@ -218,7 +218,7 @@ require that the data from the forward pass would be kept around for the
 backward pass, so if the program is not optimized for inference-only mode then
 certain memory optimizations cannot happen.
 
-Below is an example of unoptimized Glow IR. Note that the 'alloc' instruction
+Below is an example of unoptimized NEST-C IR. Note that the 'alloc' instruction
 does not allocate memory; it just marks the lifetime of the activation. The
 low-level memory allocator is responsible for allocating all of the buffers into
 a single coalesced region.
@@ -251,7 +251,7 @@ a single coalesced region.
   }
   ```
 
-### The Lifetime of a Glow Instruction
+### The Lifetime of a NEST-C Instruction
 
 This is a high-level overview of the compilation process:
 

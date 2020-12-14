@@ -70,6 +70,13 @@ class Partitioner final : public PartitionerBase {
   /// The struct contain user-defined partition info.
   PartitionConfig partitionConfig_;
 
+//  std::vector<std::vector<CostNode>> nodeGroups;
+//  PartitionProfileInfo pInfo;
+//  std::map<Node*, CostNode> nodeCostMap;
+//  std::map<size_t, float> commCostMap;
+//  std::map<size_t, std::string> peBackendMap;
+//  std::vector<size_t> peIDList;
+
   /// Get the representative function (the one with the largest input) and
   /// update the memSize.
   static Function *selectRepFunc(Module *parent, uint64_t &memSize);
@@ -156,6 +163,9 @@ public:
   Expected<DAGListTy>
   partitionFromConfig(const PartitionConfig &partitionConfig,
                       CompilationContext &cctx);
+//  Expected<DAGListTy>
+//  partitionFromConfigForNest(const PartitionConfig &partitionConfig,
+//                      CompilationContext &cctx);
 
   /// Based on \p cctx, setup all data structures needed for a DAG.
   /// cctx.prepartitionedConfig contains the Functions which are already
@@ -173,8 +183,9 @@ public:
   /// then based on cost models(memory usage and performance). \p cctx is used
   /// for function optimization. \returns the partition result or an error.
   Expected<DAGListTy> heterogeneousPartition(CompilationContext &cctx);
+//  Expected<DAGListTy> onChipHeterogeneousPartition(CompilationContext &cctx);
 
-  /// This partition approach is an experimental one. It tries to balance the
+    /// This partition approach is an experimental one. It tries to balance the
   /// workloads of each accelerator/device in addition to respecting memory
   /// constraints. \p numDevices is the minimal number of partition. That is,
   /// after loadBalancedPartition, the network will be devided up into at lease
@@ -195,6 +206,7 @@ public:
   /// \p cctx is used for function optimization. \returns the partition result
   /// or an error.
   Expected<DAGListTy> partition(CompilationContext &cctx) override;
+
 };
 } // namespace glow
 #endif // GLOW_PARTITIONER_PARTITIONER_H

@@ -1,0 +1,13 @@
+---
+backendName: CPU
+commCost: 0.0
+Convolution-1-224-224-3-float-64-7-2+Relu-1-112-112-64-float : 148
+Convolution-1-56-56-64-float-64-3-1+Relu-1-56-56-64-float : 72
+Convolution-1-56-56-64-float-128-3-2+Relu-1-28-28-128-float : 39
+Convolution-1-28-28-128-float-128-3-1+Relu-1-28-28-128-float : 72
+Convolution-1-28-28-128-float-256-3-2+Relu-1-14-14-256-float : 41
+Convolution-1-14-14-256-float-256-3-1+Relu-1-14-14-256-float : 74
+Convolution-1-14-14-256-float-512-3-2+Relu-1-7-7-512-float : 38
+Convolution-1-7-7-512-float-512-3-1+Relu-1-7-7-512-float : 75
+AvgPool-1-7-7-512-float+Reshape-1-1-1-512-float+Gemm-1-512-float : 10
+...

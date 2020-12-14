@@ -40,7 +40,8 @@ public:
   /// \returns a Error indicating if the operation was a success.
   Error provision(DAGListTy &networks, Module &module,
                   CompilationContext &cctx);
-
+  Error provisionForNestPartition(DAGListTy &networks, Module &module,
+                   CompilationContext &cctx, std::string bundleDir);
   /// Remove stored compiledFunction.
   Error removeFunction(llvm::StringRef name);
 

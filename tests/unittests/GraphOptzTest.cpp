@@ -77,6 +77,57 @@ static const NodeT *findFunctionNodeByName(const Function *F,
                    [=](auto &N) { return N.getName() == name; }));
 }
 
+
+class MockBackendWithFusion : public MockBackend {
+  bool supportsFusedActivation(Node *parent, Node *activation) const override {
+    switch (parent->getKind()) {
+    case Kinded::Kind::ConvolutionNodeKind:
+      switch (activation->getKind()) {
+      case Kinded::Kind::ReluNodeKind:
+      case Kinded::Kind::SigmoidNodeKind:
+      case Kinded::Kind::TanhNodeKind:
+        return true;
+      default:
+        return false;
+      }
+    default:
+      return false;
+    }
+  }
+};
+
+
+TEST_F(GraphOptz, FuseReluAfterConv) {
+  auto *A =
+      mod_.createPlaceholder(ElemKind::FloatTy, {1, 10, 20, 3}, "A", false);
+  ConvolutionNode *CV =
+      F_->createConv(bindings_, "conv", A, 16, 5, 1, 2, 1);
+  auto *AN = F_->createRELU("RELU", CV);
+  SaveNode *SN = F_->createSave("ret", AN);
+
+  EXPECT_EQ(F_->getNodes().size(), 3);
+//  std::cout << "[Before fusion] node size = " << F_->getNodes().size() << std::endl;
+//  std::cout << "[Before fusion] Result of Conv = " << CV->getResult() << std::endl;
+//  std::cout << "[Before fusion] Input of Save = " << SN->getInput() << std::endl;
+//  F_->dump();
+
+  CompilationContext cctx;
+  auto B = MockBackendWithFusion();
+  ::glow::fold(F_, cctx, &B);
+
+  ConvolutionNode *fusedCV =
+      llvm::dyn_cast<ConvolutionNode>(SN->getInput());
+  ASSERT_TRUE(fusedCV);
+  EXPECT_EQ(fusedCV->getFusedActivation(), FusedActivation::RELU);
+
+//  std::cout << "[After fusion] node size = " << F_->getNodes().size() << std::endl;
+//  std::cout << "[After fusion] Result of FusedConv = " << fusedCV->getResult() << std::endl;
+//  std::cout << "[After fusion] Input of Save = " << SN->getInput() << std::endl;
+//  F_->dump();
+
+}
+
+
 TEST_F(GraphOptz, OptimizeClipFunnel) {
   auto *A =
       mod_.createPlaceholder(ElemKind::FloatTy, {100, 16}, "input", false);
@@ -352,6 +403,9 @@ TEST_F(GraphOptz, optimizeBatchNormAfterConv) {
   bindings_.get(A)->getHandle().randomize(-1.0, 1.0, mod_.getPRNG());
   checkNumericalEquivalence();
 }
+
+
+
 
 /// Verify that the Conv-BatchNorm merging optimization is not impacted by
 /// multiple users on the filter/bias.
@@ -2827,23 +2881,7 @@ TEST_F(GraphFold, NoFoldChannelShuffle) {
   EXPECT_FALSE(llvm::isa<ChannelShuffleNode>(save->getInput()));
 }
 
-class MockBackendWithFusion : public MockBackend {
-  bool supportsFusedActivation(Node *parent, Node *activation) const override {
-    switch (parent->getKind()) {
-    case Kinded::Kind::ConvolutionNodeKind:
-      switch (activation->getKind()) {
-      case Kinded::Kind::ReluNodeKind:
-      case Kinded::Kind::SigmoidNodeKind:
-      case Kinded::Kind::TanhNodeKind:
-        return true;
-      default:
-        return false;
-      }
-    default:
-      return false;
-    }
-  }
-};
+
 
 #define CONV_ACTIVATION_TEST(ACTIVATION_, CREATOR_)                            \
   TEST_F(GraphFold, FoldConv##ACTIVATION_##Activation) {                       \
