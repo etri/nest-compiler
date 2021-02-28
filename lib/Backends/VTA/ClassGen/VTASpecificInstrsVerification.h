@@ -1,0 +1,4 @@
+
+void VTAConvolutionInst::verify() const {
+
+}
