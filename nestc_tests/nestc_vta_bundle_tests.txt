@@ -1,0 +1,15 @@
+vtaAvgPoolTestBundle
+vtaConvTestBundle
+vtaDequantizeTestBundle
+vtaElemAddTestBundle
+vtaElemSubTestBundle
+vtaElemDivTestBundle
+vtaFCTestBundle
+vtaFloatConvTestBundle
+vtaMaxPoolTestBundle
+vtaNonVTAConvTestBundle
+vtaQuantizeTestBundle
+vtaSoftMaxTestBundle
+vtaSplatMaxTestBundle
+vtaTransposeTestBundle
+vtaMxnetResnet18Bundle

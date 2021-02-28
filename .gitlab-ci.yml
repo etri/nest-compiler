@@ -1,0 +1,291 @@
+stages:
+  - docker-build
+  - build
+  - cleanup-build
+  - test
+  - cleanup
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_HOST: tcp://docker:2375
+
+docker-build:
+  stage: docker-build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - pwd
+    - df -h
+    - docker volume ls
+    - echo $PWD
+    - ls -al
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - DATE=`date '+%Y%m%d'`
+    - docker images
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE || true
+    - docker images
+    - docker build --cache-from $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE --tag $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE .
+    - docker images
+    - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE
+    - docker tag  $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE  $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker container ls -a
+    - df -h
+
+
+
+
+build:
+  stage: build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - df -h
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - DATE=`date '+%Y%m%d'`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - cd ../../
+    - mkdir -p build_ci
+    - ls
+    - rm -rf build_ci/*
+    - df -h
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - docker start build
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON"
+    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_tests.txt | xargs -I {} ninja {}"
+    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}"
+    - docker exec build sh -c "cd build_ci; ninja NESTVTAImageclassifierResnet18Test"
+    - du -h -d 1
+
+  before_script:
+    - apk update && apk add git
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+
+  artifacts:
+    paths:
+      - build_ci
+
+build-debug:
+  stage: build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - df -h
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - DATE=`date '+%Y%m%d'`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - cd ../../
+    - mkdir -p build_ci
+    - ls
+    - rm -rf build_ci/*
+    - df -h
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - docker start build
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Debug -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_VTA_INTERPRETER_FUSION=ON -DGLOW_VTA_FUSION=ON"
+    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_tests.txt | xargs -I {} ninja {}"
+    - du -h -d 1
+
+  before_script:
+    - apk update && apk add git
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+
+build-without-VTA:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:18.09.7-dind
+  script:
+    - df -h
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - DATE=`date '+%Y%m%d'`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - cd ../../
+    - mkdir -p build_ci
+    - ls
+    - rm -rf build_ci/*
+    - df -h
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - docker start build
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON"
+    - docker exec build sh -c "cd build_ci; ninja all;"
+    - du -h -d 1
+  before_script:
+    - apk update && apk add git
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+
+build-all:
+  stage: build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - df -h
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - DATE=`date '+%Y%m%d'`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - cd ../../
+    - mkdir -p build_ci
+    - ls
+    - rm -rf build_ci/*
+    - df -h
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - docker start build
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON"
+    - docker exec build sh -c "cd build_ci; ninja all;"
+    - du -h -d 1
+
+  before_script:
+    - apk update && apk add git
+    - git submodule sync --recursive
+    - git submodule update --init --recursive
+
+
+
+cleanup-build:
+  stage: cleanup-build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - df -h
+    - ls
+    - rm -rf build_ci/*
+    - ls
+  when: on_failure
+  artifacts:
+    paths:
+      - build_ci
+
+test:
+  stage: test
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - du -h -d 1
+    - df -h
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - DATE=`date '+%Y%m%d'`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+
+    - cd ../../
+    - mkdir -p build_ci
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker start build
+    - docker exec build sh -c "ls"
+    - docker exec build sh -c "cd build_ci;ls"
+    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_tests.txt | xargs -I {} ctest -R {}"
+    - df -h
+  artifacts:
+    paths:
+      - build_ci
+
+test-all:
+  stage: test
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - cd ../../
+    - mkdir -p build_ci
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker start build
+    - docker exec build sh -c "ls;cd build_ci; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_VTA=ON -DGLOW_WITH_STC=ON"
+    - docker exec build sh -c "cd build_ci; ninja all;"
+    - docker exec build sh -c "cd build_ci; ninja check"
+
+
+  when: manual
+  allow_failure: true
+
+cleanup:
+  stage: cleanup
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - ls
+    - rm -rf build_ci
+    - ls
+  when: manual
+  artifacts:
+    paths:
+      - build_ci
+
+
