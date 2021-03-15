@@ -53,7 +53,7 @@ add_custom_target(vtaCaffe2Resnet50BundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 add_executable(vtaCaffe2Resnet50Bundle caffe2_resnet50Main.cpp ${CMAKE_CURRENT_BINARY_DIR}/caffe2_resnet50.cpp)
 add_dependencies(vtaCaffe2Resnet50Bundle vtaCaffe2Resnet50BundleNet)
-target_link_libraries(vtaCaffe2Resnet50Bundle VTABundle png Miniz)
+target_link_libraries(vtaCaffe2Resnet50Bundle VTABundle png Miniz ${BUNDLE_LINK_LIB})
 set_target_properties(vtaCaffe2Resnet50Bundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

@@ -1,5 +1,5 @@
 add_executable(vtaFCTestBundle vtaFCTestBundleMain.cpp vtaFCTestBundle.cpp)
-target_link_libraries(vtaFCTestBundle VTABundle )
+target_link_libraries(vtaFCTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaFCTestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

@@ -1,5 +1,5 @@
 add_executable(vtaQuantizeTestBundle vtaQuantizeTestBundleMain.cpp vtaQuantizeTestBundle.cpp)
-target_link_libraries(vtaQuantizeTestBundle VTABundle  )
+target_link_libraries(vtaQuantizeTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaQuantizeTestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

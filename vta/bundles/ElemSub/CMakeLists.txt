@@ -1,6 +1,6 @@
 add_executable(vtaElemSubTestBundle vtaElemSubTestBundleMain.cpp vtaElemSubTestBundle.cpp)
 target_link_libraries(vtaElemSubTestBundle
-        VTABundle )
+        VTABundle ${BUNDLE_LINK_LIB})
 
 set_target_properties(vtaElemSubTestBundle
         PROPERTIES

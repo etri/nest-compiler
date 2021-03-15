@@ -1,6 +1,6 @@
 add_executable(vtaMaxPoolTestBundle vtaMaxPoolTestBundleMain.cpp vtaMaxPoolTestBundle.cpp)
 target_link_libraries(vtaMaxPoolTestBundle
-       VTABundle )
+       VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaMaxPoolTestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

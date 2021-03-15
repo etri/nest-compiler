@@ -124,7 +124,8 @@ add_custom_target(vtaMxnetResnet18BundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 add_executable(vtaMxnetResnet18Bundle mxnet_exported_resnet18BundleMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp)
 add_dependencies(vtaMxnetResnet18Bundle vtaMxnetResnet18BundleNet)
-target_link_libraries(vtaMxnetResnet18Bundle VTABundle png)
+
+target_link_libraries(vtaMxnetResnet18Bundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaMxnetResnet18Bundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

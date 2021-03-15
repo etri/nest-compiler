@@ -41,7 +41,7 @@ add_custom_target(vtaFloatConvTestBundleNET DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 add_executable(vtaFloatConvTestBundle vtaFloatConvTestBundleMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.cpp)
 add_dependencies(vtaFloatConvTestBundle vtaFloatConvTestBundleNET)
-target_link_libraries(vtaFloatConvTestBundle VTABundle )
+target_link_libraries(vtaFloatConvTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaFloatConvTestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

@@ -1,5 +1,5 @@
 add_executable(vtaSplatMaxTestBundle vtaSplatMaxTestBundleMain.cpp vtaSplatMaxTestBundle.cpp)
-target_link_libraries(vtaSplatMaxTestBundle VTABundle )
+target_link_libraries(vtaSplatMaxTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaSplatMaxTestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

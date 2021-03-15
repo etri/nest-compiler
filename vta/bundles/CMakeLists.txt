@@ -3,6 +3,7 @@ INCLUDE_DIRECTORIES(include ../vtalib/3rdparty/dmlc-core/include)
 
 if(GLOW_WITH_VTASIM)
     INCLUDE_DIRECTORIES(include ../vtalib/include/simulator)
+    set(BUNDLE_LINK_LIB )
 else()
     INCLUDE_DIRECTORIES(include ../vtalib/include/zcu102)
 endif()

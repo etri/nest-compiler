@@ -1,6 +1,6 @@
 add_executable(vtaReluTestBundle vtaReluTestBundleMain.cpp vtaReluTestBundle.cpp)
 target_link_libraries(vtaReluTestBundle
-       VTABundle )
+       VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaReluTestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
