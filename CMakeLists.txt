@@ -19,6 +19,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(NESTC_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(NESTC_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
 
+if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h)
+    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h)
+endif()
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory ${NESTC_ROOT_DIR}/cmake ${NESTC_ROOT_DIR})
 
 if (NESTC_WITH_EVTA)
@@ -28,6 +32,12 @@ else()
     option(NESTC_WITH_VTAINTERPRETER "Build the VTAInterpreter backend" OFF)
     set(NESTC_WITH_VTA OFF)
 endif()
+
+include_directories(BEFORE
+        ${NESTC_ROOT_DIR}/include
+        ${NESTC_ROOT_DIR}/include/tools/loader
+)
+
 
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)

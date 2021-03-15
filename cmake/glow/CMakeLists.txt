@@ -72,7 +72,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${GLOW_OUTPUT_DIR})
 set(GLOW_MODELS_DIR "" CACHE PATH
     "Directory that contains the various models, like en2gr, resnet50")
 
-include_directories(BEFORE
+include_directories(
   ${CMAKE_CURRENT_BINARY_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
