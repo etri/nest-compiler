@@ -27,8 +27,8 @@ target_link_libraries(VTA
                         GraphOptimizerPipeline
                         QuantizationBase
                         Runtime
-                        vta_runtime
         VTABundle
+        vta_runtime
         )
 
 set(linked_backends ${linked_backends} VTA PARENT_SCOPE)
