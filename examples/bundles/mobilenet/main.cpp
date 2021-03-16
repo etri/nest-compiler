@@ -299,7 +299,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
-static void dumpInferenceResults(const BundleConfig &config,
+static int dumpInferenceResults(const BundleConfig &config,
                                  uint8_t *mutableWeightVars) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, "mobilenetv20_output_flatten0_reshape0__2");
@@ -314,6 +314,8 @@ static void dumpInferenceResults(const BundleConfig &config,
   }
   printf("Result: %u\n", maxIdx);
   printf("Confidence: %f\n", maxValue);
+
+  return maxIdx;
 }
 
 /// The assumed layout of the area for mutable WeightVars is:
@@ -408,7 +410,7 @@ int main(int argc, char **argv) {
 
 
   // Report the results.
-  dumpInferenceResults(p1_config, mutableWeightVarsAddr1);
+  int maxIdx = dumpInferenceResults(p1_config, mutableWeightVarsAddr1);
 
   // Free all resources.
   free(activationsAddr0);
@@ -417,4 +419,7 @@ int main(int argc, char **argv) {
 
   free(activationsAddr1);
   free(constantWeightVarsAddr1);
-  free(mutableWeightVarsAddr1);}
+  free(mutableWeightVarsAddr1);
+
+  return !(maxIdx==285);
+}

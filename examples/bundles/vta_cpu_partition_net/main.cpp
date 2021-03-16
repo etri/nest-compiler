@@ -382,7 +382,7 @@ void softmax(float* in, float* result)
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
-static void dumpInferenceResults(const BundleConfig &config,
+static int dumpInferenceResults(const BundleConfig &config,
                                  uint8_t *mutableWeightVars, char* resultName) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, resultName);
@@ -400,6 +400,8 @@ static void dumpInferenceResults(const BundleConfig &config,
   }
   printf("Result: %u\n", maxIdx);
   printf("Confidence: %f\n", maxValue);
+
+  return maxIdx;
 }
 
 static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT) {
@@ -982,7 +984,7 @@ int main(int argc, char **argv) {
   printf ("\n====> [Inference time] %.4lf ms.\n", inftime );
 
   printf("\n======= Result ========\n");
-  dumpInferenceResults(p34_config, mutableWeightVarsAddr34, "resnetv10_dense0_fwd");
+  int maxIdx = dumpInferenceResults(p34_config, mutableWeightVarsAddr34, "resnetv10_dense0_fwd");
 //
 //  float* resultVar34 = getInferenceResultVar(p34_config, mutableWeightVarsAddr34, "resnetv10_dense0_fwd");
 // // uint8_t *constantWeightVarsAddr35 =
@@ -1145,7 +1147,10 @@ int main(int argc, char **argv) {
 //  free(activationsAddr35);
   //free(constantWeightVarsAddr35);
 //  free(mutableWeightVarsAddr35);
+
 #ifdef VTAMAIN
   destroyVTARuntime();
 #endif
+
+  return !(maxIdx==281);
 }

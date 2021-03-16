@@ -326,7 +326,7 @@ void softmax(float* in, float* result)
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
-static void dumpInferenceResults(const BundleConfig &config,
+static int dumpInferenceResults(const BundleConfig &config,
                                  uint8_t *mutableWeightVars, char* resultName) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, resultName);
@@ -344,6 +344,8 @@ static void dumpInferenceResults(const BundleConfig &config,
   }
   printf("Result: %u\n", maxIdx);
   printf("Confidence: %f\n", maxValue);
+
+  return maxIdx;
 }
 
 
@@ -464,10 +466,12 @@ int main(int argc, char **argv) {
   printf("====== the value of a non-partitioned bundle ========\n");
   // Report the results.
 //  dumpInferenceResults(resnet18v2_config, mutableWeightVarsAddr, "resnetv22_dense0_fwd__1");
-  dumpInferenceResults(mxnet_exported_resnet18_config, mutableWeightVarsAddr, "resnetv10_dense0_fwd__1");
+  int maxIdx = dumpInferenceResults(mxnet_exported_resnet18_config, mutableWeightVarsAddr, "resnetv10_dense0_fwd__1");
 
   // Free all resources.
   free(activationsAddr);
   free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
+
+  return !(maxIdx==285);
 }

@@ -13,3 +13,9 @@ vtaSoftMaxTestBundle
 vtaSplatMaxTestBundle
 vtaTransposeTestBundle
 vtaMxnetResnet18Bundle
+ccode-generator
+ResNet18Bundle
+ResNet18NHWCBundle
+ResNet18VTAPartitionBundle
+ResNet18PartitionBundle
+MobileNetBundle

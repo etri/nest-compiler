@@ -297,7 +297,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
-static void dumpInferenceResults(const BundleConfig &config,
+static int dumpInferenceResults(const BundleConfig &config,
                                  uint8_t *mutableWeightVars) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, "resnetv22_dense0_fwd__1");
@@ -312,6 +312,8 @@ static void dumpInferenceResults(const BundleConfig &config,
   }
   printf("Result: %u\n", maxIdx);
   printf("Confidence: %f\n", maxValue);
+
+  return maxIdx;
 }
 
 /// The assumed layout of the area for mutable WeightVars is:
@@ -355,10 +357,12 @@ int main(int argc, char **argv) {
   }
 
   // Report the results.
-  dumpInferenceResults(resnet18v2_config, mutableWeightVarsAddr);
+  int maxIdx = dumpInferenceResults(resnet18v2_config, mutableWeightVarsAddr);
 
   // Free all resources.
   free(activationsAddr);
   free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
+
+  return !(maxIdx==281);
 }

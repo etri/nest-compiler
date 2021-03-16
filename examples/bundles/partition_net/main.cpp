@@ -310,7 +310,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
-static void dumpInferenceResults(const BundleConfig &config,
+static int dumpInferenceResults(const BundleConfig &config,
                                  uint8_t *mutableWeightVars, char* resultName) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, resultName);
@@ -325,6 +325,8 @@ static void dumpInferenceResults(const BundleConfig &config,
   }
   printf("Result: %u\n", maxIdx);
   printf("Confidence: %f\n", maxValue);
+
+  return maxIdx;
 }
 
 static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT) {
@@ -517,7 +519,7 @@ int main(int argc, char **argv) {
   // Report the results.
   printf("====== final result of this neural net ========\n");
  // dumpInferenceResults(p2_config, mutableWeightVarsAddr2, "resnetv22_dense0_fwd__1"); //for resnet18v2.onnx
-  dumpInferenceResults(p2_config, mutableWeightVarsAddr2, "resnetv10_dense0_fwd"); //for mxnet_exported_resnet18.onnx
+  int maxIdx = dumpInferenceResults(p2_config, mutableWeightVarsAddr2, "resnetv10_dense0_fwd"); //for mxnet_exported_resnet18.onnx
 
 //   Free all resources.
   free(activationsAddr0);
@@ -532,4 +534,5 @@ int main(int argc, char **argv) {
   free(constantWeightVarsAddr2);
   free(mutableWeightVarsAddr2);
 
+  return !(maxIdx==285);
 }
