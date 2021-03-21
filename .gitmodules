@@ -1,6 +1,8 @@
 [submodule "glow"]
 	path = glow
 	url = https://github.com/pytorch/glow.git
+	ignore = dirty
 [submodule "vta/vtalib"]
 	path = vta/vtalib
 	url = ../vta_lib
+	ignore = dirty
