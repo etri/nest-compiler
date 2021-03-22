@@ -41,7 +41,7 @@ public:
   std::string backendName_;
   std::set<CostNode*> outNodeSet_;
   std::vector<CostNode*> nodeList_;
-  float totalCost_ = INFINITY;
+//  float totalCost_ = INFINITY;
   bool isParallel_ = false;
 
   unsigned int level_ = 0;

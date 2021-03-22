@@ -54,6 +54,7 @@ public:
   std::string getInputPartitionName();
   std::string getProfileKey(Node *node);
   std::string replaceAll(std::string &str, std::string pattern, std::string replace);
+  std::string addProfileKey(Function* function, std::set<std::string> *keySet, bool isFusion);
 
   void generateDeclaration(std::string& writeFileC, int partitionNum, const PartitionConfig &partitionConfig, int profileMode);
   void generateMain(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, int profileMode);

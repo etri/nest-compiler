@@ -26,7 +26,6 @@
 #include "glow/Quantization/Serialization.h"
 
 #include <fstream>
-
 namespace glow {
 //bool GlowEnableLoadBalancedPartitioning = true;
 bool GlowLogNestPartition = false;
@@ -450,8 +449,6 @@ NestPartitioner::partitionFromConfig(const PartitionConfig &partitionConfig,
   // profileMode : 0 -> no time, 1 -> time add
   // main.cpp : yaml create logic add
 
- // Loader loader;
-
   if(appGen_.getProfileMode() == 0) {
     std::cout << "Generating linking code (main.cpp).." << std::endl;
   } else if (appGen_.getProfileMode() == 1) {
@@ -670,9 +667,7 @@ void NestPartitioner::outPerformProfileForEachNode(Function* function, std::stri
             profileFile << key << ": "
                         << "1" << std::endl;
           } else {
-
-            profileFile << key << ": "
-                        << "INFINITY" << std::endl;
+            profileFile << key << ": " << "INFINITY" << std::endl;
           }
         }
       }
@@ -1017,7 +1012,7 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
     std::string nodeToPartitionStr;
     std::string logicalIDStr;
     std::string parallelPartitions = "";
-
+    int pcnt = 0;
 //    size_t idx = 0;
     for (auto partition : nodeGroups_) {
 //      std::cout << "partition ID: " << partition->ID_ << std::endl;
@@ -1030,7 +1025,8 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
           ("p" + std::to_string(partition->ID_) + ":");
 
       if(partition->isParallel_) {
-        parallelPartitions = parallelPartitions + "(p" + std::to_string(partition->ID_) + "||" + "p" + std::to_string(partition->ID_ + 1) + ")";
+        parallelPartitions = parallelPartitions + "(p" + std::to_string(partition->ID_) + "||" + "p" + std::to_string(partition->ID_ + 1) + "):";
+        pcnt++;
       }
 
       for (auto cnode : partition->nodeList_) {
@@ -1039,6 +1035,7 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
         nodeToPartitionStr += "\n  :";
       }
     }
+    parallelPartitions.pop_back();
     nodeToPartitionStr = nodeToPartitionStr.substr(0, nodeToPartitionStr.length() - 4);
 
     partitionNameStr += ("p" + std::to_string(nodeGroups_.back()->ID_+1));
@@ -1050,7 +1047,7 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
     planFile << "nodeToPartition: " << nodeToPartitionStr<< std::endl;
     planFile << "logicalIDs: " << logicalIDStr<< std::endl;
 
-    if(parallelPartitions.length() > 0)
+    if(pcnt > 0)
       planFile << "parallelPartitions: " << parallelPartitions<< std::endl;
 
     planFile << "...\n" << std::endl;
@@ -1297,7 +1294,7 @@ void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backen
     }
   }
 //    std::cout << "costNode->totalCost = " << cnode->totalCost << std::endl;
-    std::cout << "node = " << cnode->name_<<  ", backendName = " << cnode->backendName_ << std::endl;
+//    std::cout << "node = " << cnode->name_<<  ", backendName = " << cnode->backendName_ << std::endl;
 }
 
 
@@ -1528,7 +1525,7 @@ float getCostRemain(std::vector<NodeGroup*>* branchList, std::set<CostNode*> ski
 
     for (auto ii = branch->nodeList_.begin(); ii != branch->nodeList_.end(); ii++) {
       //std::cout << "name: " << (*ii)->name_<< ", backend = " << (*ii)->backendName_ << ", cost = " << (*ii)->cost_ << std::endl;
-      if(skip.find((*ii)) == skip.end())
+      if(skip.find((*ii)) != skip.end())
         totalCost+=(*ii)->cost_;
     }
   }
@@ -1537,7 +1534,8 @@ float getCostRemain(std::vector<NodeGroup*>* branchList, std::set<CostNode*> ski
 
 
 float getCostWithConstraint(std::vector<NodeGroup*>* branchList, NodeGroup* exception){
-  //std::cout << "----------- getCostWithConstraint ---------------" << std::endl;
+  std::cout << "----------- getCostWithConstraint ---------------" << std::endl;
+  std::cout << "branch size: " << branchList->size() << std::endl;
 
   float totalCost = 0.0;
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
@@ -1546,9 +1544,9 @@ float getCostWithConstraint(std::vector<NodeGroup*>* branchList, NodeGroup* exce
     if(branch != nullptr && branch == exception)
       continue;
 
-
+    //std::cout << "branch id: " << branch->ID_ << std::endl;
     for (auto ii = branch->nodeList_.begin(); ii != branch->nodeList_.end(); ii++) {
-      //std::cout << "name: " << (*ii)->name_<< ", backend = " << (*ii)->backendName_ << ", cost = " << (*ii)->cost_ << std::endl;
+      std::cout << "name: " << (*ii)->name_<< ", backend = " << (*ii)->backendName_ << ", cost = " << (*ii)->cost_ << std::endl;
 
       if(exception != nullptr) {
         if((*ii)->backendName_.compare("VTA")){
@@ -1558,6 +1556,7 @@ float getCostWithConstraint(std::vector<NodeGroup*>* branchList, NodeGroup* exce
       }
 
       totalCost+=(*ii)->cost_;
+      //std::cout << "totalCost: " << totalCost << std::endl;
     }
   }
   return totalCost;
@@ -1636,36 +1635,48 @@ void NestPartitioner::allocateCPUToParallelBranch(std::vector<NodeGroup*>* branc
   std::cout << "--------- [allocateCPUToParallelBranch] -----------" << std::endl;
   std::cout << "Original total cost =  " << getCostWithConstraint(branchList, nullptr) << std::endl;
 
-  std::set<CostNode*> nodes;
-  float finalCost = 0.0;
+  float finalTotalCost = 0.0;
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
 //    std::cout << "branch: " << (*i)->ID_ << std::endl;
     if((*i)->inBranchList_.size() > 1) {//parallel branches
       float branchCost = getCostWithConstraint(&((*i)->inBranchList_), nullptr);
-//      std::cout << "Original total cost: " << branchCost << std::endl;
+      std::cout << "Original branch cost: " << branchCost << std::endl;
 
       NodeGroup* selectedBranch = nullptr;
-      float prevCpuCost = INFINITY;
-      float cpuCost = INFINITY;
+      float selectedCpuCost = INFINITY;
+      //float cpuCost = INFINITY;
       for (auto bi = (*i)->inBranchList_.begin(); bi != (*i)->inBranchList_.end(); bi++) {
         NodeGroup* curBranch = (*bi);
-        cpuCost = getCPUCost(curBranch);
+        float cpuCost = getCPUCost(curBranch);
 
-        if(cpuCost < branchCost && cpuCost < prevCpuCost) {
+        if((*bi)->backendName_.compare("CPU")){
+          cpuCost += 5000; //execution overhead by additional partitioninig
+        }
+
+        if(cpuCost < branchCost && cpuCost < selectedCpuCost) {
           selectedBranch = curBranch;
-          prevCpuCost = cpuCost;
-//          std::cout << "Selected branch ID: " << selectedBranch->ID_ << std::endl;
+          selectedCpuCost = cpuCost;
+          std::cout << "Selected branch ID: " << selectedBranch->ID_ << std::endl;
         }
       }
 
+      std::set<CostNode*> remainNodes;
       if(selectedBranch != nullptr) {
         for (auto bi = (*i)->inBranchList_.begin(); bi != (*i)->inBranchList_.end(); bi++) {
           NodeGroup *branch = (*bi);
+          if(branch == selectedBranch)
+            continue;
+
           for (auto bii = branch->nodeList_.begin(); bii != branch->nodeList_.end(); bii++ ) {
-            nodes.insert((*bii));
+            remainNodes.insert((*bii));
           }
         }
-        finalCost += std::max(cpuCost, getCostRemain(&((*i)->inBranchList_), nodes));
+
+        float finalCost = std::max(selectedCpuCost, getCostRemain(&((*i)->inBranchList_), remainNodes));
+        std::cout << "cpu cost: " << selectedCpuCost << std::endl;
+        std::cout << "remain cost: " << getCostRemain(&((*i)->inBranchList_), remainNodes) << std::endl;
+        std::cout << "final cost: " << finalCost << std::endl;
+        finalTotalCost += finalCost;
 
         selectedBranch->isParallel_ = true;
         for (auto bi = selectedBranch->nodeList_.begin(); bi != selectedBranch->nodeList_.end(); bi++ ) {
@@ -1674,10 +1685,16 @@ void NestPartitioner::allocateCPUToParallelBranch(std::vector<NodeGroup*>* branc
           std::cout << "parallel cpu node: " << (*bi)->name_ << std::endl;
         }
       }
+    } else {
+      finalTotalCost += getCostWithConstraint(&((*i)->inBranchList_), nullptr);
     }
   }
-  finalCost += getCostRemain(branchList, nodes);
-  std::cout << "Final total cost: " << finalCost << std::endl;
+  auto lastBranch = branchList->back();
+  float lastCost = getCost(lastBranch);
+  finalTotalCost += lastCost;
+
+  //finalCost += getCostRemain(branchList, nodes);
+  std::cout << "Final total cost: " << finalTotalCost << std::endl;
 }
 
 Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx) {

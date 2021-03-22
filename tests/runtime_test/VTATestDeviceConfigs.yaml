@@ -1,0 +1,13 @@
+---
+- name:    PU1
+  backendName: CPU
+  parameters: |
+    "deviceID" : "0"
+  dramMemory: 200000000
+- name:    PU2
+  backendName: VTA
+  parameters: |
+    "supportedNodes":"Convolution,Relu,Add,MatMul"
+    "deviceID" : "1"
+  dramMemory: 200000000
+...
