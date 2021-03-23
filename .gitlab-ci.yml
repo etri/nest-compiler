@@ -1,4 +1,5 @@
 stages:
+  - check
   - docker-build
   - build
   - cleanup-build
@@ -8,6 +9,16 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_HOST: tcp://docker:2375
+
+check-dco:
+  stage: check
+  image: docker:latest
+  script:
+    - apk update && apk add python3 git
+    - chmod +x .gitlab-ci.d/check-dco.py
+    - .gitlab-ci.d/check-dco.py
+  variables:
+    GIT_DEPTH: 1000
 
 docker-build:
   stage: docker-build
@@ -121,6 +132,7 @@ build-debug:
     - git submodule sync --recursive
     - git submodule update --init --recursive
 
+
 build-without-VTA:
   stage: build
   image: docker:latest
@@ -194,8 +206,6 @@ build-all:
     - git submodule sync --recursive
     - git submodule update --init --recursive
 
-
-
 cleanup-build:
   stage: cleanup-build
   image: docker:latest
@@ -245,6 +255,7 @@ test:
   artifacts:
     paths:
       - build_ci
+
 
 test-all:
   stage: test
