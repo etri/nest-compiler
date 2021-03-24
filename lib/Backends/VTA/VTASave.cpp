@@ -123,6 +123,16 @@ SymbolTableEntry addSymbolEntryGenBundle(WeightVar* wgt, std::string *bundle, VT
     }
   }
 
+  auto csyms = ctx->getConstantSymbols();
+  for (auto s : *csyms) {
+    auto name = (const char *) (wgt->getName().data());
+
+    if (strcmp(s.name, name) == 0) {
+      ste = s;
+      return ste;
+    }
+  }
+
   syms->push_back({wgt->getName().data(), ctx->getMMemSize(), wgt->size(), '1', wgt});
   ste = syms->back();
   ctx->setMMemSize(ctx->getMMemSize() + wgt->getSizeInBytes());
