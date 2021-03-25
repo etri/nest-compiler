@@ -42,7 +42,9 @@ public:
   std::set<CostNode*> outNodeSet_;
   std::vector<CostNode*> nodeList_;
 //  float totalCost_ = INFINITY;
-  bool isParallel_ = false;
+  bool isParallelCPU_ = false;
+  bool isParallelBranch_ = false;
+  bool isParallelPartition_ = false;
 
   unsigned int level_ = 0;
 //  unsigned int branchID_ = 0;
@@ -167,7 +169,9 @@ public:
   bool isUserDefinedFusable(Node *node);
 
   void outPartitionPlan(std::string funcName, std::string filename);
+void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
+  void partitionBranchesReplaceCPU(std::vector<NodeGroup*>* branchList, bool isParallel);
   void loadPerformProfileInfo(std::string pdir);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends);
   void getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCNode);
@@ -182,12 +186,14 @@ public:
   void allocateCPUToParallelBranch(std::vector<NodeGroup*>* branchList);
   void allocateOptimalPUSingleNode(std::vector<NodeGroup*>* branchList);
   void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void findParallelBranches(std::vector<NodeGroup*>* branchList);
 
   float getCostOfSingleNode(CostNode *cnode, std::string backendName);
   void generateTestProfile(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForFusedNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void changeBackendAndGeneratePlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateDAGStatistics(Function *function);
   Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode);
 
