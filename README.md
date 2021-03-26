@@ -34,6 +34,7 @@ The objective of NEST-C is to generate optimized code for various kinds of Neura
 ## Documentation
 
 * [Installation](docs/nestc/install.md)
+* [Docker Setting](docs/nestc/DockerSetting.md)
 * [Testing and Running](docs/nestc/testing.md)
 * [EVTA](docs/nestc/evta.md)
 * [Quantization](docs/nestc/quantization.md)
