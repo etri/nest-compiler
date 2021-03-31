@@ -273,7 +273,6 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
       DEF_INSTR(QuantizeInst, quantize)
       DEF_INSTR(DequantizeInst, dequantize)
       DEF_INSTR(DebugPrintInst, debugprint)
-      DEF_INSTR(TransposeInst, transpose)
       DEF_INSTR(SplatInst, splat)
       DEF_INSTR(ElementMaxInst, elementmax)
       DEF_INSTR(ElementAddInst, elementadd)

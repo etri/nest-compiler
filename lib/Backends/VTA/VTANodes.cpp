@@ -1330,21 +1330,6 @@ void BoundVTAFunction::fwdTensorViewInst(const TensorViewInst *I) {
 
 
 
-void BoundVTAFunction::fwdTransposeInst(const TransposeInst *I) {
-  auto inT = getTensor(I->getSrc());
-  (void)inT;
-  auto outT = getTensor(I->getDest());
-
-  assert(outT->size() == inT->size() && "Invalid tensor dimensions");
-
-  if (I->getSrc()->getType()->isQuantizedType()) {
-    inT->transpose(outT, I->getShuffle());
-  } else {
-    inT->transpose(outT, I->getShuffle());
-  }
-}
-
-
 void BoundVTAFunction::fwdSplatInst(const glow::SplatInst *I) {
   auto *T = getTensor(I->getDest());
   ElemKind k = T->getElementType();

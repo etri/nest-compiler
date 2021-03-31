@@ -544,58 +544,6 @@ TEST(VTASaverTest, dequantizeTest) {
 
 }
 
-
-TEST(VTASaverTest, transposeTest) {
-  PseudoRNG PRNG;
-  Tensor inputs(ElemKind::Int8QTy, {1, 3, 224, 224}, 1, 0);
-  inputs.getHandle<int8_t>().randomize(0, 60, PRNG);
-  inputs.toBin("vtaReluInput");
-
-  std::array<dim_t, 4> S{{1, 224, 224, 3}};
-  llvm::ArrayRef<dim_t> shape(S);
-  Tensor out1(ElemKind::Int8QTy, shape, 1, 0);
-
-
-  PlaceholderBindings bindings;
-  Module M;
-  Function *F = M.createFunction("main");
-  Placeholder *inputP;
-  Placeholder *outP;
-  auto &outType = out1.getType();
-  auto &inType = inputs.getType();
-  inputP = createQuantizedPlaceholder(
-      M, bindings, &inputs, inType.getScale(), inType.getOffset(), "inputP");
-  outP = createQuantizedPlaceholder(M, bindings, &out1, outType.getScale(),
-                                    outType.getOffset(), "outP");
-  std::array<unsigned_t, 4> T{{0, 2, 3, 1}};
-  llvm::ArrayRef<unsigned_t> shuffle(T);
-  auto *transpose = F->createTranspose("relu", inputP, shuffle);
-  F->createSave("ret", transpose, outP);
-
-  std::cout<<"Function Dump Before optimizeFunction START" <<std::endl;
-  F->dump();
-  std::cout<<"Function Dump  Before optimizeFunction FINISH" <<std::endl;
-  //Optimize & Lowering
-  std::unique_ptr<Backend> backend(createBackend("VTA"));
-  CompilationContext cctx;
-  auto error = ::glow::optimizeFunction(F, *backend, cctx);
-
-  EXIT_ON_ERR(std::move(error));
-  // Save bundle.
-  llvm::StringRef outputDir = ".";
-  llvm::StringRef bundleName = "vtaTransposeTestBundle"; //file name
-  llvm::StringRef mainEntryName = "vtaTransposeTestMainEntry"; //main function name
-
-  backend->save(F, outputDir, bundleName, mainEntryName);
-
-
-  Tensor out2(ElemKind::Int8QTy, shape, 1, 0);
-  inferTransposeNet(&inputs, &out2, shuffle, "VTA");
-  out2.toBin("vtaTransposeTestGolden");
-
-}
-
-
 TEST(VTASaverTest, reluTest) {
   PseudoRNG PRNG;
   Tensor inputs(ElemKind::Int8QTy, {1, 7, 7, 2048}, 1.0, 0);
