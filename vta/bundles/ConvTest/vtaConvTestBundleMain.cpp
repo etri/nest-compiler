@@ -1,4 +1,4 @@
-#include "vtaConvTestBundle.h"
+#include "vtaConvTestMainEntry.h"
 #include <vector>
 #include <string>
 #include <assert.h>
