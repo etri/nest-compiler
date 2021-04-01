@@ -5,13 +5,13 @@ EVTA는 Ultra96-V2와 ZCU102 보드에서 다양한 특성을 가진 NPU를 타�
 
 ### EVTA 시뮬레이터를 통한 Resnet18 빌드 및 실행 방법
 ```bash
-cmake -DGLOW_WITH_VTA=ON -DGLOW_WITH_VTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON [소스코드 위치]
+cmake -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON [소스코드 위치]
 make vtaMxnetResnet18Bundle
 ```
 
 ### ZCU102 보드 상에서의 Resnet18 빌드 및 실행 방법
 호환 비트스트림 [다운로드](https://github.com/etri/nest-data/blob/master/bitstreams/zcu102_1x16_i8w8a32_16_16_19_18.bit) 및 설치
-```bash
-cmake -DGLOW_WITH_VTA=ON -DGLOW_WITH_VTASIM=OFF -DGLOW_USE_PREBUILT_LIB=ON -DGLOW_WITH_VTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_VTA_RUN_ON_AARCH64=ON [소스코드 위치]
+```bash 
+cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DNESTC_EVTA_BUNDLE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=OFF -DNESTC_VTA_RUN_ON_AARCH64=ON [소스코드 위치]
 make vtaMxnetResnet18Bundle
 ```
