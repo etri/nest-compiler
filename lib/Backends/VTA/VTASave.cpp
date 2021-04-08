@@ -1540,6 +1540,73 @@ void saveSplatInst(const glow::SplatInst *Inst, std::string *bundle, VTASaveCont
   bundle->append(" );\n");
 }
 
+
+void saveTransposeInst(const glow::TransposeInst *Inst, std::string *bundle, VTASaveContext *ctx) {
+  auto src = Inst->getSrc();
+  auto srcDims = src->dims();
+
+  auto dest = Inst->getDest();
+  auto destDims = dest->dims();
+
+  auto shuffle = Inst->getShuffle();
+
+  auto srcWeight = static_cast<WeightVar *>(src);
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(srcWeight, bundle, ctx);
+  }
+
+  auto destWeight = static_cast<WeightVar *>(dest);
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(destWeight, bundle, ctx);
+  }
+
+  bundle->append("  transpose(");
+
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(srcWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(src->getName());
+    bundle->append(", ");
+  }
+
+
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(destWeight, ctx);
+    bundle->append(ste.name);    bundle->append(", ");
+  } else {
+    bundle->append(dest->getName());
+    bundle->append(", ");
+  }
+
+  bundle->append(std::to_string(srcDims[0]));
+  bundle->append(", ");
+  bundle->append(std::to_string(srcDims[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(srcDims[2]));
+  bundle->append(", ");
+  bundle->append(std::to_string(srcDims[3]));
+  bundle->append(", ");
+  bundle->append(std::to_string(destDims[0]));
+  bundle->append(", ");
+  bundle->append(std::to_string(destDims[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(destDims[2]));
+  bundle->append(", ");
+  bundle->append(std::to_string(destDims[3]));
+  bundle->append(", ");
+  bundle->append(std::to_string(shuffle[0]));
+  bundle->append(", ");
+  bundle->append(std::to_string(shuffle[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(shuffle[2]));
+  bundle->append(", ");
+  bundle->append(std::to_string(shuffle[3]));
+  bundle->append(" );\n");
+
+}
+
 void saveElemAddInst(const glow::ElementAddInst *Inst, std::string *bundle, VTASaveContext *ctx) {
   auto src0 = Inst->getLHS();
   auto src1 = Inst->getRHS();
@@ -2730,6 +2797,11 @@ void VTA::save(Function *F, llvm::StringRef outputDir,
     case Kinded::Kind::QuantizeInstKind: {
       auto I2 = llvm::cast<QuantizeInst>(&I);
       saveQuantizeInst(I2, &bundle, &ctx);
+      break;
+    }
+    case Kinded::Kind::TransposeInstKind: {
+      auto I2 = llvm::cast<TransposeInst>(&I);
+      saveTransposeInst(I2, &bundle, &ctx);
       break;
     }
     case Kinded::Kind::SplatInstKind: {

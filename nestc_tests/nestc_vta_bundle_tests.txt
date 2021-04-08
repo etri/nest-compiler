@@ -11,6 +11,7 @@ vtaNonVTAConvTestBundle
 vtaQuantizeTestBundle
 vtaSoftMaxTestBundle
 vtaSplatMaxTestBundle
+vtaTransposeTestBundle
 vtaMxnetResnet18Bundle
 ccode-generator
 ResNet18Bundle
