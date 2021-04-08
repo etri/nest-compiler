@@ -4,7 +4,6 @@ stages:
   - build
   - cleanup-build
   - test
-  - cleanup
 
 variables:
   DOCKER_DRIVER: overlay2
@@ -251,6 +250,8 @@ test:
     - docker exec build sh -c "ls"
     - docker exec build sh -c "cd build_ci;ls"
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_tests.txt | xargs -I {} ctest -R {}"
+    - rm -rf build_ci
+    - ls
     - df -h
   artifacts:
     paths:
@@ -282,21 +283,3 @@ test-all:
 
   when: manual
   allow_failure: true
-
-cleanup:
-  stage: cleanup
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
-  script:
-    - ls
-    - rm -rf build_ci
-    - ls
-  when: manual
-  artifacts:
-    paths:
-      - build_ci
-
-
