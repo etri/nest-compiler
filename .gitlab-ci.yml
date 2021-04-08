@@ -197,7 +197,7 @@ build-all:
     - docker volume ls
     - docker ps -a
     - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON"
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON"
     - docker exec build sh -c "cd build_ci; ninja all;"
     - du -h -d 1
 
