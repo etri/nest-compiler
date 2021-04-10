@@ -13,6 +13,7 @@ vtaSoftMaxTestBundle
 vtaSplatMaxTestBundle
 vtaTransposeTestBundle
 vtaMxnetResnet18Bundle
+vtaCaffe2Resnet50Bundle
 ccode-generator
 ResNet18Bundle
 ResNet18NHWCBundle

@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
-#include "caffe2_resnet50.h"
+#include "resnet50.h"
 #include <fstream>
 
 /// This is an example demonstrating how to use auto-generated bundles and
@@ -183,17 +183,28 @@ static void loadImagesAndPreprocess(const std::vector<std::string> &filenames,
           numImages * 3 * DEFAULT_HEIGHT * DEFAULT_WIDTH * sizeof(float);
   resultT = static_cast<float *>(malloc(resultSizeInBytes));
 
-  std::ifstream fis( filenames[0], std::ios::in | std::ios::binary);
-  fis.seekg(0, std::ios::end);
-  long size = fis.tellg();
-  assert(size==resultSizeInBytes);
+  // We iterate over all the png files, reading them all into our result tensor
+  // for processing
+  for (unsigned n = 0; n < numImages; n++) {
+    float *imageT{nullptr};
+    size_t dims[3];
+    bool loadSuccess = !readPngImage(filenames[n].c_str(), range, imageT, dims);
+    assert(loadSuccess && "Error reading input image.");
+    (void)loadSuccess;
 
-  fis.seekg(0, std::ios::beg);
+    assert((dims[0] == DEFAULT_HEIGHT && dims[1] == DEFAULT_WIDTH) &&
+           "All images must have the same Height and Width");
 
-  //int8_t* buf_i = new int8_t[size];
-  fis.read((char *)resultT, size);
-  fis.close();
-
+    // Convert to BGR, as this is what NN is expecting.
+    for (unsigned z = 0; z < 3; z++) {
+      for (unsigned y = 0; y < dims[1]; y++) {
+        for (unsigned x = 0; x < dims[0]; x++) {
+          resultT[getXYZW(resultDims, n, 2 - z, x, y)] =
+                  imageT[getXYZ(dims, x, y, z)];
+        }
+      }
+    }
+  }
   printf("Loaded images size in bytes is: %lu\n", resultSizeInBytes);
 }
 
@@ -379,25 +390,25 @@ int main(int argc, char **argv) {
   initVTARuntime();
   // Allocate and initialize constant and mutable weights.
   uint8_t *constantWeightVarsAddr =
-          (uint8_t* )initConstantWeights("caffe2_resnet50.weights.bin", caffe2_resnet50_config);
-  printWeightVars(caffe2_resnet50_config);
+          (uint8_t* )initConstantWeights("resnet50.weights.bin", resnet50_config);
+  printWeightVars(resnet50_config);
 
-  uint8_t *mutableWeightVarsAddr = (uint8_t* )initMutableWeightVars(caffe2_resnet50_config, "gpu_0_data_0");
-  uint8_t *activationsAddr = (uint8_t* )initActivations(caffe2_resnet50_config);
+  uint8_t *mutableWeightVarsAddr = (uint8_t* )initMutableWeightVars(resnet50_config, "gpu_0_data_0");
+  uint8_t *activationsAddr = (uint8_t* )initActivations(resnet50_config);
 
 
   clock_t start, end;
   double result;
-  caffe2_resnet50_load_module(constantWeightVarsAddr);
+  resnet50_load_module(constantWeightVarsAddr);
   start = clock();
 
   // Perform the computation.
-  caffe2_resnet50(constantWeightVarsAddr, mutableWeightVarsAddr, activationsAddr);
-  caffe2_resnet50_destroy_module();
+  resnet50(constantWeightVarsAddr, mutableWeightVarsAddr, activationsAddr);
+  resnet50_destroy_module();
   end = clock();
 
   // Report the results.
-  int maxIdx = dumpInferenceResults(caffe2_resnet50_config, (uint8_t*) mutableWeightVarsAddr, "gpu_0_softmax_1");
+  int maxIdx = dumpInferenceResults(resnet50_config, (uint8_t*) mutableWeightVarsAddr, "gpu_0_softmax_1");
   result = (double)(end-start)/CLOCKS_PER_SEC*1000;
   std::cout<<"Inference time: "<<result<<"ms\n";
   // Free all resources.
@@ -405,5 +416,5 @@ int main(int argc, char **argv) {
   free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
   destroyVTARuntime();
-  return 0;
+  return (maxIdx != 281);
 }
