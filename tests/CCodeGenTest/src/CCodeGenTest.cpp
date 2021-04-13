@@ -604,6 +604,8 @@ int main(int argc, char *argv[]) {
 
 	{//model_num: 8, resnet18v2.onnx, vgg19
 
+/* uncomment below lines for test
+ *
 	float (* input)[1][3][224][224];
 	input = (float (*)[1][3][224][224])malloc(sizeof(float[1][3][224][224]));
 
@@ -628,7 +630,7 @@ int main(int argc, char *argv[]) {
 	result = (float (*)[1][1000])malloc(sizeof(float[1][1000]));
 	memset(result, 0x00, sizeof(float[1][1000]));
 
-
+*/
 	cout <<"-----------------------------" << endl<<endl;
 
 //	time_t istart,iend;
