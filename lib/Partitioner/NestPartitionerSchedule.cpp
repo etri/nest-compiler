@@ -3,6 +3,7 @@
 //
 
 #include "glow/Partitioner/NestPartitionerSchedule.h"
+#include "llvm/Support/FileSystem.h"
 #include <fstream>
 
 using namespace glow;
