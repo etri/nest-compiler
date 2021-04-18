@@ -148,6 +148,70 @@ TEST(VTASaverTest, convTest) {
     outVTA2.toBin("vtaConvTestGolden");
 }
 
+TEST(VTASaverTest, resnetv10S1C0Test) {
+  PseudoRNG PRNG;
+  Tensor inputs(ElemKind::Int8QTy, {1, 56, 56, 64}, 1, 0);
+  Tensor filter(ElemKind::Int8QTy, {64, 3, 3, 64}, 1, 0);
+  Tensor bias(ElemKind::Int32QTy, {64}, 1, 0);
+
+  inputs.getHandle<int8_t>().randomize(0, 60, PRNG);
+  filter.getHandle<int8_t>().randomize(-10, 10, PRNG);
+  inputs.toBin("vtaResnetv10S1C0TestInput");
+  bias.getHandle<int32_t>().randomize(0, 32768, PRNG);
+
+  std::array<dim_t, 4> S{{1, 56, 56, 64}};
+  llvm::ArrayRef<dim_t> shape(S);
+  Tensor out1(ElemKind::Int8QTy, shape, 64, 0);
+  Tensor out2(ElemKind::Int8QTy, shape, 64, 0);
+
+
+  PlaceholderBindings bindings;
+  Module M;
+  Function *F = M.createFunction("main");
+  Placeholder *inputP;
+  Constant *filterP;
+  Constant *biasP;
+  Placeholder *outP;
+  TypeRef OT1;
+
+  auto &outType1 = out1.getType();
+  auto &inType = inputs.getType();
+  auto &filterType = filter.getType();
+  auto &biasType = bias.getType();
+
+  inputP = createQuantizedPlaceholder(
+          M, bindings, &inputs, inType.getScale(), inType.getOffset(), "inputP");
+
+  filterP = createQuantizedConstant(M, bindings, &filter, filterType.getScale(),
+                                    filterType.getOffset(), "filterP");
+  biasP = createQuantizedConstant(M, bindings, &bias, biasType.getScale(),
+                                  biasType.getOffset(), "biasP");
+  outP = createQuantizedPlaceholder(M, bindings, &out2, outType1.getScale(),
+                                    outType1.getOffset(), "outP");
+  OT1 = F->getParent()->uniqueType(out1.getElementType(), out1.dims(),
+                                   outType1.getScale(), outType1.getOffset());
+  auto *conv = F->createConv("conv", inputP, filterP, biasP, OT1, 3, 1, 1, 1);
+
+  F->createSave("ret", conv, outP);
+
+  //Optimize & Lowering
+  std::unique_ptr<Backend> backend(createBackend("VTA"));
+  CompilationContext cctx;
+  auto error = ::glow::optimizeFunction(F, *backend, cctx);
+
+  EXIT_ON_ERR(std::move(error));
+  // Save bundle.
+  llvm::StringRef outputDir = ".";
+  llvm::StringRef bundleName = "vtaResnetv10S1C0TestBundle"; //file name
+  llvm::StringRef mainEntryName = "vtaResnetv10S1C0TestMainEntry"; //main function name
+
+  backend->save(F, outputDir, bundleName, mainEntryName);
+  inferVTAConvNet(&inputs, &filter, &bias, &out1, 3, 1, 1, "VTA");
+  inferVTAConvNet(&inputs, &filter, &bias, &out2, 3, 1, 1, "VTAInterpreter");
+  out1.toBin("vtaResnetv10S1C0TestGolden");
+  EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
 TEST(VTASaverTest, conv_gpu_0_conv1) {
   PseudoRNG PRNG;
   Tensor inputs(ElemKind::FloatTy, {1, 224, 224, 3});
