@@ -8,6 +8,7 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_HOST: tcp://docker:2375
+  GIT_SUBMODULE_STRATEGY: recursive
 
 check-dco:
   stage: check
@@ -84,12 +85,6 @@ build:
     - docker exec build sh -c "cd build_ci; ninja NESTVTAImageclassifierResnet18Test"
     - du -h -d 1
 
-  before_script:
-    - apk update && apk add git
-    - rm -rf glow
-    - git submodule sync --recursive
-    - git submodule update --init --recursive
-
   artifacts:
     paths:
       - build_ci
@@ -127,11 +122,6 @@ build-debug:
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_tests.txt | xargs -I {} ninja {}"
     - du -h -d 1
 
-  before_script:
-    - apk update && apk add git
-    - rm -rf glow
-    - git submodule sync --recursive
-    - git submodule update --init --recursive
 
 
 build-without-VTA:
@@ -164,11 +154,7 @@ build-without-VTA:
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON"
     - docker exec build sh -c "cd build_ci; ninja all;"
     - du -h -d 1
-  before_script:
-    - apk update && apk add git
-    - rm -rf glow
-    - git submodule sync --recursive
-    - git submodule update --init --recursive
+
 
 build-all:
   stage: build
@@ -202,13 +188,7 @@ build-all:
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON"
     - docker exec build sh -c "cd build_ci; ninja all;"
     - du -h -d 1
-
-  before_script:
-    - apk update && apk add git
-    - rm -rf glow
-    - git submodule sync --recursive
-    - git submodule update --init --recursive
-
+    
 cleanup-build:
   stage: cleanup-build
   image: docker:latest
