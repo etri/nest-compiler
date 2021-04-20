@@ -1,7 +1,7 @@
 add_library(Base
               ${NESTC_ROOT_DIR}/lib/Base/Tensor.cpp
               TensorSerialization.cpp
-              Type.cpp
+              ${NESTC_ROOT_DIR}/lib/Base/Type.cpp
               IO.cpp
               TaggedList.cpp)
 

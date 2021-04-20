@@ -105,34 +105,7 @@ bool writePngImage(float data[1][1][672][672], const char *filename,
                    vector<float> mean = zeroMean,
                    vector<float> stddev = oneStd,  vector<size_t> odim = {1,1,672,672});// vector<size_t> odim = {224,224,3,1});
 
-/*
-/// Read a png image and preprocess it according to several parameters.
-/// \param filename the png file to read.
-/// \param imageNormMode normalize values to this range.
-/// \param imageChannelOrder the order of color channels.
-/// \param imageLayout the order of dimensions (channel, height, and width).
-/// \param mean use special mean to normalize.
-/// \param stdev use special stddev to normalize.
-Tensor readPngImageAndPreprocess(llvm::StringRef filename,
-                                 ImageNormalizationMode imageNormMode,
-                                 ImageChannelOrder imageChannelOrder,
-                                 ImageLayout imageLayout,
-                                 llvm::ArrayRef<float> mean = zeroMean,
-                                 llvm::ArrayRef<float> stddev = oneStd);
 
-/// Loads and normalizes all PNGs into a tensor in the NHWC format with the
-/// requested channel ordering.
-/// \param filenames list of filenames to read.
-/// \param inputImageData Tensor to save the resulting output.
-/// \param imageNormMode normalize values to this range.
-/// \param imageChannelOrder the order of color channels.
-/// \param imageLayout the order of dimensions (channel, height, and width).
-void loadImagesAndPreprocess(const llvm::ArrayRef<std::string> &filenames,
-                             Tensor *inputImageData,
-                             ImageNormalizationMode imageNormMode,
-                             ImageChannelOrder imageChannelOrder,
-                             ImageLayout imageLayout);
-*/
 //} // namespace glow
 
 #endif // IMAGE_H

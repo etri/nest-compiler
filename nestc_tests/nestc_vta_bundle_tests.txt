@@ -21,4 +21,5 @@ ResNet18VTAPartitionBundle
 ResNet18PartitionBundle
 MobileNetBundle
 vtaMxnetResnet18PartitionBundle
+ShufflenetBundle
 vtaResnetv10S1C0TestBundle

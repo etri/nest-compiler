@@ -66,6 +66,12 @@ string CCodeGenerator::getDataCountStr(const TypeRef value)
     return str;
 }
 
+
+string splatValueVar;
+string shuffleGroupVar;
+string shuffleKernelVar;
+string concatAxisVar;
+
 string filterVecVar;
 string kernelVecVar;
 string strideVecVar;
@@ -84,7 +90,7 @@ unsigned int nodeIdx = 0;
 void CCodeGenerator::declareConstVar(string& wfilec, Constant* node)
 {
     if(varSet_.find(node->getVarName()) == varSet_.end()) {
-        wfilec.append(node->getType()->getElementName().str() + " (*" + node->getVarName() + ")" +
+        wfilec.append(node->getType()->getElementTypeName().str() + " (*" + node->getVarName() + ")" +
                       getDataArrayStr(node->getType()) + ";\n");;
         varSet_.insert(node->getVarName());
     }
@@ -122,17 +128,20 @@ void CCodeGenerator::generateDeclaration(Loader &loader, string& wfilec, Node& n
     }
 
     string outvarname = n.getNthResult(0).getNode()->getVarName();
-    string in0varname = n.getNthInput(0).getNode()->getVarName();
 
+    string in0varname = "";
+    if(n.getNumInputs() > 0) {
+        in0varname = n.getNthInput(0).getNode()->getVarName();
+    }
 
     if(varSet_.find(outvarname) == varSet_.end()) {
-        wfilec.append(n.getNthResult(0).getType()->getElementName().str()+ " (*" + outvarname + ")"
+        wfilec.append(n.getNthResult(0).getType()->getElementTypeName().str()+ " (*" + outvarname + ")"
                       + getDataArrayStr(n.getNthResult(0).getType()) + ";\n");
         varSet_.insert(outvarname);
     }
 
-    if(varSet_.find(in0varname) == varSet_.end()) {
-        wfilec.append(n.getNthInput(0).getType()->getElementName().str() + " (*" + in0varname + ")"
+    if(n.getNumInputs() > 0 && varSet_.find(in0varname) == varSet_.end()) {
+        wfilec.append(n.getNthInput(0).getType()->getElementTypeName().str() + " (*" + in0varname + ")"
                       + getDataArrayStr(n.getNthInput(0).getType()) + ";\n");
         varSet_.insert(in0varname);
     }
@@ -140,7 +149,25 @@ void CCodeGenerator::generateDeclaration(Loader &loader, string& wfilec, Node& n
 
     if(!kindName.compare("Add")) {
 
-    } else if (!kindName.compare("Transpose")) {
+    } else if (!kindName.compare("Concat")) {
+
+        wfilec.append("//Concat\n");
+        //ConcatNode* node = (ConcatNode *)&n;
+
+        concatAxisVar = string("concatAxis").append(to_string(nodeIdx));
+        wfilec.append("int " + concatAxisVar  +";\n");
+        nodeIdx++;
+
+    } else if (!kindName.compare("ChannelShuffle")) {
+
+        wfilec.append("//ChannelShuffle\n");
+        shuffleGroupVar = string("shuffleGroup").append(to_string(nodeIdx));
+        wfilec.append("int " + shuffleGroupVar + ";\n");
+        shuffleKernelVar = string("shuffleKernel").append(to_string(nodeIdx));
+        wfilec.append("int " + shuffleKernelVar + ";\n");
+        nodeIdx++;
+
+    }else if (!kindName.compare("Transpose")) {
         wfilec.append("//Transpose\n");
         TransposeNode* node = (TransposeNode *)&n;
 
@@ -213,7 +240,7 @@ void CCodeGenerator::generateDeclaration(Loader &loader, string& wfilec, Node& n
 
     } else if (!kindName.compare("SoftMax")) {
         //SoftMaxNode* node = (SoftMaxNode *)&n;
-        //wfilec.append("//SoftMax\n");
+        wfilec.append("//SoftMax\n");
 
     } else if (!kindName.compare("BatchNormalization")) {
 //        BatchNormalizationNode* node = (BatchNormalizationNode *)&n;
@@ -244,6 +271,26 @@ void CCodeGenerator::generateDeclaration(Loader &loader, string& wfilec, Node& n
         padVecVar = string("pad").append(to_string((size_t)node->getPads().data()));
         wfilec.append("vector<size_t> " + padVecVar  +";\n");
 
+    } else if  (!kindName.compare("Splat")) {
+        //SplatNode* node = (SplatNode *)&n;
+        wfilec.append("//Splat\n");
+
+        splatValueVar = string("splat").append(to_string(nodeIdx));
+        wfilec.append("float " + splatValueVar + ";\n");
+        nodeIdx++;
+        //std::cout << "value = " << node->getValue() << std::endl;
+    } else if  (!kindName.compare("ChannelShuffle")) {
+        //ChannelShuffleNode* node = (ChannelShuffleNode *)&n;
+        wfilec.append("//ChannelShuffle\n");
+
+    } else if  (!kindName.compare("Concat")) {
+        //ConcatNode* node = (ConcatNode *)&n;
+        wfilec.append("//Concat\n");
+    } else if  (!kindName.compare("Gemm")) {
+        //SplatNode* node = (SplatNode *)&n;
+        wfilec.append("//Gemm\n");
+    } else {
+        std::cout << "Unknown node type!!" << std::endl;
     }
 }
 
@@ -256,8 +303,8 @@ void CCodeGenerator::allocConstVar(string& wfilec, ofstream* wfileb, Constant* n
 
     if(allocVarList_.find(varname) == allocVarList_.end()) {
         allocVarList_.insert(varname);
-        wfilec.append("\t" + varname + " = (" + node->getType()->getElementName().str() + "(*)" +
-                      getDataArrayStr(node->getType()) + ")malloc(sizeof(" + node->getType()->getElementName().str() + getDataArrayStr(node->getType()) + "));\n");
+        wfilec.append("\t" + varname + " = (" + node->getType()->getElementTypeName().str() + "(*)" +
+                      getDataArrayStr(node->getType()) + ")malloc(sizeof(" + node->getType()->getElementTypeName().str() + getDataArrayStr(node->getType()) + "));\n");
 
         wfileb->write(node->getPayload().getUnsafePtr(), node->getPayload().getUnpaddedSizeInBytes());
         wfilec.append("\t" + string("readFileBin.read((char *)") + varname + "," + getDataCountStr(node->getType()) + ");\n\n");
@@ -294,7 +341,6 @@ void CCodeGenerator::generateInitialization(Loader &loader, string& wfilec, ofst
 
     for(int i = 0; i < n.getNumInputs(); i++) {
         string ikname = n.getNthInput(i).getNode()->getKindName();
-
         if(!ikname.compare("Constant")) {
 
             Constant* inode = (Constant *)n.getNthInput(i).getNode();
@@ -311,8 +357,11 @@ void CCodeGenerator::generateInitialization(Loader &loader, string& wfilec, ofst
     }
 
     string outvarname = n.getNthResult(0).getNode()->getVarName();
-    string in0varname = n.getNthInput(0).getNode()->getVarName();
 
+    string in0varname = "";
+    if(n.getNumInputs() > 0) {
+         in0varname = n.getNthInput(0).getNode()->getVarName();
+    }
 
     if(!kindName.compare("Add")) {
         //    AddNode* node = (AddNode *)&n;
@@ -389,9 +438,8 @@ void CCodeGenerator::generateInitialization(Loader &loader, string& wfilec, ofst
 
         size_t group = (size_t)node->getGroup();
         wfileb->write((char *)&group, sizeof(size_t));
+//        wfilec.append("\t//group: " + std::to_string(group) +  ";\n");
         wfilec.append("\treadFileBin.read((char *)&" + groupVar + ", sizeof(size_t));\n");
-
-        //cout << "bias: " << node->getBias().getNode()->getKindName() << endl;
         //cout << "bias: " << node->getBias().getNode()->getVarName() << endl;
 
 
@@ -437,25 +485,8 @@ void CCodeGenerator::generateInitialization(Loader &loader, string& wfilec, ofst
 
 
     } else if (!kindName.compare("Reshape")) {
-//        ReshapeNode* node = (ReshapeNode *)&n;
 
         wfilec.append("\t//Reshape\n");
-
-//         if (constVars.find(outvarname) == constVars.end()) {
-//
-//             string inAryStr(getDataArrayStr(node->getInput().getType()));
-//             string outAryStr(getDataArrayStr(node->getResult().getType()));
-//
-//             if(outAryStr.compare(inAryStr)) {
-//
-//                 wfilec.append("\t" + outvarname + " = (" + node->getResult().getType()->getElementName().str() + "(*)" +
-//                               getDataArrayStr(node->getResult().getType()) + ")malloc(sizeof(" \
-// + node->getResult().getType()->getElementName().str() + getDataArrayStr(node->getResult().getType()) + "));\n");
-//             } else {
-//                 freeVarList_.insert(outvarname);
-//             }
-//         }
-//
 
     } else if (!kindName.compare("MatMul")) {
 
@@ -467,8 +498,9 @@ void CCodeGenerator::generateInitialization(Loader &loader, string& wfilec, ofst
         SoftMaxNode* node = (SoftMaxNode *)&n;
         wfilec.append("\t//SoftMax\n");
 
-        wfilec.append("\t" + outvarname + " = (" + node->getResult().getType()->getElementName().str() + "(*)" + getDataArrayStr(node->getResult().getType()) + ")malloc(sizeof(" \
-        + node->getResult().getType()->getElementName().str() + getDataArrayStr(node->getResult().getType()) + "));\n");
+        wfilec.append("\t" + outvarname + " = (" + node->getResult().getType()->getElementTypeName().str() + "(*)" + getDataArrayStr(node->getResult().getType()) + ")malloc(sizeof(" \
+        + node->getResult().getType()->getElementTypeName().str() + getDataArrayStr(node->getResult().getType()) + "));\n");
+        allocVarList_.insert(outvarname);
 
     } else if (!kindName.compare("BatchNormalization")) {
         BatchNormalizationNode* node = (BatchNormalizationNode *)&n;
@@ -487,15 +519,15 @@ void CCodeGenerator::generateInitialization(Loader &loader, string& wfilec, ofst
         wfileb->write((char *)(&momentum), sizeof(float));
         wfilec.append("\treadFileBin.read((char *)&" + momentumVar + ", sizeof(float));\n");
 
-//         wfilec.append("\t" + outvarname + " = (" + node->getResult().getType()->getElementName().str() + "(*)" + getDataArrayStr(node->getResult().getType()) + ")malloc(sizeof(" \
-//        + node->getResult().getType()->getElementName().str() + getDataArrayStr(node->getResult().getType()) + "));\n");
-//         wfilec.append("\tmemset("+ outvarname +", 0x00, sizeof(" + node->getResult().getType()->getElementName().str() + getDataArrayStr(node->getResult().getType()) +"));\n");
+//         wfilec.append("\t" + outvarname + " = (" + node->getResult().getType()->getElementTypeName().str() + "(*)" + getDataArrayStr(node->getResult().getType()) + ")malloc(sizeof(" \
+//        + node->getResult().getType()->getElementTypeName().str() + getDataArrayStr(node->getResult().getType()) + "));\n");
+//         wfilec.append("\tmemset("+ outvarname +", 0x00, sizeof(" + node->getResult().getType()->getElementTypeName().str() + getDataArrayStr(node->getResult().getType()) +"));\n");
 
 
     } else if (!kindName.compare("AvgPool")) {
         AvgPoolNode* node = (AvgPoolNode *)&n;
 
-        wfilec.append("\t//MaxPool\n");
+        wfilec.append("\t//AvgPool\n");
 
         int slen = node->getKernels().size();
         wfileb->write((char *)(&slen), sizeof(int));
@@ -531,13 +563,45 @@ void CCodeGenerator::generateInitialization(Loader &loader, string& wfilec, ofst
         wfilec.append("\n");
         wfilec.append("\tread_vector(&" + padVecVar + ", &readFileBin);\n");
 
+    } else if  (!kindName.compare("Splat")) {
+        SplatNode* node = (SplatNode *)&n;
+        wfilec.append("\t//Splat\n");
+        int value = node->getValue();
+        wfileb->write((char *)(&value), sizeof(float));
+        wfilec.append("\treadFileBin.read((char *)&" + splatValueVar + ", sizeof(float));\n");
+        //std::cout << "value = " << node->getValue() << std::endl;
+    } else if  (!kindName.compare("ChannelShuffle")) {
+        ChannelShuffleNode* node = (ChannelShuffleNode *)&n;
+        wfilec.append("\t//ChannelShuffle\n");
+        int group = node->getGroup();
+        int kernel = node->getKernel();
+        wfileb->write((char *)(&group), sizeof(int));
+        wfilec.append("\treadFileBin.read((char *)&" + shuffleGroupVar + ", sizeof(int));\n");
+        wfileb->write((char *)(&kernel), sizeof(int));
+        wfilec.append("\treadFileBin.read((char *)&" + shuffleKernelVar + ", sizeof(int));\n");
+        //std::cout << "value = " << node->getValue() << std::endl;
+    }else if  (!kindName.compare("Concat")) {
+        ConcatNode* node = (ConcatNode *)&n;
+        wfilec.append("\t//Concat\n");
+
+        int axis = node->getDim();
+        wfileb->write((char *)(&axis), sizeof(int));
+        wfilec.append("\treadFileBin.read((char *)&" + concatAxisVar + ", sizeof(int));\n");
+        //std::cout << "axis value = " << axis << std::endl;
+
+    } else if  (!kindName.compare("Gemm")) {
+        //SplatNode* node = (SplatNode *)&n;
+        wfilec.append("//Gemm\n");
+    } else {
+        std::cout << "kindName = " << kindName << std::endl;
+        std::cout << "Unknown node type!!" << std::endl;
     }
 
     if (constVars.find(outvarname) == constVars.end()) {
-        wfilec.append("\t" + outvarname + " = (" + n.getType(0)->getElementName().str() + "(*)" +
+        wfilec.append("\t" + outvarname + " = (" + n.getType(0)->getElementTypeName().str() + "(*)" +
                       getDataArrayStr(n.getNthResult(0).getType()) + ")malloc(sizeof(" \
-                           + n.getNthResult(0).getType()->getElementName().str() + getDataArrayStr(n.getNthResult(0).getType()) + "));\n");
-        wfilec.append("\tmemset("+ outvarname +", 0x00, sizeof(" + n.getNthResult(0).getType()->getElementName().str() + getDataArrayStr(n.getNthResult(0).getType()) +"));\n");
+                           + n.getNthResult(0).getType()->getElementTypeName().str() + getDataArrayStr(n.getNthResult(0).getType()) + "));\n");
+        wfilec.append("\tmemset("+ outvarname +", 0x00, sizeof(" + n.getNthResult(0).getType()->getElementTypeName().str() + getDataArrayStr(n.getNthResult(0).getType()) +"));\n");
     }
     wfilec.append("\n");
 }
@@ -557,7 +621,7 @@ void CCodeGenerator::generateInference(Loader &loader, string inputName, string&
         //vector<TypeRef> inputTypes = loader.getInputTypes();
 
         wfilec.append("\n");
-        wfilec.append("void inference(" + n.getType(0)->getElementName().str() + "(*" + "var" + inputName
+        wfilec.append("void inference(" + n.getType(0)->getElementTypeName().str() + "(*" + "var" + inputName
                       + ")" + inAryStr \
      + ", float result" + getDataArrayStr(lastNode->getNthInput(0).getType()) + ")\n {\n");
 
@@ -574,7 +638,11 @@ void CCodeGenerator::generateInference(Loader &loader, string inputName, string&
     }
 
     string outvarname = string("var").append(n.getNthResult(0).getNode()->getName());
-    string in0varname = string("var").append(n.getNthInput(0).getNode()->getName());
+
+    string in0varname = "";
+    if(n.getNumInputs() > 0) {
+        in0varname = string("var").append(n.getNthInput(0).getNode()->getName());
+    }
 
     if(!kindName.compare("Add")) {
 
@@ -605,11 +673,19 @@ void CCodeGenerator::generateInference(Loader &loader, string inputName, string&
 
         string biasname = node->getBias().getNode()->getVarName();
         string filtername = node->getFilter().getNode()->getVarName();
+        unsigned_t group = node->getGroup();
 
-        wfilec.append("\tconv(*" + in0varname+ ", *" + filtername + ", " + filterVecVar + ", *" \
-			+biasname + ", " + strideVecVar + ", " + padVecVar + ", " + groupVar + ", *" \
-			+ outvarname +");\n\n");
-
+//        std::cout << "group = " << group << std::endl;
+        wfilec.append("\t//group: " + std::to_string(group) + "\n");
+        if(group == 1) {
+            wfilec.append("\tconv(*" + in0varname + ", *" + filtername + ", " + filterVecVar + ", *" \
+ + biasname + ", " + strideVecVar + ", " + padVecVar + ", " + groupVar + ", *" \
+ + outvarname + ");\n\n");
+        } else { //group > 1
+            wfilec.append("\tconv_group(*" + in0varname + ", *" + filtername + ", " + filterVecVar + ", *" \
+ + biasname + ", " + strideVecVar + ", " + padVecVar + ", " + groupVar + ", *" \
+ + outvarname + ");\n\n");
+        }
 
     } else if (!kindName.compare("Relu")) {
 
@@ -639,7 +715,7 @@ void CCodeGenerator::generateInference(Loader &loader, string inputName, string&
 
             if(!outAryStr.compare("[1]" + inAryStr2)) {
                 wfilec.append("\tmemcpy((*" + outvarname + ")[0]," + in0varname +", " + "sizeof(" \
- + node->getResult().getType()->getElementName().str() + getDataArrayStr(node->getResult().getType()) + "));\n");
+ + node->getResult().getType()->getElementTypeName().str() + getDataArrayStr(node->getResult().getType()) + "));\n");
             } else {
                 wfilec.append(
                         "\treshape(*" + in0varname + ", *" + outvarname +
@@ -724,6 +800,38 @@ void CCodeGenerator::generateInference(Loader &loader, string inputName, string&
         wfilec.append("\t//AvgPool\n");
         wfilec.append("\tavgpool(*" + in0varname+ ", " + kernelVecVar + ", " + \
 			strideVecVar + ", " + padVecVar +  ", *" + outvarname +");\n\n");
+
+    } else if  (!kindName.compare("Splat")) {
+        //SplatNode* node = (SplatNode *)&n;
+        wfilec.append("//Splat\n");
+        wfilec.append("\tsplat(" + splatValueVar + ", *" + outvarname +");\n\n");
+
+    }  else if  (!kindName.compare("Save")) {
+        wfilec.append("//Save\n");
+
+        //std::cout << "value = " << node->getValue() << std::endl;
+    } else if  (!kindName.compare("ChannelShuffle")) {
+        //SplatNode* node = (SplatNode *)&n;
+        wfilec.append("//ChannelShuffle\n");
+        wfilec.append("\tchannel_shuffle(*" + in0varname + ", " + shuffleGroupVar + ", " + shuffleKernelVar + ", *" + outvarname +");\n\n");
+
+        //std::cout << "value = " << node->getValue() << std::endl;
+    } else if  (!kindName.compare("Concat")) {
+        ConcatNode* node = (ConcatNode *)&n;
+        wfilec.append("\t//Concat\n");
+
+        std::vector<NodeValue> concatInputs = node->getInputs();
+        std::string inputParamStr = "";
+        for(int i = 0; i < concatInputs.size(); i++) {
+            NodeValue v = concatInputs.at(i);
+            inputParamStr += (", *" + v.getNode()->getVarName());
+//            std::cout << v.getNode()->getVarName() << std::endl;
+//            std::cout << getTotalSizeStr(v) << std::endl;
+        }
+        wfilec.append("\tconcat(" + concatAxisVar + inputParamStr + ", *" + outvarname +");\n\n");
+    } else {
+        std::cout << "kindName = " << kindName << std::endl;
+        std::cout << "Unknown node type!!" << std::endl;
     }
 
     if(isLast == 1) {
@@ -748,7 +856,7 @@ void CCodeGenerator::generateFree(Loader &loader, string inputName, string& wfil
         //vector<TypeRef> inputTypes = loader.getInputTypes();
 
         wfilec.append("\n");
-        wfilec.append("void memFree(" + n.getType(0)->getElementName().str() + "(*" + "var" + inputName
+        wfilec.append("void memFree(" + n.getType(0)->getElementTypeName().str() + "(*" + "var" + inputName
                       + ")" + inAryStr + ", float result" + getDataArrayStr(lastNode->getNthInput(0).getType()) + ")\n{\n");
 //    } else if(n == nodeList.back() || !kindName.compare("Save")) {
     } else if(&n == lastNode) {
@@ -762,20 +870,24 @@ void CCodeGenerator::generateFree(Loader &loader, string inputName, string& wfil
     }
 
     string outvarname = string("var").append(n.getNthResult(0).getNode()->getName());
-    string in0varname = string("var").append(n.getNthInput(0).getNode()->getName());
 
-    if(freeVarList_.find(in0varname) == freeVarList_.end()) {
-        wfilec.append("\tfree(" + in0varname + ");\n");
-        freeVarList_.insert(in0varname);
+    string in0varname = "";
+    if(n.getNumInputs() > 0) {
+        in0varname = string("var").append(n.getNthInput(0).getNode()->getName());
+
+        if(freeVarList_.find(in0varname) == freeVarList_.end()) {
+            wfilec.append("\tfree(" + in0varname + ");\n");
+            freeVarList_.insert(in0varname);
+        }
     }
 
     if (!kindName.compare("Add")) {
         AddNode* node = (AddNode *)&n;
 
-        wfilec.append("\t//Add\n");
         string in1varname = string("var").append(node->getNthInput(1).getNode()->getName());
 
         if(freeVarList_.find(in1varname) == freeVarList_.end()) {
+            wfilec.append("\t//Add\n");
             wfilec.append("\tfree(" + in1varname + ");\n");
             freeVarList_.insert(in1varname);
         }
@@ -799,11 +911,11 @@ void CCodeGenerator::generateFree(Loader &loader, string inputName, string& wfil
         }
 
     } else if (!kindName.compare("Relu")) {
-
+        wfilec.append("\t//Relu\n");
     } else if (!kindName.compare("MaxPool")) {
-
+        wfilec.append("\t//MaxPool\n");
     } else if (!kindName.compare("Reshape")) {
-
+        wfilec.append("\t//Reshape\n");
     } else if (!kindName.compare("MatMul")) {
         //MatMulNode* node = (MatMulNode *)&n;
 
@@ -831,11 +943,25 @@ void CCodeGenerator::generateFree(Loader &loader, string inputName, string& wfil
         }
 
     } else if (!kindName.compare("SoftMax")) {
+        wfilec.append("\t//SoftMax\n");
 
     } else if (!kindName.compare("BatchNormalization")) {
-
+        wfilec.append("\t//BatchNormalization\n");
     } else if (!kindName.compare("AvgPool")) {
-
+        wfilec.append("\t//AvgPool\n");
+    } else if  (!kindName.compare("Splat")) {
+        wfilec.append("\t//Splat\n");
+    } else if  (!kindName.compare("ChannelShuffle")) {
+        wfilec.append("\t//ChannelShuffle\n");
+    } else if  (!kindName.compare("Concat")) {
+        //SplatNode* node = (SplatNode *)&n;
+        wfilec.append("//Concat\n");
+    } else if  (!kindName.compare("Gemm")) {
+        //SplatNode* node = (SplatNode *)&n;
+        wfilec.append("//Gemm\n");
+    } else {
+        std::cout << "kindName = " << kindName << std::endl;
+        std::cout << "Unknown node type!!" << std::endl;
     }
 
     if(isLast == 1) {
@@ -915,11 +1041,11 @@ void CCodeGenerator::generateCodeFromModels(Loader &loader) {
         writeFileH << "//-------" + loader.getOnnxModelFilename().str() << endl << endl;
         writeFileH << "void initializeVariables(string dataFilePath);" << endl;
 
-        writeFileH << "void inference(" + inputTypes[0].getElementName().str() + " (*var" <<inputName<< ")"<< inAryStr \
-				<<", " + lastNode->getNthInput(0).getType()->getElementName().str()  + " result" + getDataArrayStr(lastNode->getNthInput(0).getType())<<");" <<endl;
+        writeFileH << "void inference(" + inputTypes[0].getElementTypeName().str() + " (*var" <<inputName<< ")"<< inAryStr \
+				<<", " + lastNode->getNthInput(0).getType()->getElementTypeName().str()  + " result" + getDataArrayStr(lastNode->getNthInput(0).getType())<<");" <<endl;
 
-        writeFileH << "void memFree(" + inputTypes[0].getElementName().str() + " (*var" <<inputName<< ")"<< inAryStr \
-				<<", " + lastNode->getNthInput(0).getType()->getElementName().str()  + " result" + getDataArrayStr(lastNode->getNthInput(0).getType())<<");" <<endl;
+        writeFileH << "void memFree(" + inputTypes[0].getElementTypeName().str() + " (*var" <<inputName<< ")"<< inAryStr \
+				<<", " + lastNode->getNthInput(0).getType()->getElementTypeName().str()  + " result" + getDataArrayStr(lastNode->getNthInput(0).getType())<<");" <<endl;
 
         writeFileH << "#endif /* NETWORK_H_ */\n" << endl;
         writeFileH.close();

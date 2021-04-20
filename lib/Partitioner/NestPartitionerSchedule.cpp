@@ -138,7 +138,7 @@ void NestPartitionerSchedule::generateYamlFile(string& wfilec, std::size_t parti
 
     std::string key = addProfileKey(func, profileKeySet_, isFused);
 
-    std::cout << "key: " << key << std::endl;
+    //std::cout << "key: " << key << std::endl;
 
     if (key.length() == 0) {
       keys = keys + "\"blank\", ";
@@ -215,6 +215,7 @@ void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std
     wfilec.append("\tcreateYamlFile();\n");
   }
 
+  wfilec.append("\treturn 0;\n");
   wfilec.append("}\n\n");
 }
 

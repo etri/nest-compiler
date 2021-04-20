@@ -21,19 +21,13 @@ namespace glow {
         std::set<std::string> varSet_;
         std::set<std::string> allocVarList_;
         std::set<std::string> freeVarList_;
-        //Loader* loader_;
 
     public:
-        //CCodeGenerator(Loader& loader) {loader_ = &loader;}
         void generateCodeFromModels(Loader &loader);
         void generateDeclaration(Loader &loader, std::string& writeFileC, Node& n);
         void generateInitialization(Loader &loader, std::string& writeFileC, std::ofstream* writeFileBin, Node& n);
         void generateInference(Loader &loader, std::string inputName, std::string& writeFileC, std::string inAryStr, Node& n);
         void generateFree(Loader &loader, std::string inputName, std::string& writeFileC, std::string inAryStr, Node& n);
-//        void generateDeclaration(Loader &loader, std::ofstream* writeFileC, Node& n);
-//        void generateInitialization(Loader &loader, std::ofstream* writeFileC, std::ofstream* writeFileBin, Node& n);
-//        void generateInference(Loader &loader, std::ofstream* writeFileC, std::string inAryStr, Node& n);
-//        void generateFree(Loader &loader, std::ofstream* writeFileC, std::string inAryStr, Node& n);
 
         void declareConstVar(std::string& wfilec, Constant* node);
         void allocConstVar(std::string& wfilec, std::ofstream* wfileb, Constant* node);
