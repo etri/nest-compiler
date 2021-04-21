@@ -41,3 +41,4 @@ include_directories(BEFORE
 
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)
+add_subdirectory(examples/bundles/resnet18_relay)
