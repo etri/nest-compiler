@@ -33,8 +33,10 @@ RUN update-alternatives --set cc /usr/bin/clang && \
 
 # Install fmt
 RUN git clone https://github.com/fmtlib/fmt && \
-    mkdir fmt/build && \
-    cd fmt/build && \
+    cd fmt && \
+    git reset --hard efe3694f150a1f307d014e68cd88350067769b19 && \
+    mkdir build && \
+    cd build && \
     cmake .. && make -j32 && \
     make install
 
