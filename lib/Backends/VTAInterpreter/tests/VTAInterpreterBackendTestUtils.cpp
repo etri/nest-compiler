@@ -633,7 +633,7 @@ void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *o
   out->assign(resultTensor);
 }
 
-/*
+
 void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind) {
   PlaceholderBindings bindings;
@@ -679,7 +679,7 @@ void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor 
   EE.run(bindings);
   out->assign(resultTensor);
 }
-*/
+
 
 void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind) {
@@ -802,7 +802,7 @@ void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *o
   EE.run(bindings);
   out->assign(resultTensor);
 }
-/*
+
 void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                      llvm::StringRef kind) {
   PlaceholderBindings bindings;
@@ -886,7 +886,7 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
   EE.run(bindings);
   out->assign(resultTensor);
 }
-*/
+
 
 
 

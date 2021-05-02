@@ -293,7 +293,8 @@ add_custom_target(dependency_graph
 
 if (NESTC_WITH_EVTA)
   message("NESTC WITH EVTA")
-  add_definitions(-DGLOW_WITH_VTA=1)
+  add_definitions(-DGLOW_WITH_VTA)
+  message("Enable DGLOW WITH VTA")
   if (GLOW_WITH_VTASIM)
     add_definitions(-DGLOW_WITH_VTASIM=1)
   endif()

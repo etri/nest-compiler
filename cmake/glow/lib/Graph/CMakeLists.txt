@@ -47,3 +47,8 @@ target_link_libraries(Graph
                         TensorPool)
 
 add_dependencies(Graph AutoGen)
+
+if (NESTC_WITH_EVTA)
+    message("NESTC WITH EVTA in graph cmake")
+    add_definitions(-DGLOW_WITH_VTA)
+endif()

@@ -67,8 +67,8 @@ VTA::compileIRWithoutConstants(std::unique_ptr<IRFunction> IR) const {
 
 bool VTA::isOpSupported(const NodeInfo &NI) const {
     switch (NI.getKind()) {
-//      case Kinded::Kind::VTAConvolutionNodeKind:
-//        return true;
+      case Kinded::Kind::VTAConvolutionNodeKind:
+        return true;
         case Kinded::Kind::BatchedReduceMinNodeKind:
             return NI.allInputsAndOutputsHaveSameElemKind(
                     {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int32ITy,
@@ -711,11 +711,11 @@ bool VTA::verify(const IRFunction &IR) const {
             !checkNoFusionForInstr(I)) {
           return false;
         }
-/*
+
         if (I.getKind() == Kinded::Kind::VTAConvolutionInstKind){
           continue;
         }
-*/
+
         if (!checkLayoutForInstr(I)) {
             return false;
         }

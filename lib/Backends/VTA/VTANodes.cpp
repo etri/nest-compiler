@@ -589,7 +589,7 @@ void BoundVTAFunction::fwdVTAConvolutionInstQuantizedImpl(
   }         // N
 }
 
-/*
+
 void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   llvm::outs() << "Found VTAConvolution but VTAConv is not yet supported on VTA\n";
   assert(I->getKind() == Kinded::Kind::VTAConvolutionInstKind);
@@ -771,7 +771,7 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   }
   return;
 }
-*/
+
 void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
   auto kernelSizes = I->getKernels();
   auto pads = I->getPads();

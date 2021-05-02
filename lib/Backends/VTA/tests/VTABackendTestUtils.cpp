@@ -849,7 +849,7 @@ void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, 
   out->assign(resultTensor);
 }
 
-/*
+
 void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                            llvm::StringRef kind) {
   PlaceholderBindings bindings;
@@ -895,7 +895,7 @@ void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor 
   EE.run(bindings);
   out->assign(resultTensor);
 }
-*/
+
 
 void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind) {

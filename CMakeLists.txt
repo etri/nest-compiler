@@ -33,6 +33,11 @@ else()
     set(NESTC_WITH_VTA OFF)
 endif()
 
+if (NESTC_WITH_EVTA)
+    message("NESTC WITH EVTA in graph cmake")
+    add_definitions(-DGLOW_WITH_VTA)
+endif()
+
 include_directories(BEFORE
         ${NESTC_ROOT_DIR}/include
         ${NESTC_ROOT_DIR}/include/tools/loader

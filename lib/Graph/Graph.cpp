@@ -802,11 +802,11 @@ static void assertConvDims(NodeValue input, NodeValue filter, NodeValue bias,
   ShapeNHWC filterDims(filter.dims());
   (void)filterDims;
 
-  assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
-         filterDims.w == kdim.width && filterDims.c == idim.c / group &&
-         "Invalid filter dims");
-
-  assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
+//  assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
+//         filterDims.w == kdim.width && filterDims.c == idim.c / group &&
+//         "Invalid filter dims");
+//
+//  assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
 }
 
 #ifdef GLOW_WITH_VTA
@@ -942,8 +942,8 @@ VTAConvolutionNode *Function::createVTAConv(llvm::StringRef name, NodeValue inpu
   return createVTAConv(name, input, filter, bias, outTy, kernels, strides, pads,
                     group, dilation, layout);
 }
-
 #endif
+
 
 
 ConvolutionNode *Function::createConv(llvm::StringRef name, NodeValue input,
