@@ -65,3 +65,20 @@ endif()
 target_include_directories(ResNet18NHWCBundleMain PUBLIC ${NHWC_BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(ResNet18NHWCBundleMain ResNet18NHWCBundleNet)
 
+
+add_custom_command(
+        TARGET ResNet18NHWCBundle POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png
+        ${NHWC_BUNDLE_OUTPUT_DIRECTORY}/cat_285.png)
+add_custom_command(
+        TARGET ResNet18NHWCBundle POST_BUILD
+        COMMAND echo `pwd`
+        WORKING_DIRECTORY ${NHWC_BUNDLE_OUTPUT_DIRECTORY}
+        COMMAND
+        ResNet18NHWCBundle ${NHWC_BUNDLE_OUTPUT_DIRECTORY}/cat_285.png
+        WORKING_DIRECTORY ${NHWC_BUNDLE_OUTPUT_DIRECTORY})
+add_custom_command(
+        TARGET ResNet18NHWCBundle POST_BUILD
+        COMMAND
+        echo "ResNet18Bundle Test Succeed")
