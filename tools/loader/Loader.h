@@ -203,7 +203,7 @@ public:
   /// Compiles the Function F_. Handles quantization, emitting bundles, and
   /// dumping debug information. \p cctx is used for compiling F_.
   void compile(CompilationContext &cctx);
-  void compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlan, int profileMode);
+  void compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlan, int profileMode, int partitionExe);
 
   /// Runs inference, unless emit bundle mode is enabled. \p bindings
   /// binds specific placeholders to concrete tensors. The concrete

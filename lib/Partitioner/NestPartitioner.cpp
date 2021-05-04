@@ -455,7 +455,7 @@ NestPartitioner::partitionFromConfig(const PartitionConfig &partitionConfig,
     std::cout << "Generating profiling code (main.cpp).." << std::endl;
   }
 
-  appGen_.generateCodeFromModels(funcList.size(), funcList, partitionConfig, appGen_.getProfileMode(),  appGen_.getInputPartitionName());
+  appGen_.generateCodeFromModels(funcList.size(), funcList, partitionConfig, appGen_.getInputPartitionName());
 
   if(appGen_.getProfileMode() == 0) {
     std::cout << "Linking-code generation is done." << std::endl << std::endl;
@@ -1898,7 +1898,7 @@ void NestPartitioner::findParallelBranches(std::vector<NodeGroup*>* branchList) 
 
 Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx) {
    std::string dir = "/home/msyu/Dropbox/Project/development/configs/partition_perform_profile";
-   return partition(cctx, 3, "", dir + "/NESTOptimalPlan.yaml", 0);
+   return partition(cctx, 3, "", dir + "/NESTOptimalPlan.yaml", 0, 0);
 }
 
 std::vector<Node*> getParallelNodes(BFSLevel  dag, Node* node) {
@@ -2116,7 +2116,7 @@ void NestPartitioner::analyzeDAG(std::vector<std::vector<CostNode>>* cnodebfs, B
   }
 }
 
-void NestPartitioner::generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode) {
+void NestPartitioner::generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe) {
 //  std::cout << "--------- generateApplicationCode -----------" << std::endl;
 
   std::string inputPartitionName;
@@ -2127,6 +2127,7 @@ void NestPartitioner::generateApplicationCode(std::string profilePath, std::stri
   }
 
   appGen_.setProfileMode(profileMode);
+  appGen_.setPartitionExeMode(partitionExe);
   appGen_.setInputPartitionName(inputPartitionName);
   appGen_.setProfilePath(profilePath);
   appGen_.setPartitionPlanFile(partitionPlanFile);
@@ -2310,9 +2311,9 @@ void NestPartitioner::generateDAGStatistics(Function *function) {
 
 }
 
-Expected<DAGListTy> NestPartitioner::generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode) {
+Expected<DAGListTy> NestPartitioner::generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe) {
   //generate main.cpp
-  generateApplicationCode(profilePath, partitionPlanFile, profileMode);
+  generateApplicationCode(profilePath, partitionPlanFile, profileMode, partitionExe);
 
   //load partition plan
   runtime::PartitionConfig partitionConfig;
@@ -2335,7 +2336,7 @@ Expected<DAGListTy> NestPartitioner::generatePartitionCode(CompilationContext &c
   }
 }
 
-Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode) {
+Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe) {
 //  std::cout << "--------- partitionForNest exeType: " << exeType << "-----------" << std::endl;
 
   Function *function = module_->getFunctions().front();
@@ -2363,7 +2364,7 @@ Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t 
   }
 
   if(exeType == 0) {//compile
-    return generatePartitionCode(cctx, profilePath, partitionPlanFile, profileMode);
+    return generatePartitionCode(cctx, profilePath, partitionPlanFile, profileMode, partitionExe);
   } else {
     DAGListTy partitions;
     return std::move(partitions);

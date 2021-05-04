@@ -163,7 +163,7 @@ public:
   Expected<DAGListTy> setupPrepartitionedModule(CompilationContext &cctx);
 
   Expected<DAGListTy> partition(CompilationContext &cctx) override;
-  Expected<DAGListTy> partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  Expected<DAGListTy> partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
 
   void outPartitionPlanForFusion(Function* function, DeviceInfo deviceInfo, std::string filename);
   bool isUserDefinedFusable(Node *node);
@@ -185,7 +185,7 @@ void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void loadFuseOperatorsConfig(std::string fname);
   void allocateCPUToParallelBranch(std::vector<NodeGroup*>* branchList);
   void allocateOptimalPUSingleNode(std::vector<NodeGroup*>* branchList);
-  void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
   void findParallelBranches(std::vector<NodeGroup*>* branchList);
 
   float getCostOfSingleNode(CostNode *cnode, std::string backendName);
@@ -195,7 +195,7 @@ void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void changeBackendAndGeneratePlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateDAGStatistics(Function *function);
-  Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
 
 
     DAGListTy doPartitioning(llvm::StringRef funcName,

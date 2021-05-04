@@ -612,7 +612,7 @@ HostManager::getDevicePartitionMapping(llvm::StringRef network) {
 
 Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
                               CompilationContext &cctx, size_t exeType,std::string profilePath,
-                                            std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode) {
+                                            std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode, int partitionExe) {
   ScopeGuard debugDumpDAGGuard([&]() {
     if (cctx.dumpFinalGraph) {
       for (Function *F : module->getFunctions()) {
@@ -725,7 +725,7 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
   //auto result = partitioner.partition(cctx);
   std::cout << "bundle dir = " << bundleDir << std::endl;
   partitioner.setOutputDir(bundleDir);
-  auto result = partitioner.partition(cctx, exeType, profilePath, partitionPlanFile, profileMode);
+  auto result = partitioner.partition(cctx, exeType, profilePath, partitionPlanFile, profileMode, partitionExe);
   if (result) {
     nodeList = std::move(result.get());
   } else {

@@ -51,7 +51,13 @@ llvm::cl::opt<std::string>
 llvm::cl::opt<int> profileMode(
     "profile-mode",
     llvm::cl::desc("\"0: partition plan loading & code generation, 1: profiling, 2: simple partitioning, 3: NEST partitioning\""),
-    llvm::cl::init(false), llvm::cl::cat(compilerCat));
+    llvm::cl::init(0), llvm::cl::cat(compilerCat));
+
+
+llvm::cl::opt<int> partitionExe(
+        "partition-exe",
+        llvm::cl::desc("\"1: generating an execution file for each partition\""),
+        llvm::cl::init(0), llvm::cl::cat(compilerCat));
 }
 
 //int glow::partitionProfileMode() { return profileMode; }
@@ -107,22 +113,8 @@ int main(int argc, char **argv) {
   }
 
   CompilationContext cctx = loader.getCompilationContext();
-
-//  PartitionScheduleCodeGenerator appGen_;
-//  appGen_.setProfileMode(profileMode);
-//  appGen_.setOutputDir();
-
-//  std::string inputPartitionName;
-//  if (partitionPlanFile.find('/') != std::string::npos) {
-//    inputPartitionName =
-//        partitionPlanFile.substr(partitionPlanFile.find_last_of("/") + 1);
-//    inputPartitionName = inputPartitionName.substr(0, inputPartitionName.size() - 5);
-//  }
-//  appGen_.setInputPartitionName(inputPartitionName);
-//  appGen_.setOutputDir(glow::emittingBundlePath());
-
   //0: generate compiled partition
-  loader.compileForNestPartition(cctx, executionType, profilePath, partitionPlanFile, profileMode);
+  loader.compileForNestPartition(cctx, executionType, profilePath, partitionPlanFile, profileMode, partitionExe);
 
   return 0;
 }

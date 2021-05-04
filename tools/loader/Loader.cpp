@@ -750,7 +750,7 @@ void Loader::compile(CompilationContext &cctx) {
   compilationInfo_ = cctx.info;
 }
 
-void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode) {
+void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe) {
 //  std::cout << "=== compileForNestProfile ===" << std::endl;
 
   // Dump the DAG before compilation if needed.
@@ -783,7 +783,7 @@ void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, s
 //  std::cout << "bundle dir = " << emitBundle << std::endl;
   // Emit IR for the graph and compile it.
   cctx.saturateHost = !runAllInputsOnAllDevices;
-  auto error = hostManager_->addNetworkForNestPartition(std::move(M_), cctx, exeType, profilePath, partitionPlanFile, emitBundle.c_str(), loadVTAProfileFileOpt, profileMode);
+  auto error = hostManager_->addNetworkForNestPartition(std::move(M_), cctx, exeType, profilePath, partitionPlanFile, emitBundle.c_str(), loadVTAProfileFileOpt, profileMode, partitionExe);
   EXIT_ON_ERR(std::move(error));
   // After partitioning, the original function may be removed. Need to update
   // F_.

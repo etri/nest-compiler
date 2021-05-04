@@ -198,7 +198,7 @@ public:
   /// optimized based on \p cctx.
   Error addNetwork(std::unique_ptr<Module> module, CompilationContext &cctx);
   Error addNetworkForNestPartition(std::unique_ptr<Module> module, CompilationContext &cctx, size_t exeType,
-                                 std::string profilePath, std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode);
+                                 std::string profilePath, std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode, int partitionExe);
   std::vector<DeviceInfo> getDeviceInfoList();
 
 
