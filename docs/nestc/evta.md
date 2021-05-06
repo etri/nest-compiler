@@ -11,7 +11,13 @@ make vtaMxnetResnet18Bundle
 
 ### ZCU102 보드 상에서의 Resnet18 빌드 및 실행 방법
 호환 비트스트림 [다운로드](https://github.com/etri/nest-data/blob/master/bitstreams/zcu102_1x16_i8w8a32_16_16_19_18.bit) 및 설치
-```bash 
-cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DNESTC_EVTA_BUNDLE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=OFF -DNESTC_VTA_RUN_ON_AARCH64=ON [소스코드 위치]
+```bash
+cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DNESTC_EVTA_BUNDLE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=ON -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=OFF [소스코드 위치]
 make vtaMxnetResnet18Bundle
+```
+
+### ZCU102 보드 상에서의 Resnet50 빌드 및 실행 방법
+```bash
+cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DNESTC_EVTA_BUNDLE_TEST=ON -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=ON -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON [소스코드 위치]
+make vtaCaffe2Resnet50Bundle
 ```
