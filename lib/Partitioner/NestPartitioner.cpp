@@ -650,7 +650,6 @@ void NestPartitioner::outPerformProfileForEachNode(Function* function, std::stri
 
     profileFile << "---" << std::endl;
     profileFile << "backendName: " << device.backendName << std::endl;
-    profileFile << "commCost: " << "0.0" << std::endl;
 
     for (int i = level - 1; i >= 0; i--) {
       for (size_t j = 0, e = bfs[i].size(); j < e; j++) {
@@ -774,7 +773,6 @@ void NestPartitioner::outPerformProfileForFusedNode(Function* function, std::str
 
         profileFile << "---" << std::endl;
         profileFile << "backendName: " << device.backendName << std::endl;
-        profileFile << "commCost: " << "0.0" << std::endl;
 
         for (int i = level - 1; i >= 0; i--) {
             for (size_t j = 0; j < bfs[i].size(); j++) {
@@ -1348,15 +1346,12 @@ void NestPartitioner::loadPerformProfileInfo(std::string pdir)
       std::map<std::string, std::string> profileMap = deserializeStrStrMapFromYaml(pdir+"/"+fn);
       std::string backendName = profileMap["backendName"];
       backendSet_.insert(backendName);
-      float commCost = atof(profileMap["commCost"].c_str());
-      commCostMap_[backendName] = commCost;
 
       std::map<std::string, float> puvalues;
       backendProfileMap_.insert(std::make_pair(backendName, puvalues));
 
-
       for(auto it = profileMap.begin();it != profileMap.end();it++) {
-        if(!it->first.compare("backendName") || !it->first.compare("commCost")) continue;
+        if(!it->first.compare("backendName")) continue;
 
         std::string costValueStr = profileMap[it->first].c_str();
         if(!costValueStr.compare("INFINITY")) {
@@ -1385,10 +1380,8 @@ float NestPartitioner::getCostOfSingleNode(CostNode *cnode, std::string backendN
      != backendMap_[backendName].nonSupportedNodesKinds.end()) {
     return INFINITY;
   } else {
-    float commCost = commCostMap_[backendName];
     float compCost = backendProfileMap_[backendName][key];
-
-    return (commCost + compCost);
+    return compCost;
   }
 }
 
@@ -1402,7 +1395,7 @@ void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backen
   std::vector<std::string> backendList(backendSet_.size());
   std::copy(backendSet_.begin(), backendSet_.end(), backendList.begin());
 
-  cnode->cost_ = commCostMap_[backendList[0]] + backendProfileMap_[backendList[0]][key];
+  cnode->cost_ = backendProfileMap_[backendList[0]][key];
   cnode->backendName_ = backendList[0];
 
   //  std::cout << "costNode->totalCost = " << cnode->totalCost << std::endl;
@@ -1418,10 +1411,9 @@ void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backen
         (backendMap_[backendName].supportedNodesKinds.find(cnode->node_->getKind())
        == backendMap_[backendName].supportedNodesKinds.end())) continue;
 
-    float commCost = commCostMap_[backendName];
     float compCost = backendProfileMap_[backendName][key];
 
-    float cost = compCost + commCost;
+    float cost = compCost;
     if(cost < cnode->cost_) {
       cnode->cost_ = cost;
       cnode->backendName_ = backendName;
@@ -1472,11 +1464,7 @@ void NestPartitioner::getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCN
 
         if(backendProfileMap_[backendName].find(compKey) == backendProfileMap_[backendName].end())
             continue;
-
-        float commCost = commCostMap_[backendName];
-        float compCost = backendProfileMap_[backendName][compKey];
-        float cost = compCost + commCost;
-
+        float cost = backendProfileMap_[backendName][compKey];
         if(cost < originalCost && cost < prevCost) {
 //          std::cout << "First node: " << prevCNode->name_ << ", " << prevCNode->backendName_ << std::endl;
 //          std::cout << "Second node: " << curCNode->name_ << ", " << curCNode->backendName_ << std::endl;
@@ -1540,11 +1528,7 @@ void NestPartitioner::getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode*
 
         if(backendProfileMap_[backendName].find(compKey) == backendProfileMap_[backendName].end())
             continue;
-
-        float commCost = commCostMap_[backendName];
-        float compCost = backendProfileMap_[backendName][compKey];
-        float cost = compCost + commCost;
-
+        float cost = backendProfileMap_[backendName][compKey];
         if(cost < originalCost && cost < prevCost) {
 //          std::cout << "[Original cost] = " << secondPrevCNode->cost_ + firstPrevCNode->cost_ + curCNode->cost_ << std::endl;
 

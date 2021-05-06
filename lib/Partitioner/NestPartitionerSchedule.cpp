@@ -165,7 +165,6 @@ void NestPartitionerSchedule::generateYamlFile(string& wfilec, std::size_t parti
   wfilec.append("\tif (profileFile.is_open()) {\n");
   wfilec.append("\t\tprofileFile << \"---\" << std::endl;\n");
   wfilec.append("\t\tprofileFile << \"backendName: " + backendName + "\" << std::endl;\n");
-  wfilec.append("\t\tprofileFile << \"commCost: \" << \"0.0\" << std::endl;\n\n");
   wfilec.append("\t\tfor(int i = 0; i < " + std::to_string(partitionNum-1) + "; i++){\n");
   wfilec.append("\t\t\tif(keyList[i].compare(\"blank\")) {\n");
   wfilec.append("\t\t\t\tsprintf(str, \"%lu\", delay_time[i]);\n");

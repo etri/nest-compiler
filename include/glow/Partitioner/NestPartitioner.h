@@ -101,8 +101,6 @@ class NestPartitioner final : public PartitionerBase {
     PartitionConfig partitionConfig_;
 
     std::vector<NodeGroup*> nodeGroups_;
-//    PartitionProfileInfo pInfo_;
-    std::map<std::string, float> commCostMap_;
     std::set<std::string> backendSet_;
     std::string quantFileName_;
 
