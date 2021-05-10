@@ -225,7 +225,7 @@ void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std
 }
 
 #include <boost/algorithm/string/replace.hpp>
-void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, const PartitionConfig &partitionConfig) {
+void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
     std::string partitionMainTemplate = std::string("#include <stdlib.h>\n") +
                                          "#include \"main_template.h\"\n" +
                                          "#include \"p%.h\"\n" +
@@ -240,14 +240,19 @@ void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, con
                                          "\tint repeat = 1;\n" +
                                          "\tif(argc > 1)\n" +
                                          "\t\trepeat = atoi(argv[1]);\n" +
-                                         "\tprintf(\"pStart %\\n\");\n" +
+                                         "\tprintf(\"pStart $3\\n\");\n" +
+                                        "\tfflush(stdout);\n" +
                                          "\tfor(int i = 0; i < repeat; i++)\n" +
                                          "\t\tp%(constantWeightVarsAddr%, mutableWeightVarsAddr%, activationsAddr%);\n" +
-                                         "\tprintf(\"pEnd %\\n\");\n" +
+                                         "\tprintf(\"pEnd $3\\n\");\n" +
+                                         "\tfflush(stdout);\n" +
                                          "$2" +  //destroyVTARuntime();
                                          "\n}";
 
     for(int i = 0; i < partitionNum - 1; i++) {
+        auto func = funcList[i];
+        std::string key = getPartitionProfileKey(func);
+        //std::cout << "partition key = " << key << std::endl;
         std::string partitionMainStr(partitionMainTemplate.c_str());
         std::string pid = std::to_string(i);
         std::string outfile_c = outputDir_ + "/p" + pid + "_main.cpp";
@@ -268,6 +273,7 @@ void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, con
                 boost::replace_all(partitionMainStr, "$2", "");
             }
 
+            boost::replace_all(partitionMainStr, "$3", key);
             boost::replace_all(partitionMainStr ,"%", pid.c_str());
          //   std::cout << partitionMainStr << std::endl;
             writeFileC << partitionMainStr;
@@ -815,7 +821,7 @@ void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, s
   }
 
   if(partitionExeMode_ == 1) {
-      generateMainforEachPartition(partitionNum, partitionConfig);
+      generateMainforEachPartition(partitionNum, funcList, partitionConfig);
   }
 
 
@@ -1003,14 +1009,32 @@ void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t
   wfilec.append("#endif()\n");
 }
 
+
+std::string NestPartitionerSchedule::getPartitionProfileKey(Function* function) {
+    BFSLevel bfs = getBFSLevel(function);
+    size_t level = bfs.size();
+    std::string key = "";
+    int cnt = 0;
+    for (int i = level - 1; i >= 0; i--) {
+        for (size_t j = 0, e = bfs[i].size(); j < e; j++) {
+            Node *node = bfs[i][j];
+            if (node->getKind() == Kinded::Kind::SaveNodeKind || node->getKind() == Kinded::Kind::PlaceholderKind) {
+                continue;
+            }
+            key = key + getProfileKey(node) + "+";
+            cnt++;
+        }
+    }
+
+    if(key.length() > 1) {
+        key.pop_back();
+    }
+    return key;
+}
+
 std::string NestPartitionerSchedule::getProfileKey(Node *node) {
   std::string key;
   std::string kindName = node->getKindName();
-
-//  if(node->getNumInputs() == 0) {
-//    std::cout << "0 input: " << node->getName().str() << std::endl;
-//    std::cout << node->getKindName() << std::endl;
-//  }
 
   if(node->getKind() == Kinded::Kind::ConvolutionNodeKind) {
     key = std::string(node->getKindName()) + "-" + getDimArrayStr(node->getNthInput(0).getType())

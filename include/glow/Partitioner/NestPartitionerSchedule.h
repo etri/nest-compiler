@@ -59,13 +59,13 @@ public:
   std::string addProfileKey(Function* function, std::set<std::string> *keySet, bool isFusion);
 
   void generateDeclaration(std::string& writeFileC, int partitionNum, const PartitionConfig &partitionConfig);
-  void generateMainforEachPartition(int partitionNum, const PartitionConfig &partitionConfig);
+  void generateMainforEachPartition(int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateMain(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateFree(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateCodeFromModels(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
   void generateYamlFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
   void generateCMakeListsFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
-
+  std::string getPartitionProfileKey(Function* function);
 };
 
 } // namespace glow
