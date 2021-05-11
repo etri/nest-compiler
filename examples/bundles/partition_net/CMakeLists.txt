@@ -1,5 +1,5 @@
 option(NEST_BUILD_ON_MAC "Set configurations for building in MAC environment." OFF)
-set(PARTITION_BUNDLE_OUTPUT_DIRECTORY ${GLOW_BINARY_DIR}/examples/bundles/resnet18_partition)
+set(PARTITION_BUNDLE_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/examples/bundles/resnet18_partition)
 set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 

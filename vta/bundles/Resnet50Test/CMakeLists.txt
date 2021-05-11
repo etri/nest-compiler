@@ -13,7 +13,7 @@ add_custom_target(vtaCaffe2Resnet50BundleONNX
         ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
         ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx
         )
-if(NESTC_EVTA_BUNDLE_TEST AND GLOW_WITH_VTASIM)
+if(NESTC_EVTA_BUNDLE_TEST AND NESTC_USE_VTASIM)
     add_custom_command(
             OUTPUT
             ${CMAKE_CURRENT_BINARY_DIR}/resnet50.cpp

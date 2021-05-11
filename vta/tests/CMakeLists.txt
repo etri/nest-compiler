@@ -17,10 +17,10 @@ target_link_libraries(NESTVTABackendTest
         )
 set_target_properties( NESTVTABackendTest
         PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${GLOW_BINARY_DIR}/tests"
+        RUNTIME_OUTPUT_DIRECTORY "${NESTC_BINARY_DIR}/tests"
         )
 
-add_glow_test(NESTVTABackendTest ${GLOW_BINARY_DIR}/tests/NESTVTABackendTest --gtest_output=xml:VTASaverTest.xml)
+add_test(NESTVTABackendTest ${NESTC_BINARY_DIR}/tests/NESTVTABackendTest --gtest_output=xml:VTASaverTest.xml)
 
 add_custom_command(
         OUTPUT
@@ -72,5 +72,3 @@ add_custom_command(
 )
 
 add_custom_target(NESTVTAImageclassifierResnet18Test DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/results.txt)
-#add_executable(VTAResnetTest ../../lib/Backends/VTA/tests/VTAResnetTest.cpp)
-#target_link_libraries(VTAResnetTest gtest BackendTestUtils)

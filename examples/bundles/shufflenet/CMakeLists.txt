@@ -1,6 +1,6 @@
 option(NEST_BUILD_ON_MAC "Set configurations for building in MAC environment." OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${GLOW_BINARY_DIR}/bundles)
-set(SHUFFLENET_BUNDLE_DIR ${GLOW_BINARY_DIR}/examples/bundles/shufflenet)
+set(SHUFFLENET_BUNDLE_DIR ${NESTC_BINARY_DIR}/examples/bundles/shufflenet)
 set(MODEL_INPUT_NAME "gpu_0/data_0")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 

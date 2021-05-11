@@ -16,7 +16,7 @@ add_custom_target(vtaMxnetResnet18BundleONNX
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
 )
 
-if(NESTC_EVTA_BUNDLE_TEST AND GLOW_WITH_VTASIM)
+if(NESTC_EVTA_BUNDLE_TEST AND NESTC_USE_VTASIM)
     if(NOT VTA_RESNET18_WITH_SKIPQUANT0)
         add_custom_command(
                 OUTPUT

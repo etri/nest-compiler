@@ -1,4 +1,4 @@
-if(GLOW_WITH_VTASIM)
+if(NESTC_USE_VTASIM)
     add_custom_command(
             OUTPUT
             ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.cpp

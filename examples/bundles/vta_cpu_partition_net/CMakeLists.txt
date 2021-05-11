@@ -1,6 +1,6 @@
 option(NEST_BUILD_ON_MAC "Set configurations for building in MAC environment." OFF)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${GLOW_BINARY_DIR}/bundles)
-set(RESNET18_VTA_PARTITION_BUNDLE_OUTPUT_DIRECTORY ${GLOW_BINARY_DIR}/examples/bundles/resnet18_vta_cpu_partition)
+set(RESNET18_VTA_PARTITION_BUNDLE_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/examples/bundles/resnet18_vta_cpu_partition)
 set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 

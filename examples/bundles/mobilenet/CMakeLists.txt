@@ -3,7 +3,7 @@ set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 
 # Output directories for regular and quantized outputs
-set(MOBILENET_BUNDLE_OUTPUT_DIRECTORY ${GLOW_BINARY_DIR}/examples/bundles/mobilenet)
+set(MOBILENET_BUNDLE_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/examples/bundles/mobilenet)
 
 add_custom_target(MobileNetBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MOBILENET_BUNDLE_OUTPUT_DIRECTORY}

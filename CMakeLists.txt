@@ -6,7 +6,7 @@ project(NESTC C CXX)
 
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
 option(NESTC_EVTA_BUNDLE_TEST "Build with VTA bundle test" OFF)
-option(GLOW_WITH_VTASIM "Build the VTASIM" ON)
+option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_VTA_RUN_ON_AARCH64 "Run VTA on AArch64" OFF)
 
 include(CTest)
