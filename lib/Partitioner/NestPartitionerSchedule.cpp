@@ -237,6 +237,7 @@ void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, std
                                          "\tuint8_t *constantWeightVarsAddr% = initConstantWeights(\"p%.weights.bin\", p%_config);\n" +
                                          "\tuint8_t *mutableWeightVarsAddr% =  allocateMutableWeightVars(p%_config);\n" +
                                          "\tuint8_t *activationsAddr% = initActivations(p%_config);\n" +
+                                         "$4" + //load_module();
                                          "\tint repeat = 1;\n" +
                                          "\tif(argc > 1)\n" +
                                          "\t\trepeat = atoi(argv[1]);\n" +
@@ -246,6 +247,7 @@ void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, std
                                          "\t\tp%(constantWeightVarsAddr%, mutableWeightVarsAddr%, activationsAddr%);\n" +
                                          "\tprintf(\"pEnd $3\\n\");\n" +
                                          "\tfflush(stdout);\n" +
+                                         "$5" + //load_module();
                                          "$2" +  //destroyVTARuntime();
                                          "\n}";
 
@@ -267,10 +269,14 @@ void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, std
                 boost::replace_all(partitionMainStr, "$0", "#include \"VTARuntime.h\"\n");
                 boost::replace_all(partitionMainStr, "$1", "\tinitVTARuntime();\n");
                 boost::replace_all(partitionMainStr, "$2", "\tdestroyVTARuntime();\n");
+                boost::replace_all(partitionMainStr, "$4", "\tp" + pid + "_load_module(constantWeightVarsAddr"+ pid +");\n");
+                boost::replace_all(partitionMainStr, "$5", "\tp" + pid +"_destroy_module();\n");
             } else {
                 boost::replace_all(partitionMainStr, "$0", "");
                 boost::replace_all(partitionMainStr, "$1", "");
                 boost::replace_all(partitionMainStr, "$2", "");
+                boost::replace_all(partitionMainStr, "$4", "");
+                boost::replace_all(partitionMainStr, "$5", "");
             }
 
             boost::replace_all(partitionMainStr, "$3", key);
@@ -920,15 +926,15 @@ void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t
 
   wfilec.append("add_custom_target("+demoExeFileName+"Net DEPENDS\n");
   wfilec.append("\t");
-  for(int i = 0; i < partitionNum - 1; i++)
-  {
-    if(!partitionConfig.backendNames[i].compare("CPU"))
-    {
+
+  bool isExistVTA = false;
+  for(int i = 0; i < partitionNum - 1; i++) {
+    if(!partitionConfig.backendNames[i].compare("CPU")) {
       wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
     }
-    else if(!partitionConfig.backendNames[i].compare("VTA"))
-    {
+    else if(!partitionConfig.backendNames[i].compare("VTA")) {
       wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
+      isExistVTA = true;
     }
   }
   wfilec.append("\t)\n\n");
@@ -977,10 +983,14 @@ void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t
         }
     }
 
-
   wfilec.append("INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})\n");
   wfilec.append("add_dependencies(" + demoExeFileName + " " + demoExeFileName + "Net)\n");
-  wfilec.append("target_link_libraries(" + demoExeFileName + " VTABundle vta_runtime arm_compute arm_compute_core arm_compute_graph LLVMSupport cma gomp png)\n");
+
+  if(isExistVTA)
+    wfilec.append("target_link_libraries(" + demoExeFileName + " VTABundle vta_runtime arm_compute arm_compute_core arm_compute_graph LLVMSupport cma gomp png)\n");
+  else
+      wfilec.append("target_link_libraries(" + demoExeFileName + " LLVMSupport gomp png)\n");
+
   wfilec.append("set_target_properties(" + demoExeFileName + "\n");
   wfilec.append("\tPROPERTIES\n");
   wfilec.append("\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\"\n");
