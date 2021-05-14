@@ -143,11 +143,11 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
         imageT[getXYZ(imageDims, row_n, col_n, 0)] =
             float(ptr[0]) * scale + bias;
       } else {
-        imageT[getXYZ(imageDims, row_n, col_n, 0)] =
+        imageT[getXYZ(imageDims, row_n, col_n, 2)] =
             float(ptr[0]) * scale + bias;
         imageT[getXYZ(imageDims, row_n, col_n, 1)] =
             float(ptr[1]) * scale + bias;
-        imageT[getXYZ(imageDims, row_n, col_n, 2)] =
+        imageT[getXYZ(imageDims, row_n, col_n, 0)] =
             float(ptr[2]) * scale + bias;
       }
     }
@@ -473,5 +473,5 @@ int main(int argc, char **argv) {
   free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
 
-  return !(maxIdx==285);
+  return !(maxIdx==281);
 }
