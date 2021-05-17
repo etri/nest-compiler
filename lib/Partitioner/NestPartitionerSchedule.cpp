@@ -241,7 +241,7 @@ void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, std
                                          "\tint repeat = 1;\n" +
                                          "\tif(argc > 1)\n" +
                                          "\t\trepeat = atoi(argv[1]);\n" +
-                                         "\tprintf(\"pStart $3\\n\");\n" +
+                                         "\tprintf(\"\\npStart $3\\n\");\n" +
                                         "\tfflush(stdout);\n" +
                                          "\tfor(int i = 0; i < repeat; i++)\n" +
                                          "\t\tp%(constantWeightVarsAddr%, mutableWeightVarsAddr%, activationsAddr%);\n" +
