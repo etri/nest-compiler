@@ -10,7 +10,7 @@ add_library(VTA
         VTANodes.cpp
         VTADeviceManager.cpp
         VTAFactory.cpp
-        VTASave.cpp)
+        VTASave.cpp VTASchedules.h)
 
 target_include_directories(VTA
         PUBLIC

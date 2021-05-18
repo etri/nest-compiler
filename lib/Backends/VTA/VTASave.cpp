@@ -15,19 +15,8 @@
 //#define VTA_MEMOPT_DISABLE
 
 using namespace glow;
-struct ConvolutionTuneElement{
-  std::string name;
-  int nVirtualThread;
-  int tileHSize;
-  int tileWSize;
-};
 
 
-struct ConvolutionTune{
-  std::vector<ConvolutionTuneElement> ConvolutionTune_;
-};
-
-struct ConvolutionTune convTune;
 
 class VTASaveContext{
 public:
@@ -878,15 +867,17 @@ void generateVTAConvolutionCall(const glow::ConvolutionInst *Inst, std::string *
   bundle->append(", ");
   bundle->append(std::to_string(dest->dims()[2]));
   bundle->append(", vtaCmdH");
+
+#include "VTASchedules.h"
   for(auto elem : convTune.ConvolutionTune_){
-    if(elem.name.compare(Inst->getName())==0)
+    if(elem.isMatch(N, H, W, C, KN, KH, KW, C, stride_size, pad_size))
     {
       bundle->append(", ");
-      bundle->append(std::to_string(elem.nVirtualThread));
+      bundle->append(std::to_string(elem.nVirtualThread_));
       bundle->append(", ");
-      bundle->append(std::to_string(elem.tileHSize));
+      bundle->append(std::to_string(elem.tileHSize_));
       bundle->append(", ");
-      bundle->append(std::to_string(elem.tileWSize));
+      bundle->append(std::to_string(elem.tileWSize_));
     }
   }
 
@@ -2705,22 +2696,57 @@ void exportBundleHeader(llvm::StringRef outputDir,
 void VTA::save(Function *F, llvm::StringRef outputDir,
                llvm::StringRef bundleName,
                llvm::StringRef mainEntryName) const {
-  std::string tntFileName("./VTAConvolutionTune.txt");
+  /*
+  std::string tntFileName("./VTASchedules.txt");
   std::ifstream inTuneFs(tntFileName);
   std::string inStr;
   convTune.ConvolutionTune_.clear();
 
-  while(getline(inTuneFs, inStr)){
-    std::string nVirtualThread;
-    std::string tileHSize;
-    std::string tileWSize;
-    if(!getline(inTuneFs, nVirtualThread)) break;
-    if(!getline(inTuneFs, tileHSize)) break;
-    if(!getline(inTuneFs, tileWSize)) break;
-    convTune.ConvolutionTune_.push_back({inStr, stoi(nVirtualThread), stoi(tileHSize), stoi(tileWSize)});
+  if(inTuneFs.is_open()) {
+    while (getline(inTuneFs, inStr)) {
+      if (inStr.compare("Conv") == 0) {
+        getline(inTuneFs, inStr);
+        std::string item;
+        unsigned_t inputN;
+        unsigned_t inputH;
+        unsigned_t inputW;
+        unsigned_t inputC;
+        unsigned_t filterN;
+        unsigned_t filterH;
+        unsigned_t filterW;
+        unsigned_t filterC;
+        unsigned_t stride;
+        unsigned_t pad;
+        unsigned_t nVirtualThread;
+        unsigned_t tileHSize;
+        unsigned_t tileWSize;
+        std::istringstream inIstr(inStr);
+        inIstr >> item >> inputN >> inputH >> inputW >> inputC;
+        if (item.compare("Input") != 0) continue;
+        getline(inTuneFs, inStr);
+        std::istringstream fIstr(inStr);
+        fIstr >> item >> filterN >> filterH >> filterW >> filterC;
+        if (item.compare("Filter") != 0) continue;
+        getline(inTuneFs, inStr);
+        std::istringstream sIstr(inStr);
+        sIstr >> item >> stride;
+        if (item.compare("Stride") != 0) continue;
+        getline(inTuneFs, inStr);
+        std::istringstream pIstr(inStr);
+        pIstr >> item >> pad;
+        if (item.compare("Pad") != 0) continue;
+        getline(inTuneFs, inStr);
+        std::istringstream schIstr(inStr);
+        schIstr >> item >> nVirtualThread >> tileHSize >> tileWSize;
+        if (item.compare("Schedule") != 0) continue;
 
+        convTune.ConvolutionTune_.push_back({inputN, inputH, inputW, inputC, filterN, filterH,
+                                             filterW, filterC, stride, pad, nVirtualThread, tileHSize, tileWSize});
+      }
+    }
+    inTuneFs.close();
   }
-
+  */
   auto IR = generateAndOptimizeIR(F, *this, shouldShareBuffers());
   VTASaveContext ctx(&IR->getVariableMap());
   std::string weightFileName = outputDir;
