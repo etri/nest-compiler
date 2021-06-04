@@ -5,37 +5,12 @@ set_target_properties(vtaNonVTAConvTestBundle
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
 
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaNonVTAConvTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaNonVTAConvTestInput.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaNonVTAConvTestInput.bin)
+add_custom_command(
+        TARGET vtaNonVTAConvTestBundle POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/vtaNonVTAConvTestBundle.weights.bin
+        ${CMAKE_CURRENT_BINARY_DIR}/vtaNonVTAConvTestBundle.weights.bin)
 
-    add_custom_command(
-            TARGET vtaNonVTAConvTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaNonVTAConvTestBundle.weights.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaNonVTAConvTestBundle.weights.bin)
-
-    add_custom_command(
-            TARGET vtaNonVTAConvTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaNonVTAConvTestGolden.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaNonVTAConvTestGolden.bin)
-
-
-
-    add_custom_command(
-            TARGET vtaNonVTAConvTestBundle POST_BUILD
-            COMMAND
-            vtaNonVTAConvTestBundle vtaNonVTAConvTestInput.bin)
-    add_custom_command(
-            TARGET vtaNonVTAConvTestBundle POST_BUILD
-            COMMAND
-            diff output.bin vtaNonVTAConvTestGolden.bin)
-    add_custom_command(
-            TARGET vtaNonVTAConvTestBundle POST_BUILD
-            COMMAND
-            echo "vtaNonVTAConvTestBundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaNonVTAConvTestBundle
+        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaNonVTAConvTestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_SOURCE_DIR}/vtaNonVTAConvTestInput.bin
+        USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_SOURCE_DIR}/vtaNonVTAConvTestGolden.bin)

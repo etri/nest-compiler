@@ -70,3 +70,4 @@ target_compile_options(ResNet18BundleMain PRIVATE -std=c++11 -g -I/usr/local/inc
 endif()
 target_include_directories(ResNet18BundleMain PUBLIC ${BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(ResNet18BundleMain ResNet18BundleNet)
+

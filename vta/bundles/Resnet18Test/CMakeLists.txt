@@ -16,7 +16,7 @@ add_custom_target(vtaMxnetResnet18BundleONNX
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
 )
 
-if(NESTC_EVTA_BUNDLE_TEST AND NESTC_USE_VTASIM)
+if(NESTC_USE_VTASIM)
     if(NOT VTA_RESNET18_WITH_SKIPQUANT0)
         add_custom_command(
                 OUTPUT
@@ -131,23 +131,4 @@ set_target_properties(vtaMxnetResnet18Bundle
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
 
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaMxnetResnet18Bundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png
-            ${CMAKE_CURRENT_BINARY_DIR}/cat_285.png)
-
-    add_custom_command(
-            TARGET vtaMxnetResnet18Bundle POST_BUILD
-            COMMAND
-            mkdir -p debug)
-    add_custom_command(
-            TARGET vtaMxnetResnet18Bundle POST_BUILD
-            COMMAND
-            vtaMxnetResnet18Bundle cat_285.png)
-    add_custom_command(
-            TARGET vtaMxnetResnet18Bundle POST_BUILD
-            COMMAND
-            echo "vtaMxnetResnet18Bundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaMxnetResnet18Bundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18Bundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)

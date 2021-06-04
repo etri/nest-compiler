@@ -43,19 +43,6 @@ set_target_properties( vtaAvgPoolTestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaAvgPoolTestBundle POST_BUILD
-            COMMAND
-            vtaAvgPoolTestBundle vtaAvgPoolTestInput.bin)
 
-    add_custom_command(
-            TARGET vtaAvgPoolTestBundle POST_BUILD
-            COMMAND
-            diff output.bin vtaAvgPoolTestGolden.bin)
-
-    add_custom_command(
-            TARGET vtaAvgPoolTestBundle POST_BUILD
-            COMMAND
-            echo "AvgPoolTestBundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaAvgPoolTestBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestInput.bin
+        USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin)

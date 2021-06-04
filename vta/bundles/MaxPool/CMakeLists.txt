@@ -6,37 +6,12 @@ set_target_properties(vtaMaxPoolTestBundle
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
 
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaMaxPoolTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaMaxPoolTestInput.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaMaxPoolTestInput.bin)
+add_custom_command(
+        TARGET vtaMaxPoolTestBundle POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/vtaMaxPoolTestBundle.weights.bin
+        ${CMAKE_CURRENT_BINARY_DIR}/vtaMaxPoolTestBundle.weights.bin)
 
-    add_custom_command(
-            TARGET vtaMaxPoolTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaMaxPoolTestBundle.weights.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaMaxPoolTestBundle.weights.bin)
-
-    add_custom_command(
-            TARGET vtaMaxPoolTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaMaxPoolTestGolden.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaMaxPoolTestGolden.bin)
-
-
-
-    add_custom_command(
-            TARGET vtaMaxPoolTestBundle POST_BUILD
-            COMMAND
-            vtaMaxPoolTestBundle vtaMaxPoolTestInput.bin)
-    add_custom_command(
-            TARGET vtaMaxPoolTestBundle POST_BUILD
-            COMMAND
-            diff output.bin vtaMaxPoolTestGolden.bin)
-    add_custom_command(
-            TARGET vtaMaxPoolTestBundle POST_BUILD
-            COMMAND
-            echo "vtaMaxPoolTestBundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaMaxPoolTestBundle
+        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMaxPoolTestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_SOURCE_DIR}/vtaMaxPoolTestInput.bin
+        USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_SOURCE_DIR}/vtaMaxPoolTestGolden.bin)

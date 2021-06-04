@@ -5,37 +5,12 @@ set_target_properties(vtaTransposeTestBundle
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
 
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaTransposeTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaTransposeTestInput.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaTransposeTestInput.bin)
+add_custom_command(
+        TARGET vtaTransposeTestBundle POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/vtaTransposeTestBundle.weights.bin
+        ${CMAKE_CURRENT_BINARY_DIR}/vtaTransposeTestBundle.weights.bin)
 
-    add_custom_command(
-            TARGET vtaTransposeTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaTransposeTestBundle.weights.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaTransposeTestBundle.weights.bin)
-
-    add_custom_command(
-            TARGET vtaTransposeTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaTransposeTestGolden.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaTransposeTestGolden.bin)
-
-
-
-    add_custom_command(
-            TARGET vtaTransposeTestBundle POST_BUILD
-            COMMAND
-            vtaTransposeTestBundle vtaTransposeTestInput.bin)
-    add_custom_command(
-            TARGET vtaTransposeTestBundle POST_BUILD
-            COMMAND
-            diff output.bin vtaTransposeTestGolden.bin)
-    add_custom_command(
-            TARGET vtaTransposeTestBundle POST_BUILD
-            COMMAND
-            echo "vtaTransposeTestBundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaTransposeTestBundle
+        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaTransposeTestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_SOURCE_DIR}/vtaTransposeTestInput.bin
+        USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_SOURCE_DIR}/vtaTransposeTestGolden.bin)

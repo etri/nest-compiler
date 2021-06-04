@@ -2,7 +2,5 @@
 echo 'PARAM:' $0
 DIR="$( cd "$( dirname "$0" )" && pwd -P )"
 echo $DIR
-cmake $DIR/../../ -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DGLOW_WITH_VTA=ON -DGLOW_WITH_VTASIM=OFF  -DCMAKE_BUILD_TYPE=Release -DGLOW_USE_PREBUILT_LIB=ON -DGLOW_WITH_VTA_BUNDLE_TEST=ON
-cat $DIR/nestc_vta_bundle_tests.txt | xargs -I {} make {} -j4
-cat $DIR/nestc_vta_bundle_tests.txt | xargs -I {} make {} -j4
-
+cmake $DIR/../ -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DCMAKE_BUILD_TYPE=Release -DNESTC_USE_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=ON -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON
+make check_zcu102

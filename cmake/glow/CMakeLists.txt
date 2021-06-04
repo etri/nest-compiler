@@ -273,7 +273,6 @@ if (GLOW_BUILD_TESTS)
 
   # Fetch the dependencies for all the tests.
   get_property(GLOW_TEST_DEPENDS GLOBAL PROPERTY GLOW_TEST_DEPENDS)
-
   # All tests except expensive tests and stress tests.
   add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} -LE EXPENSIVE\\|STRESS
                       DEPENDS ${GLOW_TEST_DEPENDS} USES_TERMINAL)
@@ -303,3 +302,7 @@ if (NESTC_WITH_EVTA)
   endif ()
   add_subdirectory(../vta ../vta)
 endif ()
+
+get_property(ZCU102_TEST_DEPENDS GLOBAL PROPERTY ZCU102_TEST_DEPENDS)
+add_custom_target(zcu102 COMMAND ${CMAKE_CTEST_COMMAND} -L ZCU102
+        DEPENDS ${ZCU102_TEST_DEPENDS} USES_TERMINAL)

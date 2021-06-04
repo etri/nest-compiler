@@ -1,15 +1,16 @@
 cmake_minimum_required(VERSION 3.5)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/glow/cmake/modules")
 
 project(NESTC C CXX)
 
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
-option(NESTC_EVTA_BUNDLE_TEST "Build with VTA bundle test" OFF)
 option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_VTA_RUN_ON_AARCH64 "Run VTA on AArch64" OFF)
 
 include(CTest)
+include(NESTCTestSupport)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CXX_STANDARD_REQUIRED ON)
@@ -47,3 +48,11 @@ include_directories(BEFORE
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)
 add_subdirectory(examples/bundles/resnet18_relay)
+
+get_property(NESTC_TEST_DEPENDS GLOBAL PROPERTY NESTC_TEST_DEPENDS)
+get_property(ZCU102_TEST_DEPENDS GLOBAL PROPERTY ZCU102_TEST_DEPENDS)
+add_custom_target(check_nestc COMMAND ${CMAKE_CTEST_COMMAND} -L NESTC
+        DEPENDS ${NESTC_TEST_DEPENDS} USES_TERMINAL)
+add_custom_target(check_zcu102 COMMAND ${CMAKE_CTEST_COMMAND} -L ZCU102
+        DEPENDS ${ZCU102_TEST_DEPENDS} USES_TERMINAL)
+message("YIKWON_TEMP0 ${NESTC_TEST_DEPENDS}")

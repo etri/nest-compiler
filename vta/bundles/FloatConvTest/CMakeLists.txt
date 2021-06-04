@@ -47,13 +47,6 @@ set_target_properties(vtaFloatConvTestBundle
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
 
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaFloatConvTestBundle POST_BUILD
-            COMMAND
-            vtaFloatConvTestBundle vtaFloatConvTestInput.bin)
-    add_custom_command(
-            TARGET vtaFloatConvTestBundle POST_BUILD
-            COMMAND
-            echo "vtaFloatConvTestBundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaFloatConvTestBundle
+        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestInput.bin
+        USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestGolden.bin)

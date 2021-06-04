@@ -16,7 +16,6 @@ add_custom_target(vtaMxnetResnet18PartitionBundleONNX
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
 )
 
-if(NESTC_EVTA_BUNDLE_TEST)
 if(NESTC_USE_VTASIM)
         add_custom_command(
                 OUTPUT
@@ -46,23 +45,6 @@ set_target_properties(vtaMxnetResnet18PartitionBundle
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
 
-    add_custom_command(
-            TARGET vtaMxnetResnet18PartitionBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png
-            ${CMAKE_CURRENT_BINARY_DIR}/cat_285.png)
+add_nestc_test(NAME vtaMxnetResnet18PartitionBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18PartitionBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+endif()
 
-    add_custom_command(
-            TARGET vtaMxnetResnet18PartitionBundle POST_BUILD
-            COMMAND
-            mkdir -p debug)
-    add_custom_command(
-            TARGET vtaMxnetResnet18PartitionBundle POST_BUILD
-            COMMAND
-            vtaMxnetResnet18PartitionBundle cat_285.png)
-    add_custom_command(
-            TARGET vtaMxnetResnet18PartitionBundle POST_BUILD
-            COMMAND
-            echo "vtaMxnetResnet18PartitionBundle Test Succeed")
-endif()
-endif()

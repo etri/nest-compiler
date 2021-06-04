@@ -13,7 +13,7 @@ add_custom_target(vtaCaffe2Resnet50BundleONNX
         ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
         ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx
         )
-if(NESTC_EVTA_BUNDLE_TEST AND NESTC_USE_VTASIM)
+if(NESTC_USE_VTASIM)
     add_custom_command(
             OUTPUT
             ${CMAKE_CURRENT_BINARY_DIR}/resnet50.cpp
@@ -63,23 +63,9 @@ set_target_properties(vtaCaffe2Resnet50Bundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaCaffe2Resnet50Bundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png
-            ${CMAKE_CURRENT_BINARY_DIR}/cat_285.png)
 
-    add_custom_command(
-            TARGET vtaCaffe2Resnet50Bundle POST_BUILD
-            COMMAND
-            mkdir -p debug)
-    add_custom_command(
-                TARGET vtaCaffe2Resnet50Bundle POST_BUILD
-                COMMAND
-            vtaCaffe2Resnet50Bundle cat_285.png)
-    add_custom_command(
-            TARGET vtaCaffe2Resnet50Bundle POST_BUILD
-            COMMAND
-            echo "vtaCaffe2Resnet50Bundle Test Succeed")
+if(NESTC_EVTA_RUN_WITH_GENERIC_BUNDLE)
+    add_nestc_test(ZCU102 NAME vtaCaffe2Resnet50Bundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaCaffe2Resnet50Bundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+else()
+    add_nestc_test(NAME vtaCaffe2Resnet50Bundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaCaffe2Resnet50Bundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
 endif()

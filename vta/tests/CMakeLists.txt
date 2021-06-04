@@ -20,7 +20,7 @@ set_target_properties( NESTVTABackendTest
         RUNTIME_OUTPUT_DIRECTORY "${NESTC_BINARY_DIR}/tests"
         )
 
-add_test(NESTVTABackendTest ${NESTC_BINARY_DIR}/tests/NESTVTABackendTest --gtest_output=xml:VTASaverTest.xml)
+add_nestc_test(NESTVTABackendTest ${NESTC_BINARY_DIR}/tests/NESTVTABackendTest --gtest_output=xml:VTASaverTest.xml)
 
 add_custom_command(
         OUTPUT

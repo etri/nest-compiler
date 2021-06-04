@@ -53,17 +53,11 @@ target_link_libraries(VTASaverTest
         TestMain)
 set_target_properties( VTASaverTest
         PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${GLOW_BINARY_DIR}/tests"
+        RUNTIME_OUTPUT_DIRECTORY "${NESTC_BINARY_DIR}/tests"
         )
 
-add_glow_test(VTASaverTest ${GLOW_BINARY_DIR}/tests/VTASaverTest --gtest_output=xml:VTASaverTest.xml)
-#add_glow_test(VTABackendSimulatorTest ${GLOW_BINARY_DIR}/tests/VTABackendSimulatorTest --gtest_output=xml:VTABackendSimulatorTest.xml)
+add_nestc_test(VTASaverTest ${NESTC_BINARY_DIR}/tests/VTASaverTest --gtest_output=xml:VTASaverTest.xml)
 
-#add_glow_test(NESTVTABackendTest ${GLOW_BINARY_DIR}/tests/NESTVTABackendTest --gtest_output=xml:VTASaverTest.xml)
-#add_glow_test(VTABackendSimulatorTest ${GLOW_BINARY_DIR}/tests/VTABackendSimulatorTest --gtest_output=xml:VTABackendSimulatorTest.xml)
-
-#add_executable(VTABackendSimulatorTest tests/VTABackendSimulatorTest.cpp)
-#target_link_libraries(VTABackendSimulatorTest gtest)
 INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/glow/tests/googletest/googletest/include)
 
 

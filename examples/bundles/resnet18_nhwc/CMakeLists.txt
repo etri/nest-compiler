@@ -5,8 +5,7 @@ set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 
 # Output directories for regular and quantized outputs
-set(NHWC_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resnet18_nhwc)
-
+set(NHWC_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(ResNet18NHWCBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${NHWC_BUNDLE_OUTPUT_DIRECTORY}
         )
@@ -65,20 +64,4 @@ endif()
 target_include_directories(ResNet18NHWCBundleMain PUBLIC ${NHWC_BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(ResNet18NHWCBundleMain ResNet18NHWCBundleNet)
 
-
-add_custom_command(
-        TARGET ResNet18NHWCBundle POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-        ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png
-        ${NHWC_BUNDLE_OUTPUT_DIRECTORY}/cat_285.png)
-add_custom_command(
-        TARGET ResNet18NHWCBundle POST_BUILD
-        COMMAND echo `pwd`
-        WORKING_DIRECTORY ${NHWC_BUNDLE_OUTPUT_DIRECTORY}
-        COMMAND
-        ResNet18NHWCBundle ${NHWC_BUNDLE_OUTPUT_DIRECTORY}/cat_285.png
-        WORKING_DIRECTORY ${NHWC_BUNDLE_OUTPUT_DIRECTORY})
-add_custom_command(
-        TARGET ResNet18NHWCBundle POST_BUILD
-        COMMAND
-        echo "ResNet18Bundle Test Succeed")
+add_nestc_test(NAME ResNet18NHWCBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ResNet18NHWCBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)

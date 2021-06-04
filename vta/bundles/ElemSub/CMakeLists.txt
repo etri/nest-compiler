@@ -7,37 +7,12 @@ set_target_properties(vtaElemSubTestBundle
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
 
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaElemSubTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaElemSubTestInput.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaElemSubTestInput.bin)
+add_custom_command(
+        TARGET vtaElemSubTestBundle POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_CURRENT_SOURCE_DIR}/vtaElemSubTestBundle.weights.bin
+        ${CMAKE_CURRENT_BINARY_DIR}/vtaElemSubTestBundle.weights.bin)
 
-    add_custom_command(
-            TARGET vtaElemSubTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaElemSubTestBundle.weights.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaElemSubTestBundle.weights.bin)
-
-    add_custom_command(
-            TARGET vtaElemSubTestBundle POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_SOURCE_DIR}/vtaElemSubTestGolden.bin
-            ${CMAKE_CURRENT_BINARY_DIR}/vtaElemSubTestGolden.bin)
-
-
-
-    add_custom_command(
-            TARGET vtaElemSubTestBundle POST_BUILD
-            COMMAND
-            vtaElemSubTestBundle vtaElemSubTestInput.bin)
-    add_custom_command(
-            TARGET vtaElemSubTestBundle POST_BUILD
-            COMMAND
-            diff output.bin vtaElemSubTestGolden.bin)
-    add_custom_command(
-            TARGET vtaElemSubTestBundle POST_BUILD
-            COMMAND
-            echo "vtaElemSubTestBundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaElemSubTestBundle
+        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaElemSubTestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_SOURCE_DIR}/vtaElemSubTestInput.bin
+        USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_SOURCE_DIR}/vtaElemSubTestGolden.bin)

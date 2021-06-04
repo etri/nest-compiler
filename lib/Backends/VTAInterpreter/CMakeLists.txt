@@ -48,7 +48,7 @@ set_target_properties( NESTVTAInterpreterBackendTest
         RUNTIME_OUTPUT_DIRECTORY "${GLOW_BINARY_DIR}/tests"
         )
 
-add_glow_test(NESTVTAInterpreterBackendTest ${GLOW_BINARY_DIR}/tests/NESTVTAInterpreterBackendTest --gtest_output=xml:NESTVTAInterpreterBackendTest.xml)
+add_nestc_test(NESTVTAInterpreterBackendTest ${GLOW_BINARY_DIR}/tests/NESTVTAInterpreterBackendTest --gtest_output=xml:NESTVTAInterpreterBackendTest.xml)
 
 option(GLOW_VTA_INTERPRETER_FUSION "VTA Interpreter Fusion Enable" ON)
 

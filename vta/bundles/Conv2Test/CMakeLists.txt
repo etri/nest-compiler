@@ -1,5 +1,5 @@
 option(NESTC_USE_PRECOMPILED_BUNDLE "Use pre-compiled bundle" OFF)
-option(NESTC_EVTA_BUNDLE_TEST "Test bundles after build executable" ON)
+
 if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
     add_custom_command(
             OUTPUT
@@ -51,19 +51,7 @@ set_target_properties( vtaConv2TestBundle
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
         )
-if(NESTC_EVTA_BUNDLE_TEST)
-    add_custom_command(
-            TARGET vtaConv2TestBundle POST_BUILD
-            COMMAND
-            vtaConv2TestBundle vtaConv2TestInput.bin)
 
-    add_custom_command(
-            TARGET vtaConv2TestBundle POST_BUILD
-            COMMAND
-            diff output.bin vtaConv2TestGolden.bin)
-
-    add_custom_command(
-            TARGET vtaConv2TestBundle POST_BUILD
-            COMMAND
-            echo "vtaConv2TestBundle Test Succeed")
-endif()
+add_nestc_test(ZCU102 NAME vtaConv2TestBundle
+        COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestInput.bin
+        USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestGolden.bin)
