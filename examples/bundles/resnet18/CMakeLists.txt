@@ -8,8 +8,9 @@ set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 
 # Output directories for regular and quantized outputs
-set(BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resnet18)
-#set(QUANTIZED_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/quantized_resnet18)
+#set(BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resnet18)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/bundles)
+set(BUNDLE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_custom_target(ResNet18BundleDir ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_OUTPUT_DIRECTORY}
@@ -51,7 +52,8 @@ add_custom_command(
   COMMAND
     model-compiler -g -model=${CMAKE_CURRENT_BINARY_DIR}/resnet18v2.onnx
     -model-input=${MODEL_INPUT_NAME},float,[1,3,224,224]
-    -backend=CPU -emit-bundle=${BUNDLE_OUTPUT_DIRECTORY}
+    -backend=CPU
+    -emit-bundle=${BUNDLE_OUTPUT_DIRECTORY}
     -bundle-api=dynamic
   DEPENDS
     model-compiler ResNet18BundleDir ResNet18BundleONNX
@@ -71,3 +73,4 @@ endif()
 target_include_directories(ResNet18BundleMain PUBLIC ${BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(ResNet18BundleMain ResNet18BundleNet)
 
+add_nestc_test(NAME ResNet18Bundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ResNet18Bundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)

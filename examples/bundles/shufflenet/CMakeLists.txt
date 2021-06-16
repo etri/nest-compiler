@@ -5,7 +5,9 @@ set(MODEL_INPUT_NAME "gpu_0/data_0")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 
 # Output directories for regular and quantized outputs
-set(BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shufflenet)
+#set(BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shufflenet)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/bundles)
+set(BUNDLE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_custom_target(ShufflenetBundleDir ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${BUNDLE_OUTPUT_DIRECTORY}
@@ -62,3 +64,5 @@ target_compile_options(ShufflenetBundleMain PRIVATE -std=c++11 -g -I/usr/local/i
 endif()
 target_include_directories(ShufflenetBundleMain PUBLIC ${BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(ShufflenetBundleMain ShufflenetBundleNet)
+
+add_nestc_test(NAME ShufflenetBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ShufflenetBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)

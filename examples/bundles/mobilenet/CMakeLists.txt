@@ -3,7 +3,9 @@ set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 
 # Output directories for regular and quantized outputs
-set(MOBILENET_BUNDLE_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/examples/bundles/mobilenet)
+#set(MOBILENET_BUNDLE_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/examples/bundles/mobilenet)
+set(MOBILENET_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
 
 add_custom_target(MobileNetBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MOBILENET_BUNDLE_OUTPUT_DIRECTORY}
@@ -87,3 +89,4 @@ endif()
 target_include_directories(MobileNetBundleMain PUBLIC ${MOBILENET_BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(MobileNetBundleMain MobileNetBundleNet)
 
+add_nestc_test(NAME MobileNetBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/MobileNetBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)

@@ -1,11 +1,12 @@
 option(NEST_BUILD_ON_MAC "Set configurations for building in MAC environment." OFF)
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${GLOW_BINARY_DIR}/bundles)
-set(RESNET18_VTA_PARTITION_BUNDLE_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/examples/bundles/resnet18_vta_cpu_partition)
 set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 
 # Output directories for regular and quantized outputs
 #set(RESNET18_VTA_PARTITION_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resnet18_vta_cpu_partition)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/bundles)
+set(RESNET18_VTA_PARTITION_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_custom_target(ResNet18VTAPartitionBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${RESNET18_VTA_PARTITION_BUNDLE_OUTPUT_DIRECTORY}
@@ -162,3 +163,4 @@ endif()
 target_include_directories(ResNet18VTAPartitionBundleMain PUBLIC ${RESNET18_VTA_PARTITION_BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(ResNet18VTAPartitionBundleMain ResNet18VTAPartitionBundleNet)
 
+add_nestc_test(NAME ResNet18VTAPartitionBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ResNet18VTAPartitionBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)

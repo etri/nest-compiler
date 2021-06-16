@@ -1,11 +1,11 @@
 option(NEST_BUILD_ON_MAC "Set configurations for building in MAC environment." OFF)
-set(PARTITION_BUNDLE_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/examples/bundles/resnet18_partition)
 set(MODEL_INPUT_NAME "data")
 set(IMAGES ${GLOW_SOURCE_DIR}/tests/images/imagenet)
 
 # Output directories for regular and quantized outputs
 #set(PARTITION_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/resnet18_partition)
-
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${NESTC_BINARY_DIR}/bundles)
+set(PARTITION_BUNDLE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_custom_target(ResNet18PartitionBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${PARTITION_BUNDLE_OUTPUT_DIRECTORY}
         )
@@ -144,3 +144,4 @@ endif()
 target_include_directories(ResNet18PartitionBundleMain PUBLIC ${PARTITION_BUNDLE_OUTPUT_DIRECTORY})
 add_dependencies(ResNet18PartitionBundleMain ResNet18PartitionBundleNet)
 
+add_nestc_test(NAME ResNet18PartitionBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ResNet18PartitionBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
