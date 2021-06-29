@@ -76,7 +76,7 @@ TEST(inferVTALayoutConvReluNet, vta_layout_conv_test) {
   TensorSerializationOptions opts;
   opts.withType = true;
   // dumpTensorToTextFile(out1, "./CPU.txt", opts);
-  //dumpTensorToTextFile(out2, "./VTAInterpreter.txt", opts);
+  dumpTensorToTextFile(out2, "./VTAconv.txt", opts);
 
   //llvm::outs()<<out1.getHandle().raw(0)<<"\n";
   //llvm::outs()<<(double)out2.getHandle<int8_t>().raw(0)<<"\n";
@@ -85,24 +85,39 @@ TEST(inferVTALayoutConvReluNet, vta_layout_conv_test) {
 }
 
 
-TEST(inferVTALayoutConvReluNet, VTAResnetTest1) {
+TEST(inferVTALayoutConvReluNet, VTAResnetTest1){
   PseudoRNG PRNG;
-  Tensor inputs(ElemKind::Int8QTy, {1, 64, 56, 56}, 1, 0);
-  Tensor kernel(ElemKind::Int8QTy, {64, 64,3, 3}, 1, 0);
+  Tensor inputs(ElemKind::Int8QTy, {1, 56, 56, 64}, 1, 0);
+  Tensor kernel(ElemKind::Int8QTy, {64, 3, 3, 64}, 1, 0);
   Tensor bias(ElemKind::Int32QTy, {64}, 1, 0);
   inputs.getHandle<int8_t>().randomize(0, 60, PRNG);
   kernel.getHandle<int8_t>().randomize(-10, 10, PRNG);
-  //inputs.toBin("input");
-  //kernel.toBin("kernel");
+  inputs.toBin("./input_origin.bin");
+  kernel.toBin("./kernel_origin.bin");
   //bias.getHandle<int32_t>().randomize(0, 1, PRNG);
-  bias.zero();
+  bias.getHandle<int32_t>().randomize(0, 32768, PRNG);
+  //bias.getHandle<int32_t>().randomize(0, 0, PRNG);
+  //bias.zero();
+  bias.toBin("./bias_origin.bin");
+
   std::array<dim_t, 4> S{{1, 56, 56, 64}};
   llvm::ArrayRef<dim_t> shape(S);
-  Tensor out1(ElemKind::Int8QTy, shape, 256, 0);
-  Tensor out2(ElemKind::Int8QTy, shape, 256, 0);
+  Tensor out1(ElemKind::Int8QTy, shape, 64, 0);
+  Tensor out2(ElemKind::Int8QTy, shape, 64, 0);
 
-  //inferVTAConvNet2(&inputs, &kernel, &bias, &out1, "VTA");
-  //inferVTAConvNettemp(&inputs, &kernel, &bias, &out2, "Interpreter");
+  inferVTAConvNet3(&inputs, &kernel, &bias, &out1, "VTA");
+  out1.toBin("golden_vta");
+  //inferVTAConvNettemp2(&inputs, &kernel, &bias, &out2, "VTAInterpreter"); // original code
+  //out2.toBin("golden_vtainterpreter");
+  inferVTAConvNet4(&inputs, &kernel, &bias, &out2, "VTAInterpreter");
+  //inferVTAConvNet4(&inputs, &kernel, &bias, &out2, "VTAInterpreter");
+  out2.toBin("golden_vtainterpreter");
+  //inferVTAConvNettemp2(&inputs, &kernel, &bias, &out1, "VTA");
+  //inferVTAConvNettemp2(&inputs, &kernel, &bias, &out2, "VTAInterpreter"); // original code
+  TensorSerializationOptions opts;
+  opts.withType = true;
+  //dumpTensorToTextFile(out1, "./vtaconvtest.txt", opts);
+  //dumpTensorToTextFile(out2, "./VTAInterpreter4vtaconvtest.txt", opts);
   //out1.toBin("golden");
-  //EXPECT_TRUE(out1.isEqual(out2, 1.0));
+  EXPECT_TRUE(out1.isEqual(out2));
 }

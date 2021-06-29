@@ -1,0 +1,4 @@
+
+void VTAInterpreterConvolutionInst::verify() const {
+
+}

@@ -1,3 +1,5 @@
+add_subdirectory(ClassGen)
+
 add_library(VTAInterpreter
         VTAInterpreter.cpp
         VTAInterpreterFunction.cpp

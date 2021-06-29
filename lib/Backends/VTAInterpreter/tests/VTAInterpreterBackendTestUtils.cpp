@@ -31,6 +31,7 @@
 
 #include <future>
 #include "VTA.h"
+#include "VTAInterpreter.h"
 
 namespace glow {
 
@@ -673,6 +674,7 @@ void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor 
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
   EE.compile(CompilationMode::Infer);
+  F->dumpDAG("vtaconv.dot");
 
   updateInputPlaceholders(bindings, {inputP, filterP, biasP},
                           {inputs, filter, bias});
@@ -753,7 +755,7 @@ void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t 
   out->assign(resultTensor);
 }
 
-void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+void inferVTAConvNettemp2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                      llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
@@ -788,22 +790,23 @@ void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *o
     OT = F->getParent()->uniqueType(out->getElementType(), out->dims());
   }
   auto *conv = F->createConv("conv", inputP, filterP, biasP, OT, 3, 1, 1, 1);
-  auto *relu = F->createRELU("relu", conv);
-  auto *result = F->createSave("ret", relu, outP);
+ // auto *relu = F->createRELU("relu", conv);
+  //auto *result = F->createSave("ret", relu, outP);
+  auto *result = F->createSave("ret", conv, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
   CompilationContext cctx;
   glow::optimize(F, cctx);
-  F->dumpDAG("bbb.dot");
+  F->dumpDAG("vtainter_before.dot");
   EE.compile(CompilationMode::Infer);
-
+  F->dumpDAG("vtainter_after.dot");
   updateInputPlaceholders(bindings, {inputP, filterP, biasP},
-                          {inputs, filter, bias});
+                            {inputs, filter, bias});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
-void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+void inferVTAConvNet3(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                      llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
@@ -820,10 +823,10 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
     auto &filterType = filter->getType();
     auto &biasType = bias->getType();
     inputP = createQuantizedPlaceholder(
-        mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP", "NCHW");
+        mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP", "NHWC");
     filterP =
         createQuantizedPlaceholder(mod, bindings, filter, filterType.getScale(),
-                                   filterType.getOffset(), "filterP", "NCHW");
+                                   filterType.getOffset(), "filterP", "NHWC");
     biasP = createQuantizedPlaceholder(mod, bindings, bias, biasType.getScale(),
                                        biasType.getOffset(), "biasP");
     outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
@@ -835,18 +838,27 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
 #define BLOCK_IN 16
   auto inputDim = inputP->dims();
   assert(inputDim.size()==4);
-  std::array<dim_t, 6> reshapeInputS{{inputDim[0], 1, (dim_t)ceil(inputDim[1]/(double)BLOCK_IN), BLOCK_IN, inputDim[2], inputDim[3]}};
+  std::array<dim_t, 6> reshapeInputS{{inputDim[0], 1,  inputDim[1], inputDim[2], (dim_t)ceil(inputDim[3]/(double)BLOCK_IN), BLOCK_IN}};
   llvm::ArrayRef<dim_t> reshapeInputDim(reshapeInputS);
-  std::array<unsigned_t, 6> transposeInputS{{0,2,4,5,1,3}};
+  //std::array<unsigned_t, 6> transposeInputS{{0,2,4,5,1,3}};
+  std::array<unsigned_t, 6> transposeInputS{{0,4,2,3,1,5}};
+
   llvm::ArrayRef<unsigned_t> transposeInputDim(transposeInputS);
   auto filterDim = filterP->dims();
 
   assert(filterDim.size()==4);
-  std::array<dim_t, 6> reshapeFilterS{{(dim_t)ceil(filterDim[0]/(double)BLOCK_OUT), BLOCK_OUT, (dim_t)ceil(filterDim[1]/(double)BLOCK_IN), BLOCK_IN, filterDim[2], filterDim[3]}};
+  // NCHW
+  //std::array<dim_t, 6> reshapeFilterS{{(dim_t)ceil(filterDim[0]/(double)BLOCK_OUT), BLOCK_OUT, (dim_t)ceil(filterDim[1]/(double)BLOCK_IN), BLOCK_IN, filterDim[2], filterDim[3]}};
+  // NHWC
+  std::array<dim_t, 6> reshapeFilterS{{(dim_t)ceil(filterDim[0]/(double)BLOCK_OUT),BLOCK_OUT,filterDim[1],filterDim[2],(dim_t)ceil(filterDim[3]/(double)BLOCK_IN), BLOCK_IN}};
   llvm::ArrayRef<dim_t> reshapeFilterDim(reshapeFilterS);
-  std::array<unsigned_t, 6> transposeFilterS{{0,2,4,5,1,3}};
+  //std::array<unsigned_t, 6> transposeFilterS{{0,2,4,5,1,3}};
+  //Nm, Cm, H, W, Ns, Cs
+  std::array<unsigned_t, 6> transposeFilterS{{0,4,2,3,1,5}};
   llvm::ArrayRef<unsigned_t> transposeFilterDim(transposeFilterS);
 
+  std::array<unsigned_t, 6> transposeOutputS{{0,4,2,3,1,5}};
+  llvm::ArrayRef<unsigned_t> transposeOutputDim(transposeOutputS);
 
   auto biasDim = biasP->dims();
 
@@ -861,32 +873,128 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
 
   TypeRef newOT = F->getParent()->uniqueType(out->getElementType(), newOutputDim, out->getType().getScale(), out->getType().getOffset());
 
-  auto *reshapeInput = F->createReshape("reshapeInput", inputP, reshapeInputDim, "N1(C//16)16HW");
-  auto *transposeInput = F->createTranspose("transposeInput", reshapeInput, transposeInputDim, "N(C//16)HW1(16)" );
-  auto *reshapeFilter = F->createReshape("reshapeFilter", filterP, reshapeFilterDim, "(N//16)(16)(C//16)(16)HW");
-  auto *transposeFilter = F->createTranspose("transposeFilter", reshapeFilter, transposeFilterDim, "(N//16)(C//16)HW(16)(16)" );
+  auto *reshapeInput = F->createReshape("reshapeInput", inputP, reshapeInputDim);
+  auto *transposeInput = F->createTranspose("transposeInput", reshapeInput, transposeInputDim);
+  auto *reshapeFilter = F->createReshape("reshapeFilter", filterP, reshapeFilterDim);
+  auto *transposeFilter = F->createTranspose("transposeFilter", reshapeFilter, transposeFilterDim);
 
-  auto *reshapeBias = F->createReshape("reshapeBias", biasP, newBiasDim, "VTA_BIAS_LAYOUT");
-  auto *conv = F->createConv("conv", transposeInput, transposeFilter, reshapeBias, newOT, 3, 1, 1, 1, VTA_LAYOUT);
+  auto *reshapeBias = F->createReshape("reshapeBias", biasP, newBiasDim);
+  //auto *conv = F->createConv("conv", transposeInput, transposeFilter, reshapeBias, newOT, 3, 1, 1, 1, VTA_LAYOUT);
+  auto *conv = F->createVTAConv("conv", transposeInput, transposeFilter, reshapeBias, newOT, 3, 1, 1, 1);
   auto *relu = F->createRELU("relu", conv);
-  auto *reshapeOutput = F->createReshape("reshapeOutput", relu, out->dims());
+
+  auto *transposeOutput = F->createTranspose("transposeOutput",relu, transposeOutputDim);
+  auto *reshapeOutput = F->createReshape("reshapeOutput", transposeOutput, out->dims());
   auto *result = F->createSave("ret", reshapeOutput, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
+
   auto B = VTA();
   CompilationContext cctx;
-  F->dumpDAG("aaa.dot");
   glow::fold(F, cctx, &B);
-  F->dumpDAG("aaa2.dot");
-
 
   EE.compile(CompilationMode::Infer);
-
+  F->dumpDAG("vta.dot");
   updateInputPlaceholders(bindings, {inputP, filterP, biasP},
                           {inputs, filter, bias});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
+void inferVTAConvNet4(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+                      llvm::StringRef kind) {
+    PlaceholderBindings bindings;
+    ExecutionEngine EE(kind);
+    auto &mod = EE.getModule();
+    Function *F = mod.createFunction("main");
+    Placeholder *inputP;
+    Placeholder *filterP;
+    Placeholder *biasP;
+    Placeholder *outP;
+    TypeRef OT;
+
+    auto &outType = out->getType();
+    auto &inType = inputs->getType();
+    auto &filterType = filter->getType();
+    auto &biasType = bias->getType();
+    inputP = createQuantizedPlaceholder(
+            mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP", "NHWC");
+    filterP =
+            createQuantizedPlaceholder(mod, bindings, filter, filterType.getScale(),
+                                       filterType.getOffset(), "filterP", "NHWC");
+    biasP = createQuantizedPlaceholder(mod, bindings, bias, biasType.getScale(),
+                                       biasType.getOffset(), "biasP");
+    outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
+                                      outType.getOffset(), "outP");
+    OT = F->getParent()->uniqueType(out->getElementType(), out->dims(),
+                                    outType.getScale(), outType.getOffset());
+
+#define BLOCK_OUT 16
+#define BLOCK_IN 16
+    auto inputDim = inputP->dims();
+    assert(inputDim.size()==4);
+    std::array<dim_t, 6> reshapeInputS{{inputDim[0], 1,  inputDim[1], inputDim[2], (dim_t)ceil(inputDim[3]/(double)BLOCK_IN), BLOCK_IN}};
+    llvm::ArrayRef<dim_t> reshapeInputDim(reshapeInputS);
+    //std::array<unsigned_t, 6> transposeInputS{{0,2,4,5,1,3}};
+    std::array<unsigned_t, 6> transposeInputS{{0,4,2,3,1,5}};
+
+    llvm::ArrayRef<unsigned_t> transposeInputDim(transposeInputS);
+    auto filterDim = filterP->dims();
+
+    assert(filterDim.size()==4);
+    // NCHW
+    //std::array<dim_t, 6> reshapeFilterS{{(dim_t)ceil(filterDim[0]/(double)BLOCK_OUT), BLOCK_OUT, (dim_t)ceil(filterDim[1]/(double)BLOCK_IN), BLOCK_IN, filterDim[2], filterDim[3]}};
+    // NHWC
+    std::array<dim_t, 6> reshapeFilterS{{(dim_t)ceil(filterDim[0]/(double)BLOCK_OUT),BLOCK_OUT,filterDim[1],filterDim[2],(dim_t)ceil(filterDim[3]/(double)BLOCK_IN), BLOCK_IN}};
+    llvm::ArrayRef<dim_t> reshapeFilterDim(reshapeFilterS);
+    //std::array<unsigned_t, 6> transposeFilterS{{0,2,4,5,1,3}};
+    //Nm, Cm, H, W, Ns, Cs
+    std::array<unsigned_t, 6> transposeFilterS{{0,4,2,3,1,5}};
+    llvm::ArrayRef<unsigned_t> transposeFilterDim(transposeFilterS);
+
+    std::array<unsigned_t, 6> transposeOutputS{{0,4,2,3,1,5}};
+    llvm::ArrayRef<unsigned_t> transposeOutputDim(transposeOutputS);
+
+    auto biasDim = biasP->dims();
+
+    assert(biasDim.size()==1);
+    std::array<dim_t, 2> biasS{{(dim_t)ceil(biasDim[0]/(double)BLOCK_OUT), BLOCK_OUT}};
+    llvm::ArrayRef<dim_t> newBiasDim(biasS);
+
+
+    auto outDim = out->dims();
+    std::array<dim_t, 6> outputS{{outDim[0], (dim_t)ceil(outDim[3]/(double)BLOCK_IN), outDim[1], outDim[2], 1, BLOCK_IN}};
+    llvm::ArrayRef<dim_t> newOutputDim(outputS);
+
+    TypeRef newOT = F->getParent()->uniqueType(out->getElementType(), newOutputDim, out->getType().getScale(), out->getType().getOffset());
+
+    auto *reshapeInput = F->createReshape("reshapeInput", inputP, reshapeInputDim);
+    auto *transposeInput = F->createTranspose("transposeInput", reshapeInput, transposeInputDim);
+    auto *reshapeFilter = F->createReshape("reshapeFilter", filterP, reshapeFilterDim);
+    auto *transposeFilter = F->createTranspose("transposeFilter", reshapeFilter, transposeFilterDim);
+
+    auto *reshapeBias = F->createReshape("reshapeBias", biasP, newBiasDim);
+    //auto *conv = F->createConv("conv", transposeInput, transposeFilter, reshapeBias, newOT, 3, 1, 1, 1, VTA_LAYOUT);
+    auto *conv = F->createVTAInterpreterConv("conv", transposeInput, transposeFilter, reshapeBias, newOT, 3, 1, 1, 1);
+
+    auto *relu = F->createRELU("relu", conv);
+
+    auto *transposeOutput = F->createTranspose("transposeOutput",relu, transposeOutputDim);
+    auto *reshapeOutput = F->createReshape("reshapeOutput", transposeOutput, out->dims());
+    auto *result = F->createSave("ret", reshapeOutput, outP);
+    auto *resultTensor = bindings.get(result->getPlaceholder());
+
+    auto B = VTAInterpreter();
+    CompilationContext cctx;
+    glow::fold(F, cctx, &B);
+
+    EE.compile(CompilationMode::Infer);
+    F->dumpDAG("vtainter.dot");
+
+    updateInputPlaceholders(bindings, {inputP, filterP, biasP},
+                            {inputs, filter, bias});
+    EE.run(bindings);
+    out->assign(resultTensor);
+}
 
 
 

@@ -133,6 +133,7 @@ private:
 #define DEF_INSTR(CLASS, NAME) void fwd##CLASS(const CLASS *I);
 #define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
 #include "glow/AutoGenInstr.def"
+  void fwdVTAInterpreterConvolutionInst(const glow::Instruction *I);
 
   template <typename ElemTy, typename AccumulatorTy,
             typename BiasElemTy = int32_t>
@@ -258,7 +259,12 @@ private:
 
   void fwdVTAReluInstQuantizedImpl(Value *inV, Value *outV, float shift);
 
-  template <typename ElemTy> void fwdSigmoidInstFloatImpl(const SigmoidInst *I);
+  int cpuvtaconvolution(int8_t* input, float inputScale, int32_t inputOffset, int8_t *kernel, float kernelScale, int32_t kernelOffset,
+                        int32_t *bias, float biasScale, int32_t biasOffset, int8_t *output, float outputScale, int32_t outputOffset, dim_t N, dim_t H, dim_t W, dim_t C, dim_t KN, dim_t KH, dim_t KW, int pad_size,
+                      int stride_size, size_t group, size_t dilation, bool doRelu, bool doBias, int out_h, int out_w);
+
+
+        template <typename ElemTy> void fwdSigmoidInstFloatImpl(const SigmoidInst *I);
 
   template <typename ElemTy> void fwdTanhInstFloatImpl(const TanhInst *I);
 

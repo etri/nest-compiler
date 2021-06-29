@@ -357,9 +357,11 @@ void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor 
                      llvm::StringRef kind);
 void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind);
-void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+void inferVTAConvNettemp2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                          llvm::StringRef kind);
-void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+void inferVTAConvNet3(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+                      llvm::StringRef kind);
+void inferVTAConvNet4(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                       llvm::StringRef kind);
 void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *filter2, Tensor *bias2, Tensor *out, Tensor *out2,
                           llvm::StringRef kind);

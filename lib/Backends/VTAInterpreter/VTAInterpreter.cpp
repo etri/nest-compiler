@@ -82,6 +82,8 @@ std::unique_ptr<CompiledFunction> VTAInterpreter::compileIRWithoutConstants(
 
 bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
   switch (NI.getKind()) {
+  case Kinded::Kind::VTAInterpreterConvolutionNodeKind:
+      return true;
   case Kinded::Kind::BatchedReduceMinNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
@@ -764,6 +766,11 @@ bool VTAInterpreter::verify(const IRFunction &IR) const {
         !checkNoFusionForInstr(I)) {
       return false;
     }
+
+    if (I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind){
+        continue;
+    }
+
     if (!checkLayoutForInstr(I)) {
       return false;
     }

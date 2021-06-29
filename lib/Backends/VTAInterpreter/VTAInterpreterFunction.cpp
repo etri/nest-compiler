@@ -252,6 +252,11 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
     break;                                                                     \
   }
 #define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
+#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)                                \
+  case Kinded::Kind::CLASS##Kind: {                                            \
+    fwd##CLASS(llvm::cast<CLASS>(&I));                                         \
+    break;                                                                     \
+  }
 
 
 #ifndef DEF_INSTR
@@ -285,6 +290,7 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
       DEF_INSTR(ElementSubInst, elementsub)
       DEF_INSTR(ElementDivInst, elementdiv)
       DEF_INSTR(ReluInst, relu)
+      DEF_BACKEND_SPECIFIC_INSTR(VTAInterpreterConvolutionInst, vtainterpreterconvolution)
 #undef DEF_INSTR_RANGE
 #undef DEF_INSTR
 #undef DEF_BACKEND_SPECIFIC_INSTR

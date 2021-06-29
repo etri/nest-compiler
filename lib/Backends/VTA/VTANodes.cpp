@@ -733,10 +733,10 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
     }
   }
 
-  int32_t* bias = (int32_t *)malloc(odim.cs*odim.ns*sizeof(int32_t));
-  for (unsigned long i = 0 ; i < odim.cs*odim.ns ; i++)
+  int32_t* bias = (int32_t *)malloc(odim.cm * odim.cs*sizeof(int32_t));
+  for (unsigned long i = 0 ; i < odim.cm * odim.cs ; i++)
   {
-    bias[i] = biasW.at({i});
+    bias[i] = biasW.raw(i);
     if(bias[i]!=0){
       doBias = true;
     }
