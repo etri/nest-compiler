@@ -410,10 +410,6 @@ void BoundVTAInterpreterFunction::fwdVTAInterpreterConvolutionInst(const glow::I
     size_t group = CI->getGroup();
     size_t dilation = 0;
 
-//    if (CI->getFusedActivation() == FusedActivation::RELU) {
-//        fuseRelu = 1;
-//    }
-    bool fuseRelu = false;
     assert(CI->getSrc()->getType()->isQuantizedType());
 
     auto inW = getWeightHandle<int8_t>(CI->getSrc());
@@ -469,7 +465,9 @@ void BoundVTAInterpreterFunction::fwdVTAInterpreterConvolutionInst(const glow::I
     uint32_t stride_size = strides[0];
 
     bool doRelu = false;
-
+    if (CI->getFusedActivation() == FusedActivation::RELU) {
+        doRelu = true;
+    }
     bool doBias = false;
 
     filterScale = 1/filterScale;

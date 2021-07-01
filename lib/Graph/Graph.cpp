@@ -925,7 +925,7 @@ VTAConvolutionNode *Function::createVTAConv(
   }
 
   return addNode(new VTAConvolutionNode(name, OT, input, filter, bias, kernels,
-                                        strides, pads, group, false));
+                                        strides, pads, group, FusedActivation::NONE));
 
 
 }
@@ -971,7 +971,7 @@ VTAInterpreterConvolutionNode *Function::createVTAInterpreterConv(
     }
 
     return addNode(new VTAInterpreterConvolutionNode(name, OT, input, filter, bias, kernels,
-                                          strides, pads, group, false));
+                                          strides, pads, group, FusedActivation::NONE));
 
 
 }

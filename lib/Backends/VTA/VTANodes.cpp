@@ -655,6 +655,9 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   uint32_t stride_size = strides[0];
 
   bool doRelu = false;
+  if (CI->getFusedActivation() == FusedActivation::RELU) {
+      doRelu = true;
+  }
 
   bool doBias = false;
 

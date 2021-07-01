@@ -24,6 +24,19 @@ if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h)
     message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h")
     execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h)
 endif()
+
+if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/ClassGen/NodeBuilder.h)
+    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/tools/ClassGen/NodeBuilder.h")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/ClassGen/NodeBuilder.h)
+
+endif()
+
+if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h)
+    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h)
+
+endif()
+
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory ${NESTC_ROOT_DIR}/cmake ${NESTC_ROOT_DIR})
 
 if (NESTC_WITH_EVTA)
@@ -42,8 +55,8 @@ endif()
 include_directories(BEFORE
         ${NESTC_ROOT_DIR}/include
         ${NESTC_ROOT_DIR}/include/tools/loader
+        ${NESTC_ROOT_DIR}/tools/ClassGen/
 )
-
 
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)

@@ -1,6 +1,6 @@
 add_executable(NodeGen
                  NodeGen.cpp
-                 NodeBuilder.cpp)
+                ${NESTC_ROOT_DIR}/tools/ClassGen/NodeBuilder.cpp)
 
 add_executable(InstrGen
                  InstrGen.cpp

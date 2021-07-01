@@ -720,24 +720,27 @@ static bool checkLayoutForNode(const Node &N) {
 }
 
 bool VTAInterpreter::verify(const Function &F, bool verbose) const {
-  if (!F.verify(this)) {
-    return false;
-  }
-  if (!checkAllNodesSupported(F, verbose)) {
-    return false;
-  }
-  for (const Node &N : F.getNodes()) {
-    if (!checkLayoutForNode(N)) {
-      return false;
+    if (!F.verify(this)) {
+        return false;
     }
-    if (!(N.getKind() == Kinded::Kind::ConvolutionNodeKind &&
-          llvm::cast<ConvolutionNode>(&N)->getFusedActivation() ==
+    if (!checkAllNodesSupported(F, verbose)) {
+        return false;
+    }
+    for (const Node &N : F.getNodes()) {
+        if (!checkLayoutForNode(N)) {
+            return false;
+        }
+        if (!(N.getKind() == Kinded::Kind::ConvolutionNodeKind &&
+              llvm::cast<ConvolutionNode>(&N)->getFusedActivation() ==
               FusedActivation::RELU) &&
-        !checkNoFusionForNode(N)) {
-      return false;
+            !(N.getKind() == Kinded::Kind::VTAInterpreterConvolutionNodeKind &&
+              llvm::cast<VTAInterpreterConvolutionNode>(&N)->getFusedActivation() ==
+              FusedActivation::RELU) &&
+            !checkNoFusionForNode(N)) {
+            return false;
+        }
     }
-  }
-  return true;
+    return true;
 }
 
 static bool checkLayoutForInstr(const Instruction &I) {
@@ -758,24 +761,27 @@ static bool checkLayoutForInstr(const Instruction &I) {
 }
 
 bool VTAInterpreter::verify(const IRFunction &IR) const {
-  for (const auto &I : IR.getInstrs()) {
-    // Only support convolution+relu fusions for now.
-    if (!(I.getKind() == Kinded::Kind::ConvolutionInstKind &&
-          llvm::cast<ConvolutionInst>(&I)->getFusedActivation() ==
+    for (const auto &I : IR.getInstrs()) {
+        // Only support convolution+relu fusions for now.
+        if (!(I.getKind() == Kinded::Kind::ConvolutionInstKind &&
+              llvm::cast<ConvolutionInst>(&I)->getFusedActivation() ==
               FusedActivation::RELU) &&
-        !checkNoFusionForInstr(I)) {
-      return false;
-    }
+            !(I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind &&
+              llvm::cast<VTAInterpreterConvolutionInst>(&I)->getFusedActivation() ==
+              FusedActivation::RELU) &&
+            !checkNoFusionForInstr(I)) {
+            return false;
+        }
 
-    if (I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind){
-        continue;
-    }
+        if (I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind) {
+            continue;
+        }
 
-    if (!checkLayoutForInstr(I)) {
-      return false;
+        if (!checkLayoutForInstr(I)) {
+            return false;
+        }
     }
-  }
-  return true;
+    return true;
 }
 
 bool VTAInterpreter::shouldLower(const Node *N) const {

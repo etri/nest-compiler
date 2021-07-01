@@ -363,6 +363,10 @@ void inferVTAConvNet3(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                       llvm::StringRef kind);
 void inferVTAConvNet4(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                       llvm::StringRef kind);
+void inferVTAConvReluFusionNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+                      llvm::StringRef kind);
+void inferVTAConvReluFusionNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+                               llvm::StringRef kind);
 void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *filter2, Tensor *bias2, Tensor *out, Tensor *out2,
                           llvm::StringRef kind);
 void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,

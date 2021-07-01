@@ -8,6 +8,7 @@ BB.newBackendSpecificInstr("VTAInterpreterConvolution")
     .addMember(MemberType::VectorUnsigned, "Strides")
     .addMember(MemberType::VectorUnsigned, "Pads")
     .addMember(MemberType::Unsigned, "Group")
+    .addMember(MEMBER_TYPE_INFO(FusedActivation), "FusedActivation")
     .autoIRGen();
 
 BB.includeBackendSpecificVerification("glow/VTAInterpreterSpecificInstrsVerification.h");

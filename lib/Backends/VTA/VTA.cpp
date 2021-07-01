@@ -678,6 +678,9 @@ bool VTA::verify(const Function &F, bool verbose) const {
         if (!(N.getKind() == Kinded::Kind::ConvolutionNodeKind &&
               llvm::cast<ConvolutionNode>(&N)->getFusedActivation() ==
               FusedActivation::RELU) &&
+              !(N.getKind() == Kinded::Kind::VTAConvolutionNodeKind &&
+              llvm::cast<VTAConvolutionNode>(&N)->getFusedActivation() ==
+              FusedActivation::RELU) &&
             !checkNoFusionForNode(N)) {
           return false;
         }
@@ -707,6 +710,9 @@ bool VTA::verify(const IRFunction &IR) const {
         // Only support convolution+relu fusions for now.
         if (!(I.getKind() == Kinded::Kind::ConvolutionInstKind &&
               llvm::cast<ConvolutionInst>(&I)->getFusedActivation() ==
+              FusedActivation::RELU) &&
+            !(I.getKind() == Kinded::Kind::VTAConvolutionInstKind &&
+              llvm::cast<VTAConvolutionInst>(&I)->getFusedActivation() ==
               FusedActivation::RELU) &&
             !checkNoFusionForInstr(I)) {
           return false;

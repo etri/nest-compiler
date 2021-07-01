@@ -121,3 +121,29 @@ TEST(inferVTALayoutConvReluNet, VTAResnetTest1){
   //out1.toBin("golden");
   EXPECT_TRUE(out1.isEqual(out2));
 }
+
+TEST(inferVTALayoutConvReluNet, VTAConvReluFusionTest){
+    PseudoRNG PRNG;
+    Tensor inputs(ElemKind::Int8QTy, {1, 56, 56, 64}, 1, 0);
+    Tensor kernel(ElemKind::Int8QTy, {64, 3, 3, 64}, 1, 0);
+    Tensor bias(ElemKind::Int32QTy, {64}, 1, 0);
+    inputs.getHandle<int8_t>().randomize(0, 60, PRNG);
+    kernel.getHandle<int8_t>().randomize(-10, 10, PRNG);
+    inputs.toBin("./input_origin.bin");
+    kernel.toBin("./kernel_origin.bin");
+    bias.getHandle<int32_t>().randomize(0, 32768, PRNG);
+    bias.toBin("./bias_origin.bin");
+
+    std::array<dim_t, 4> S{{1, 56, 56, 64}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 64, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 64, 0);
+
+    inferVTAConvReluFusionNet(&inputs, &kernel, &bias, &out1, "VTA");
+    out1.toBin("golden_vta");
+    inferVTAConvReluFusionNet2(&inputs, &kernel, &bias, &out2, "VTAInterpreter");
+    out2.toBin("golden_vtainterpreter");
+    TensorSerializationOptions opts;
+    opts.withType = true;
+    EXPECT_TRUE(out1.isEqual(out2));
+}

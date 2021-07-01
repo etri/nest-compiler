@@ -7,8 +7,8 @@ BB.newNode("VTAInterpreterConvolution")
 .addMember(MemberType::VectorUnsigned, "Strides")
 .addMember(MemberType::VectorUnsigned, "Pads")
 .addMember(MemberType::Unsigned, "Group")
-.addMember(MemberType::Boolean, "DoRelu")
 .addResultFromCtorArg()
+.addFusedActivationVTAInter()
 .setDocstring("This is a VTA-specific convolution node that is "
 "identical to the normal ConvolutionNode. That node "
 "and convolution + relu are replaced with this one "
