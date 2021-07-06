@@ -45,7 +45,7 @@ add_custom_target(vtaResnetv10S1C0TestBundleNET DEPENDS ${CMAKE_CURRENT_BINARY_D
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(vtaResnetv10S1C0TestBundle vtaResnetv10S1C0TestBundleMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestBundle.cpp)
-
+add_dependencies(vtaResnetv10S1C0TestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaResnetv10S1C0TestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties( vtaResnetv10S1C0TestBundle
         PROPERTIES

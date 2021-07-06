@@ -1,4 +1,5 @@
 add_executable(vtaSoftMaxTestBundle vtaSoftMaxTestBundleMain.cpp vtaSoftMaxTestBundle.cpp)
+add_dependencies(vtaSoftMaxTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaSoftMaxTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaSoftMaxTestBundle
         PROPERTIES

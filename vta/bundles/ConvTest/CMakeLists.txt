@@ -20,7 +20,7 @@ if(NESTC_USE_VTASIM)
     INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 
     add_executable(vtaConvTestBundle vtaConvTestBundleMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaConvTestBundle.cpp)
-
+    add_dependencies(vtaConvTestBundle ${BUNDLE_DEPENDS})
     target_link_libraries(vtaConvTestBundle VTABundle ${BUNDLE_LINK_LIB})
     set_target_properties( vtaConvTestBundle
             PROPERTIES

@@ -1,4 +1,5 @@
 add_executable(vtaSplatMaxTestBundle vtaSplatMaxTestBundleMain.cpp vtaSplatMaxTestBundle.cpp)
+add_dependencies(vtaSplatMaxTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaSplatMaxTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaSplatMaxTestBundle
         PROPERTIES

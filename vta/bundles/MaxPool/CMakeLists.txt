@@ -1,4 +1,5 @@
 add_executable(vtaMaxPoolTestBundle vtaMaxPoolTestBundleMain.cpp vtaMaxPoolTestBundle.cpp)
+add_dependencies(vtaMaxPoolTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaMaxPoolTestBundle
        VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaMaxPoolTestBundle

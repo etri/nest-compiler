@@ -4,9 +4,11 @@ INCLUDE_DIRECTORIES(include ../vtalib/3rdparty/dmlc-core/include)
 if(NESTC_USE_VTASIM)
     INCLUDE_DIRECTORIES(include ../vtalib/include/simulator)
     set(BUNDLE_LINK_LIB png)
+    set(BUNDLE_DEPENDS VTABundle)
 else()
     INCLUDE_DIRECTORIES(include ../vtalib/include/zcu102)
     set(BUNDLE_LINK_LIB png)
+    set(BUNDLE_DEPENDS VTABundle)
 endif()
 
 

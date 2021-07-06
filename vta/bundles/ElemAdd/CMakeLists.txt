@@ -1,4 +1,5 @@
 add_executable(vtaElemAddTestBundle vtaElemAddTestBundleMain.cpp vtaElemAddTestBundle.cpp)
+add_dependencies(vtaElemAddTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaElemAddTestBundle
         VTABundle ${BUNDLE_LINK_LIB})
 

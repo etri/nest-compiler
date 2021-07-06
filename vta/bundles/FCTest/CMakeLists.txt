@@ -1,4 +1,5 @@
 add_executable(vtaFCTestBundle vtaFCTestBundleMain.cpp vtaFCTestBundle.cpp)
+add_dependencies(vtaFCTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaFCTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaFCTestBundle
         PROPERTIES

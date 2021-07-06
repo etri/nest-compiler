@@ -1,4 +1,5 @@
 add_executable(vtaDequantizeTestBundle vtaDequantizeTestBundleMain.cpp vtaDequantizeTestBundle.cpp)
+add_dependencies(vtaDequantizeTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaDequantizeTestBundle
          VTABundle  ${BUNDLE_LINK_LIB})
 

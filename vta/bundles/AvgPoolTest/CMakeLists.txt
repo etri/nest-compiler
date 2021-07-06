@@ -38,6 +38,7 @@ add_custom_target(vtaAvgPoolTestBundleNET DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/vt
         ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 add_executable(vtaAvgPoolTestBundle vtaAvgPoolTestBundleMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.cpp)
+add_dependencies(vtaAvgPoolTestBundle  ${BUNDLE_DEPENDS})
 target_link_libraries(vtaAvgPoolTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties( vtaAvgPoolTestBundle
         PROPERTIES

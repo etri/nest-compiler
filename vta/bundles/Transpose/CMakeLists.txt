@@ -1,4 +1,5 @@
 add_executable(vtaTransposeTestBundle vtaTransposeTestBundleMain.cpp vtaTransposeTestBundle.cpp)
+add_dependencies(vtaTransposeTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaTransposeTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaTransposeTestBundle
         PROPERTIES

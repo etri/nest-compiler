@@ -1,4 +1,5 @@
 add_executable(vtaReluTestBundle vtaReluTestBundleMain.cpp vtaReluTestBundle.cpp)
+add_dependencies(vtaReluTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaReluTestBundle
        VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaReluTestBundle

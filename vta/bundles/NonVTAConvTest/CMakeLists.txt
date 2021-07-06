@@ -1,4 +1,5 @@
 add_executable(vtaNonVTAConvTestBundle vtaNonVTAConvTestBundleMain.cpp vtaNonVTAConvTestBundle.cpp)
+add_dependencies(vtaNonVTAConvTestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaNonVTAConvTestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties(vtaNonVTAConvTestBundle
         PROPERTIES

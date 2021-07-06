@@ -45,7 +45,7 @@ add_custom_target(vtaConv3TestBundleNET DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/vtaC
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(vtaConv3TestBundle vtaConv3TestBundleMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaConv3TestBundle.cpp)
-
+add_dependencies(vtaConv3TestBundle ${BUNDLE_DEPENDS})
 target_link_libraries(vtaConv3TestBundle VTABundle ${BUNDLE_LINK_LIB})
 set_target_properties( vtaConv3TestBundle
         PROPERTIES
