@@ -4,11 +4,11 @@
 
 ## image-selection
 - File location: `${root_nestc}utils/imagenet_val_script/image_selection.py`
-- `image-selection` generates a list file that contains paths of images for calibration.  
+- `image-selection` generates a list file that contains paths of images for calibration.
 - Options you specify are the followings:
-    - `--train-images-dir`
-    - `--num-of-images`
-    - `--file-name`
+  - `--train-images-dir`
+  - `--num-of-images`
+  - `--file-name`
 ```bash
 python image_selection.py --file-name=test.txt --num-of-images=1 --train-images=/home/jemin/hdd/imagenet/train_processed
 ```
@@ -21,7 +21,8 @@ python image_selection.py --file-name=test.txt --num-of-images=1 --train-images=
 ```bash
 imagenet_sorting_by_labels.py <validation data dir> <validation labels file>
 ```
-![sorting](docs/nestc/image_re_arrangement.png)
+<img src="image_re_arrangement.png" width="80%">
+
 
 ## imagenet_topk_accuracy_driver_py3
 
@@ -80,7 +81,7 @@ cd /home/jemin/development/nest_compiler/utils/imagenet_val_script
 
 ### Show explored results
 
-```bash``
+```bash
 # All search results of resnet18 
 ls | grep resnet18
 
