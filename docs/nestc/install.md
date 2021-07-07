@@ -30,7 +30,9 @@ NEST-C depends on `fmt`, which must be built from source:
 ```bash
 git clone https://github.com/fmtlib/fmt
 mkdir fmt/build
-cd fmt/build
+cd fmt
+git reset --hard efe3694f150a1f307d014e68cd88350067769b19
+cd build
 cmake ..
 make
 sudo make install
