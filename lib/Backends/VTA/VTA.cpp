@@ -16,6 +16,7 @@ namespace glow {
     }
 } // namespace glow
 using namespace glow;
+using llvm::dyn_cast;
 
 Expected<std::unique_ptr<CompiledFunction>>
 VTA::compile(Function *F, const BackendOptions &opts) const {
@@ -789,6 +790,108 @@ static bool channelwiseQuantizeFloatBias(
     return false;
 }
 
+static Node *optimizeVTAConv(ConvolutionNode *CN, Function *F) {
+    auto depth = CN->getFilter().dims()[0];
+    auto channel = CN->getFilter().dims()[3];
+
+    auto *M = F->getParent();
+    auto group = CN->getGroup();
+    auto ActivationNV = CN->getFusedActivation();
+
+    // Make sure that the depth group is divisible by 16 to perform the
+    // transformation.
+    if (((depth / group) % 16) != 0) {
+        return nullptr;
+    }
+
+    // Make sure that the channel group is divisible by 16 to perform the
+    // transformation.
+    if (((channel / group) % 16) != 0) {
+        return nullptr;
+    }
+
+    Constant *filter = dyn_cast<Constant>(CN->getFilter());
+    auto input = CN->getInput();
+    auto output = CN->getResult();
+
+    if (!filter || filter->getNumUsers() != 1) {
+        // Can't mutate the filter.
+        return nullptr;
+    }
+
+    // We only support Int8 for EVTA.
+    if (filter->getElementType() != ElemKind::Int8QTy) {
+        return nullptr;
+    }
+
+    // This optimization is not supported with Dilation currently.
+    if (CN->getDilation() != 1) {
+        return nullptr;
+    }
+
+    // This optimization only support single group size.
+    if (CN->getGroup() != 1) {
+        return nullptr;
+    }
+
+    // Create a new constant filter with the layout [Nm, Cm, H, W, Ns, Cs];
+    TypeRef filterTy = filter->getType();
+    TypeRef inputTy = input.getType();
+    TypeRef outputTy = output.getType();
+
+    auto dims = filterTy->dims();
+    auto dims_input = inputTy->dims();
+    auto dims_output = outputTy->dims();
+    assert(dims.size() == 4 && "Invalid filter size");
+    auto *filter8 = M->createConstant(filterTy->getElementType(),
+                                      {dims[0]/16, dims[3]/16, dims[1], dims[2], 16, 16},
+                                      filterTy->getScale(),filterTy->getOffset(),
+                                      filter->getName());
+    ShapeVTAKernel fdim(filter8->dims());
+
+    auto F8H = filter8->getHandle<int8_t>();
+    auto FH = filter->getHandle<int8_t>();
+
+    // Transpose the weights into the following format [Nm, Cm, H, W, Ns, Cs]
+    for (dim_t c0 = 0; c0 < dims[0]; c0++)
+        for (dim_t c1 = 0; c1 < dims[1]; c1++)
+            for (dim_t c2 = 0; c2 < dims[2]; c2++)
+                for (dim_t c3 = 0; c3 < dims[3]; c3++) {
+                    F8H.at({c0 / 16, c3 / 16, c1, c2, c0 % 16, c3 % 16}) = FH.at({c0, c1, c2, c3});
+                }
+
+
+    // 4 dim -> 6dim and do reshape and transpose.
+    std::array<dim_t, 6> reshapeInputS{{dims_input[0], 1,  dims_input[1], dims_input[2], (dim_t)ceil(dims_input[3]/(double)16), 16}};
+    llvm::ArrayRef<dim_t> reshapeInputDim(reshapeInputS);
+    std::array<unsigned_t, 6> transposeInputS{{0,4,2,3,1,5}};
+    llvm::ArrayRef<unsigned_t> transposeInputDim(transposeInputS);
+    auto *reshapeInput = F->createReshape("reshapeInput", CN->getInput(), reshapeInputDim);
+    auto *transposeInput = F->createTranspose("transposeInput", reshapeInput, transposeInputDim);
+
+    // output tensor of VTAConv
+    std::array<dim_t, 6> outputS{{dims_output[0], (dim_t)ceil(dims_output[3]/(double)16), dims_output[1], dims_output[2], 1, 16}};
+    llvm::ArrayRef<dim_t> newOutputDim(outputS);
+
+    TypeRef newOT = F->getParent()->uniqueType(output.getElementType(), newOutputDim, output.getType()->getScale(), output.getType()->getOffset());
+    VTAConvolutionNode *conv = F->createVTAConv(CN->getName(),
+                                                                      transposeInput,
+                                                                      filter8, CN->getBias(), newOT, CN->getKernels(), CN->getStrides(), CN->getPads(), group);
+    if (ActivationNV == FusedActivation::RELU){
+        conv->setFusedActivation(FusedActivation::RELU);
+    }
+
+
+    // output node
+    std::array<unsigned_t, 6> transposeOOutputS{{0,4,2,3,1,5}};
+    llvm::ArrayRef<unsigned_t> transposeOutputDim(transposeOOutputS);
+
+    auto *transposeOutput = F->createTranspose("transposeOutput",conv, transposeOutputDim);
+    auto *reshapeOutput = F->createReshape("reshapeOutput", transposeOutput, dims_output);
+
+    return reshapeOutput;
+}
+
 Expected<bool> VTA::transformPostLowering(
         Function *F, CompilationContext &cctx,
         const glow::runtime::DeviceInfo *devInfo) const {
@@ -803,6 +906,17 @@ Expected<bool> VTA::transformPostLowering(
                 llvm::dyn_cast<FullyConnectedNode>(&node)) {
             changed |= quantizeFloatBias(F, *fullyConnected);
         }
+
+#ifdef NESTC_EVTA_GRAPH_OPT
+        // Try to replace the generic convolution with vta-optimized version (6dim).
+        if (auto *CN = dyn_cast<ConvolutionNode>(&node)) {
+            if (Node *NCN = optimizeVTAConv(CN, F)) {
+                CN->getResult().replaceAllUsesOfWith(NCN);
+                changed = true;
+                continue;
+            }
+        }
+#endif
     }
     return changed;
 }

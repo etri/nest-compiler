@@ -20,6 +20,7 @@
 using namespace glow;
 using llvm::cast;
 
+// Test Conv ReLU Fusion
 TEST(inferVTAConvReluNet, conv_relu_fusion_test) {
   PseudoRNG PRNG;
   Tensor inputs(ElemKind::Int8QTy, {1, 6, 6, 16}, 1, 0);
@@ -51,40 +52,7 @@ TEST(inferVTAConvReluNet, conv_relu_fusion_test) {
   EXPECT_TRUE(out2.isEqual(out1,1));
 }
 
-
-TEST(inferVTALayoutConvReluNet, vta_layout_conv_test) {
-  PseudoRNG PRNG;
-  Tensor inputs(ElemKind::Int8QTy, {1, 4, 56, 56, 1, 16}, 1, 0);
-  Tensor kernel(ElemKind::Int8QTy, {4, 4, 3, 3, 16, 16}, 1, 0);
-  Tensor bias(ElemKind::Int32QTy, {4, 16}, 1, 0);
-  inputs.getHandle<int8_t>().randomize(0, 60, PRNG);
-  kernel.getHandle<int8_t>().randomize(-1, 1, PRNG);
-  // inputs.toBin("input");
-  // kernel.toBin("kernel");
-  bias.getHandle<int32_t>().randomize(0, 32768, PRNG);
-  // bias.zero();
-  std::array<dim_t, 4> S{{1, 6, 6, 1}};
-  llvm::ArrayRef<dim_t> shape(S);
-  Tensor out1(ElemKind::Int8QTy, shape, 256, 0);
-  Tensor out2(ElemKind::Int8QTy, {1, 4, 56, 56, 1, 16}, 256, 0);
-
-
-  //inferVTAConvReluNet(&inputs, &kernel, &bias, &out1, 3, 1, 1, "Interpreter");
-  inferVTALayoutConvNet(&inputs, &kernel, &bias, &out2, 3, 1, 1,
-                      "VTA");
-
-  TensorSerializationOptions opts;
-  opts.withType = true;
-  // dumpTensorToTextFile(out1, "./CPU.txt", opts);
-  dumpTensorToTextFile(out2, "./VTAconv.txt", opts);
-
-  //llvm::outs()<<out1.getHandle().raw(0)<<"\n";
-  //llvm::outs()<<(double)out2.getHandle<int8_t>().raw(0)<<"\n";
-  //EXPECT_TRUE(out1.getHandle().raw(0) == (double)out2.getHandle<int8_t>().raw(0));
-  //EXPECT_TRUE(out2.isEqual(out1,1));
-}
-
-
+// Test VTAConv (6dim) and VTAConvInterpreter(6dim)
 TEST(inferVTALayoutConvReluNet, VTAResnetTest1){
   PseudoRNG PRNG;
   Tensor inputs(ElemKind::Int8QTy, {1, 56, 56, 64}, 1, 0);
@@ -122,6 +90,7 @@ TEST(inferVTALayoutConvReluNet, VTAResnetTest1){
   EXPECT_TRUE(out1.isEqual(out2));
 }
 
+// Test VTAConvFusion and VTAConvInterpreterFusion
 TEST(inferVTALayoutConvReluNet, VTAConvReluFusionTest){
     PseudoRNG PRNG;
     Tensor inputs(ElemKind::Int8QTy, {1, 56, 56, 64}, 1, 0);
@@ -146,4 +115,29 @@ TEST(inferVTALayoutConvReluNet, VTAConvReluFusionTest){
     TensorSerializationOptions opts;
     opts.withType = true;
     EXPECT_TRUE(out1.isEqual(out2));
+}
+
+// transformPostLoweirng.optimizeVTAConv: 6dim VTAConv graph optimization testing
+TEST(inferVTALayoutConvReluNet, VTAConvGraphOptzTest){
+    PseudoRNG PRNG;
+    Tensor inputs(ElemKind::Int8QTy, {1, 56, 56, 64}, 1, 0);
+    Tensor kernel(ElemKind::Int8QTy, {64, 3, 3, 64}, 1, 0);
+    Tensor bias(ElemKind::Int32QTy, {64}, 1, 0);
+    inputs.getHandle<int8_t>().randomize(0, 60, PRNG);
+    kernel.getHandle<int8_t>().randomize(-10, 10, PRNG);
+    inputs.toBin("./input_origin.bin");
+    kernel.toBin("./kernel_origin.bin");
+    bias.getHandle<int32_t>().randomize(0, 32768, PRNG);
+    bias.toBin("./bias_origin.bin");
+    // bias.zero();
+    std::array<dim_t, 4> S{{1, 56, 56, 64}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 64, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 64, 0);
+
+    inferVTAConvReluNet2(&inputs, &kernel, &bias, &out1, 3, 1, 1, "VTA");
+    out1.toBin("golden_vta_graphoptz");
+    inferVTAConvReluNet2(&inputs, &kernel, &bias, &out2, 3, 1, 1, "VTAInterpreter");
+    out2.toBin("golden_vtainterpreter_graphoptz");
+    EXPECT_TRUE(out2.isEqual(out1));
 }

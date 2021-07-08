@@ -60,3 +60,7 @@ if (GLOW_VTA_INTERPRETER_FUSION)
 else()
     message(STATUS "VTA Interpreter Fusion OFF")
 endif ()
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_definitions(-DVTA_DEBUG_MODE)
+endif()

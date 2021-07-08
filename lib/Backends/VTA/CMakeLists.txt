@@ -69,3 +69,12 @@ if (GLOW_VTA_FUSION)
 else()
     message(STATUS "VTA Fusion OFF")
 endif ()
+
+option(NESTC_EVTA_GRAPH_OPT "VTAConv graph optimization Enable" OFF)
+
+if (NESTC_EVTA_GRAPH_OPT)
+    add_definitions(-DNESTC_EVTA_GRAPH_OPT)
+    message(STATUS "VTAConv graph optimization Enable ON")
+else()
+    message(STATUS "VTAConv graph optimization Enable OFF")
+endif ()

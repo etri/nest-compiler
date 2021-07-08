@@ -772,6 +772,50 @@ void BoundVTAInterpreterFunction::fwdVTAConvolutionInstQuantizedImpl(
   auto filterW = getWeightHandle<int8_t>(filterV);
   auto biasW = getWeightHandle<int32_t>(biasV);
 
+#ifdef VTA_DEBUG_MODE
+    // save 4dim tensors
+    {
+        std::ofstream fos("input_vtainterpreter.bin", std::ios::binary);
+        int16_t data16 = 0;
+        for (size_t i = 0; i < inW.size(); i++) {
+            auto data = inW.raw(i);
+            if (i % 2 == 0) {
+                data16 = 0xff & data;
+            } else {
+                data16 = data16 | data << 8;
+                fos.write((const char *)&data16, 2);
+            }
+        }
+        fos.close();
+    }
+
+    // save 4dim tensors
+    {
+        std::ofstream fos("kernel_vtainterpreter.bin", std::ios::binary);
+        int16_t data16 = 0;
+        for (size_t i = 0; i < filterW.size(); i++) {
+            auto data = filterW.raw(i);
+            if (i % 2 == 0) {
+                data16 = 0xff & data;
+            } else {
+                data16 = data16 | data << 8;
+                fos.write((const char *)&data16, 2);
+            }
+        }
+        fos.close();
+    }
+
+    {
+        std::ofstream fos("bias_vtainterpreter.bin", std::ios::binary);
+        int32_t data32 = 0;
+        for (size_t i = 0, e = biasW.size(); i<e; i++) {
+            auto data = biasW.raw(i);
+            fos.write((const char *)&data, 4);
+        }
+        fos.close();
+    }
+#endif
+
   ShapeNHWC odim(outW.dims());
   ShapeNHWC idim(inW.dims());
   ShapeHW kdim(kernelSizes);

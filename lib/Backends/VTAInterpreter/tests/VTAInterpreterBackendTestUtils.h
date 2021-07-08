@@ -353,8 +353,6 @@ unsigned countNodeKind(Function *F, Kinded::Kind kind);
 
 void inferConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                   llvm::StringRef kind);
-void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                     llvm::StringRef kind);
 void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind);
 void inferVTAConvNettemp2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
@@ -370,6 +368,8 @@ void inferVTAConvReluFusionNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Te
 void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *filter2, Tensor *bias2, Tensor *out, Tensor *out2,
                           llvm::StringRef kind);
 void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
+                         llvm::StringRef kind);
+void inferVTAConvReluNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                          llvm::StringRef kind);
 void trainConvNet(Tensor *inputs, Tensor *kernel1, Tensor *bias1,
                   Tensor *kernel2, Tensor *bias2, Tensor *selected,
