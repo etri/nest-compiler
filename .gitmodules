@@ -6,3 +6,7 @@
 	path = vta/vtalib
 	url = ../vta_lib
 	ignore = dirty
+[submodule "tvm"]
+	path = tvm
+	url = https://github.com/apache/tvm.git
+	ignore = dirty

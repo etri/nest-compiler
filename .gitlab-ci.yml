@@ -81,7 +81,7 @@ build:
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON"
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}"
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c "cd build_ci; ninja check_nestc"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
 
 
@@ -116,7 +116,7 @@ build-debug:
     - docker start build
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Debug -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_VTA_INTERPRETER_FUSION=ON -DGLOW_VTA_FUSION=ON"
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c "cd build_ci; ninja check_nestc"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
 
 
@@ -149,7 +149,7 @@ build-without-VTA:
     - docker ps -a
     - docker start build
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON"
-    - docker exec build sh -c "cd build_ci; ninja all;"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
     - du -h -d 1
 
 
@@ -183,7 +183,7 @@ build-all:
     - docker ps -a
     - docker start build
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON"
-    - docker exec build sh -c "cd build_ci; ninja all;"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
     - du -h -d 1
 
   when: manual
@@ -208,8 +208,8 @@ test-all:
     - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
     - docker start build
     - docker exec build sh -c "ls;cd build_ci; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_VTA=ON -DGLOW_WITH_STC=ON"
-    - docker exec build sh -c "cd build_ci; ninja all;"
-    - docker exec build sh -c "cd build_ci; ninja check"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check"
 
 
   when: manual

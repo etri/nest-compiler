@@ -99,7 +99,9 @@ following command should install the required dependencies:
       libprotobuf-dev llvm-8 llvm-8-dev ninja-build protobuf-compiler wget \
       opencl-headers libgoogle-glog-dev libboost-all-dev \
       libdouble-conversion-dev libevent-dev libssl-dev libgflags-dev \
-      libjemalloc-dev libpthread-stubs0-dev
+      libjemalloc-dev libpthread-stubs0-dev python python3-pip
+  pip3 install numpy decorator attrs pytest onnx scipy
+  pip install --upgrade protobuf
   ```
 
 [Note: Ubuntu 16.04 and 18.04 ship with llvm-6 and need to be upgraded before building NEST-C. Building NEST-C on Ubuntu 16.04 with llvm-7 fails because llvm-7 xenial distribution uses an older c++ ABI, however building NEST-C on Ubuntu 18.04 with llvm-7 has been tested and is successful]
@@ -141,10 +143,13 @@ because some programs take a really long time to run in Debug mode. It's also a
 good idea to build the project outside of the source directory.
 
   ```bash
-  mkdir build_Debug
-  cd build_Debug
-  cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug ../nest-compiler
-  ninja all
+  mkdir build
+  cd build
+  export TVM_HOME=/path/to/nest_compiler/tvm
+  export PYTHONPATH=/path/to/nest_compiler/tvm/python
+  export TVM_LIBRARY_PATH=/path/to/build/tvm
+  cmake cmake -G Ninja /path/to/nest_compiler -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON
+  ninja check_nestc
   ```
 
 It's possible to configure and build the compiler with any CMake generator,

@@ -1,0 +1,6 @@
+export TVM_HOME=/root/dev/tvm
+export DMLC_CORE=/root/dev/tvm/3rdparty/dmlc-core
+export PYTHONPATH=$TVM_HOME/python:${PYTHONPATH}
+export TVM_BUILD_PATH=/root/dev/build_ci/tvm
+export TVM_LIBRARY_PATH=/root/dev/build_ci/tvm
+export PATH=/root/dev/build_ci/tvm:${PATH}

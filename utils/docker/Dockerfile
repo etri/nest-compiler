@@ -15,7 +15,7 @@ RUN apt-get update && \
         libdouble-conversion-dev libevent-dev libssl-dev libgflags-dev \
         libjemalloc-dev libpthread-stubs0-dev \
         # Additional dependencies
-        git python python-numpy && \
+        git python python-numpy python3-pip && \
     # Delete outdated llvm to avoid conflicts
     apt-get autoremove -y llvm-6.0 && \
     apt-get clean && \
@@ -26,6 +26,8 @@ RUN update-alternatives --install /usr/bin/clang clang \
         /usr/lib/llvm-8/bin/clang 50 && \
     update-alternatives --install /usr/bin/clang++ clang++ \
         /usr/lib/llvm-8/bin/clang++ 50
+
+RUN pip3 install numpy decorator attrs pytest onnx scipy
 
 # Point default C/C++ compiler to clang
 RUN update-alternatives --set cc /usr/bin/clang && \

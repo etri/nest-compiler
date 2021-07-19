@@ -53,14 +53,17 @@ if (NESTC_WITH_EVTA)
 endif()
 
 include_directories(BEFORE
+        ${NESTC_ROOT_DIR}/
         ${NESTC_ROOT_DIR}/include
         ${NESTC_ROOT_DIR}/include/tools/loader
         ${NESTC_ROOT_DIR}/tools/ClassGen/
 )
+message(STATUS "START CMAKE TVM")
+SET(USE_LLVM ON)
 
+add_subdirectory(tvm)
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)
-add_subdirectory(examples/bundles/resnet18_relay)
 
 get_property(NESTC_TEST_DEPENDS GLOBAL PROPERTY NESTC_TEST_DEPENDS)
 get_property(ZCU102_TEST_DEPENDS GLOBAL PROPERTY ZCU102_TEST_DEPENDS)
