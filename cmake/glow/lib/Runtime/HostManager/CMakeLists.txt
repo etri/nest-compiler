@@ -13,3 +13,19 @@ target_link_libraries(HostManager
                         Partitioner
                         Provisioner
                         Runtime)
+
+add_library(HostManagerNestos
+        ${NESTC_ROOT_DIR}/lib/Runtime/HostManager/HostManager.cpp)
+
+target_link_libraries(HostManagerNestos
+        PRIVATE
+        Backends
+        Base
+        Executor
+        Exporter
+        Importer
+        Graph
+        GraphOptimizer
+        PartitionerNestos
+        Provisioner
+        Runtime)

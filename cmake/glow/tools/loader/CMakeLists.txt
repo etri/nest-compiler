@@ -35,6 +35,23 @@ target_link_libraries(model-partition-tuner
         GraphOptimizer
         Quantization
         LLVMSupport)
+
+add_executable(nestos-partitioner
+        ${NESTC_ROOT_DIR}/tools/loader/Loader.cpp
+        ${NESTC_ROOT_DIR}/tools/loader/nestos-partitioner.cpp)
+
+target_link_libraries(nestos-partitioner
+        PRIVATE
+        Backends
+        Base
+        Converter
+        Graph
+        HostManagerNestos
+        Importer
+        ExecutionEngine
+        GraphOptimizer
+        Quantization
+        LLVMSupport)
                 
 add_executable(image-classifier
    ${NESTC_ROOT_DIR}/tools/loader/Loader.cpp
