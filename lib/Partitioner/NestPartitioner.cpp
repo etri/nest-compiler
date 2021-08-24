@@ -1024,9 +1024,14 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
     std::string parallelPartitions = "";
     std::set<int> addedPartitions;
 
+    uint convNum = 0;
+    uint vtaConvNum = 0;
+    uint vtaReluNum = 0;
+    uint parallelPartitionNum = 0;
+
     for (auto partition : nodeGroups_) {
-//      std::cout << "partition ID: " << partition->ID_ << std::endl;
-//      std::cout << "partition backend: " << partition->backendName_ << std::endl;
+      //std::cout << "partition ID: " << partition->ID_ << std::endl;
+      //std::cout << "partition backend: " << partition->backendName_ << std::endl;
 
       DeviceInfo dinfo = getDeviceInfoForBackend(partition->backendName_);
       backendNameStr += (partition->backendName_ + ":");
@@ -1038,6 +1043,8 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
 
       std::vector<NodeGroup*> parallelBranches;
       if(partition->isParallelPartition_) {
+          parallelPartitionNum++;
+
           if(addedPartitions.find(partition->ID_) == addedPartitions.end()) {
               getBranchesWithSameLevel(&nodeGroups_, &parallelBranches, partition->level_);
               parallelPartitions = parallelPartitions + ("(");
@@ -1053,11 +1060,23 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
       }
 
       for (auto cnode : partition->nodeList_) {
+          //std::cout << "cnode: " << cnode->node_->getName().str() << std::endl;
+
+          if(!std::string(cnode->node_->getKindName()).compare("Convolution")) {
+              convNum++;
+              if (!cnode->backendName_.compare("VTA"))
+                  vtaConvNum++;
+          }else if(!std::string(cnode->node_->getKindName()).compare("Relu")) {
+              if (!cnode->backendName_.compare("VTA"))
+                  vtaReluNum++;
+          }
+
         nodeToPartitionStr +=
             (cnode->name_ + "-" + std::to_string(partition->ID_));
         nodeToPartitionStr += "\n  :";
       }
     }
+
     nodeToPartitionStr = nodeToPartitionStr.substr(0, nodeToPartitionStr.length() - 4);
 
     partitionNameStr += ("p" + std::to_string(nodeGroups_.back()->ID_+1));
@@ -1076,6 +1095,9 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
     planFile << "...\n" << std::endl;
 
     planFile.close();
+
+    std::cout << "convNum: " << convNum << " vtaConvNum: "<< vtaConvNum << " vtaReluNum: " << vtaReluNum << " parallelPartitionNum: " << parallelPartitionNum << std::endl;
+
   }
 
 }
@@ -1228,10 +1250,11 @@ void NestPartitioner::partitionBranches(std::vector<NodeGroup*>* branchList, boo
         std::vector<NodeGroup*> parallelBranches;
         int bn = getBranchesWithSameLevel(branchList, &parallelBranches, branch->level_);
         processedLevels.insert(branch->level_);
-        //std::cout << "bn: " << bn << " level = " << branch->level_ << std::endl;
+
         if(bn > 1) {
            if(isParallel && (*i)->isParallelBranch_) {
                 for(auto pb: parallelBranches) {
+                    //std::cout << "2 branch --->" << partitionID << std::endl;
                     NodeGroup* p = partitionSingleBranch(&nodeGroups_, pb, &partitionID, nullptr);
                     p->isParallelPartition_ = true;
                     p->level_ = pb->level_;
@@ -1246,15 +1269,17 @@ void NestPartitioner::partitionBranches(std::vector<NodeGroup*>* branchList, boo
                 lastPartition = partitionSingleBranch(&nodeGroups_, &nb, &partitionID, nullptr);
                 //std::cout << "backend: " << lastPartition->backendName_ << std::endl;
            }
-
         } else if(bn == 1) {
-//      std::cout << "4 branch --->" << partitionID << std::endl;
-            lastPartition = partitionSingleBranch(&nodeGroups_, branch, &partitionID, lastPartition);
-//     std::cout << "backend: " << lastPartition->backendName_ << std::endl;
+            //std::cout << "4 branch --->" << partitionID << std::endl;
+            //lastPartition = partitionSingleBranch(&nodeGroups_, branch, &partitionID, lastPartition);
+            lastPartition = partitionSingleBranch(&nodeGroups_, branch, &partitionID, nullptr);
+            //std::cout << "backend: " << lastPartition->backendName_ << std::endl;
         } else {
             std::cout << "No branch in branchList." << std::endl;
             continue;
         }
+
+  //      std::cout << "lastPartition size = " <<lastPartition->nodeList_.size() << std::endl;
     }
 
 //  for (auto partition : nodeGroups_) {
@@ -1388,21 +1413,21 @@ float NestPartitioner::getCostOfSingleNode(CostNode *cnode, std::string backendN
 
 void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends)
 {
-//  std::cout << "--------- getMinCostOfSingleNode -----------" << std::endl;
-//  std::cout << "node type: " << cnode->node_->getKindName() << std::endl;
+  //std::cout << "--------- getMinCostOfSingleNode -----------" << std::endl;
+  //std::cout << "node type: " << cnode->node_->getKindName() << std::endl;
+
   std::string key = appGen_.getProfileKey(cnode->node_);
+  //std::cout << "key: " << key << std::endl;
 
-  std::vector<std::string> backendList(backendSet_.size());
-  std::copy(backendSet_.begin(), backendSet_.end(), backendList.begin());
+  auto iter = backendSet_.begin();
+  cnode->cost_ = backendProfileMap_[backends[0]->getBackendName()][key];
+  cnode->backendName_ = backends[0]->getBackendName();
 
-  cnode->cost_ = backendProfileMap_[backendList[0]][key];
-  cnode->backendName_ = backendList[0];
+  for(int i = 1; i < backends.size(); i++) {
+    std::string backendName = backends[i]->getBackendName();
+    //std::cout << "backendName = " << backendName << std::endl;
 
-  //  std::cout << "costNode->totalCost = " << cnode->totalCost << std::endl;
-  for(int i = 1; i < backendList.size(); i++) {
-    std::string backendName = backendList[i];
-
-    //non supported type
+      //non supported type
     if(backendMap_[backendName].nonSupportedNodesKinds.size() > 0 &&
           (backendMap_[backendName].nonSupportedNodesKinds.find(cnode->node_->getKind())
       != backendMap_[backendName].nonSupportedNodesKinds.end())) continue;
@@ -1412,6 +1437,7 @@ void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backen
        == backendMap_[backendName].supportedNodesKinds.end())) continue;
 
     float compCost = backendProfileMap_[backendName][key];
+//    std::cout << "compCost = " << compCost << std::endl;
 
     float cost = compCost;
     if(cost < cnode->cost_) {
@@ -2329,7 +2355,7 @@ Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t 
   if(exeType == 1) {
     generateTestProfile(function, profilePath, partitionPlanFile, profileMode);
     exit(0);
-  } else if (exeType == 2) {//2
+  } else if (exeType == 2) {
     generateOptimalPlanForSingleNodes(function, profilePath, partitionPlanFile, profileMode);
     exit(0);
   }

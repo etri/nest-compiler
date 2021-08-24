@@ -12,7 +12,7 @@
 #include <glog/logging.h>
 #include <boost/algorithm/string.hpp>
 
-//#define ARRAY_LENGTH 100
+#define maxInOut 500
 
 using namespace glow::runtime;
 
@@ -34,6 +34,7 @@ class NestPartitionerSchedule {
   std::string planFileName_;
   std::set<std::string> *fuseOperatorSet_;
   std::set<std::string> *profileKeySet_;
+
 
 public:
   void setProfilePath(std::string path){profilePath_ = path;};
@@ -66,6 +67,7 @@ public:
   void generateYamlFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
   void generateCMakeListsFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   std::string getPartitionProfileKey(Function* function);
+  void setPartitionInputOutputList(Function* function, std::string inputList[maxInOut], std::string outputList[maxInOut], int* inputCount, int* outputCount);
 };
 
 } // namespace glow

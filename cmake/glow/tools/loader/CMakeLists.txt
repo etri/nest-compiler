@@ -23,6 +23,7 @@ add_executable(model-partition-tuner
         ${NESTC_ROOT_DIR}/tools/loader/Loader.cpp
         ${NESTC_ROOT_DIR}/tools/loader/ModelPartitionTuner.cpp)
 
+
 target_link_libraries(model-partition-tuner
         PRIVATE
         Backends
@@ -35,6 +36,34 @@ target_link_libraries(model-partition-tuner
         GraphOptimizer
         Quantization
         LLVMSupport)
+
+INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/glow/tests/googletest/googletest/include)
+INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/lib)
+add_executable(NestPartitionerTest
+        ${NESTC_ROOT_DIR}/lib/Partitioner/tests/NestPartitionerTest.cpp)
+
+target_link_libraries(NestPartitionerTest
+        PRIVATE
+        Backends
+        Base
+        Converter
+        Graph
+        HostManager
+        Importer
+        ExecutionEngine
+        GraphOptimizer
+        Quantization
+        LLVMSupport
+        gtest
+        TestMain)
+
+set_target_properties(NestPartitionerTest
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${NESTC_BINARY_DIR}/tests"
+        )
+
+add_nestc_test(NestPartitionerTest ${NESTC_BINARY_DIR}/tests/NestPartitionerTest  --gtest_output=xml:NestPartitionerTest.xml)
+
 
 add_executable(nestos-partitioner
         ${NESTC_ROOT_DIR}/tools/loader/Loader.cpp
