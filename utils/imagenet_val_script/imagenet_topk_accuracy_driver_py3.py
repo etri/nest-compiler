@@ -71,6 +71,9 @@ parser.add_argument("--fail-list", default=False,
 parser.add_argument("--ignore-exist-file-check", default=False,
                     action="store_true", help="Allow over-writing reuslts in the file.")
 
+parser.add_argument("--filename", default=None, type=str,
+                    help="Filename to save result.")
+
 # Opens and returns an image located at @param path using the PIL loader.
 
 
@@ -266,11 +269,10 @@ def print_topk_accuracy(total_image_count, top1_count, top5_count, start):
 
 
 def calculate_top_k(validation_images_dir, image_classifier_cmd, batch_size,
-                    resize_input_images, verbose, start, failed_list, arg_failed_list):
+                    resize_input_images, verbose, start, failed_list, arg_failed_list, filename):
     print ("Calculating Top-1 and Top-5 accuracy...")
 
     if arg_failed_list:
-        filename = generate_filename(image_classifier_cmd)
         failed_list_file = open("./failed_list" + filename+".txt", "w")
 
     verify_spawn_cmd(image_classifier_cmd)
@@ -345,7 +347,7 @@ def calculate_top_k(validation_images_dir, image_classifier_cmd, batch_size,
                     top5_count += 1
 
             curr_completed_count = img_index + batch_size
-            if curr_completed_count % 5 == 0:
+            if curr_completed_count % 10 == 0:
                 print ("Finished image index %d out of %d" % (
                     (curr_completed_count, total_image_count)))
                 if verbose:
@@ -367,9 +369,9 @@ def calculate_top_k(validation_images_dir, image_classifier_cmd, batch_size,
     print ("\nCompleted running; Final Top-1/5 accuracy across %d images:" % (
         total_image_count))
     print_topk_accuracy(total_image_count, top1_count, top5_count, start)
-    write_file_topk_accuracy(image_classifier_cmd, total_image_count, top1_count, top5_count, start)
+    write_file_topk_accuracy(image_classifier_cmd, total_image_count, top1_count, top5_count, start, filename)
 
-def write_file_topk_accuracy(image_classifier_cmd, total_image_count, top1_count, top5_count, start):
+def write_file_topk_accuracy(image_classifier_cmd, total_image_count, top1_count, top5_count, start, filename):
     top1_accuracy = float(top1_count) / float(total_image_count)
     top5_accuracy = float(top5_count) / float(total_image_count)
     top1_accuracy = top1_accuracy * 100
@@ -381,7 +383,6 @@ def write_file_topk_accuracy(image_classifier_cmd, total_image_count, top1_count
     minutes, seconds = divmod(rem, 60)
     print("{:0>2}:{:0>2}:{:05.2f}".format(int(hours), int(minutes), seconds))
 
-    filename = generate_filename(image_classifier_cmd)
     input_txt_file = open("./quant_result/"+filename,"w")
     input_txt_file.write("\tTop-1 accuracy: " + "{0:.2f}".format(top1_accuracy)+"\n")
     input_txt_file.write("\tTop-5 accuracy: " + "{0:.2f}".format(top5_accuracy)+"\n")
@@ -449,6 +450,12 @@ def main():
     start = time.time()
     failed_list = []
 
+    if args.filename != None:
+        file_name = generate_filename(args.image_classifier_cmd) + args.filename
+    else:
+        file_name = generate_filename(args.image_classifier_cmd)
+
+    print("filename: "+file_name)
     # Path to the directory containing the validation set of images.
     # Subdirectories are expected to be organized such that when sorted their
     # index corresponds to their label. For example, if the
@@ -465,11 +472,11 @@ def main():
 
     # Check whether the file for result saving is exist or not.
     if args.ignore_exist_file_check == False:
-        assert os.path.isfile(os.path.join("./quant_result", generate_filename(args.image_classifier_cmd))) == False, (
-                "File already exist: " + generate_filename(args.image_classifier_cmd))
+        assert os.path.isfile(os.path.join("./quant_result", file_name)) == False, (
+                "File already exist: " + file_name)
 
     calculate_top_k(validation_images_dir, args.image_classifier_cmd,
-                    args.batch_size, args.resize_input_images, args.verbose, start, failed_list, args.fail_list)
+                    args.batch_size, args.resize_input_images, args.verbose, start, failed_list, args.fail_list, file_name)
 
     end = time.time()
     hours, rem = divmod(end - start, 3600)
