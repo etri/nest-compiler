@@ -38,6 +38,8 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "lib/Backends/VTA/VTA.h"
+
 #include <algorithm>
 #include <future>
 #include <sstream>
@@ -327,6 +329,10 @@ llvm::cl::opt<bool>
 llvm::cl::opt<unsigned> iterationsOpt(
     "iterations", llvm::cl::desc("Number of iterations to perform"),
     llvm::cl::Optional, llvm::cl::init(0), llvm::cl::cat(loaderCat));
+
+llvm::cl::opt<unsigned> idxMultiEVTA(
+    "index-multi-evta", llvm::cl::desc("Target EVTA Index"),
+    llvm::cl::Optional, llvm::cl::init(1), llvm::cl::cat(loaderCat));
 
 
 std::string Loader::getModelOptPath() {
@@ -941,6 +947,9 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
 
   hostManager_ = glow::make_unique<runtime::HostManager>(std::move(configs));
   backend_ = std::unique_ptr<Backend>(createBackend(ExecutionBackend));
+  if(backend_->getBackendName()=="VTA"){
+    static_cast<VTA*>(backend_.get())->setIdxMultiEVTA(idxMultiEVTA);
+  }
   F_ = M_->createFunction(modelPathOpt[0]);
   functionName_ = modelPathOpt[0];
 }

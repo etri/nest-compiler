@@ -2696,57 +2696,6 @@ void exportBundleHeader(llvm::StringRef outputDir,
 void VTA::save(Function *F, llvm::StringRef outputDir,
                llvm::StringRef bundleName,
                llvm::StringRef mainEntryName) const {
-  /*
-  std::string tntFileName("./VTASchedules.txt");
-  std::ifstream inTuneFs(tntFileName);
-  std::string inStr;
-  convTune.ConvolutionTune_.clear();
-
-  if(inTuneFs.is_open()) {
-    while (getline(inTuneFs, inStr)) {
-      if (inStr.compare("Conv") == 0) {
-        getline(inTuneFs, inStr);
-        std::string item;
-        unsigned_t inputN;
-        unsigned_t inputH;
-        unsigned_t inputW;
-        unsigned_t inputC;
-        unsigned_t filterN;
-        unsigned_t filterH;
-        unsigned_t filterW;
-        unsigned_t filterC;
-        unsigned_t stride;
-        unsigned_t pad;
-        unsigned_t nVirtualThread;
-        unsigned_t tileHSize;
-        unsigned_t tileWSize;
-        std::istringstream inIstr(inStr);
-        inIstr >> item >> inputN >> inputH >> inputW >> inputC;
-        if (item.compare("Input") != 0) continue;
-        getline(inTuneFs, inStr);
-        std::istringstream fIstr(inStr);
-        fIstr >> item >> filterN >> filterH >> filterW >> filterC;
-        if (item.compare("Filter") != 0) continue;
-        getline(inTuneFs, inStr);
-        std::istringstream sIstr(inStr);
-        sIstr >> item >> stride;
-        if (item.compare("Stride") != 0) continue;
-        getline(inTuneFs, inStr);
-        std::istringstream pIstr(inStr);
-        pIstr >> item >> pad;
-        if (item.compare("Pad") != 0) continue;
-        getline(inTuneFs, inStr);
-        std::istringstream schIstr(inStr);
-        schIstr >> item >> nVirtualThread >> tileHSize >> tileWSize;
-        if (item.compare("Schedule") != 0) continue;
-
-        convTune.ConvolutionTune_.push_back({inputN, inputH, inputW, inputC, filterN, filterH,
-                                             filterW, filterC, stride, pad, nVirtualThread, tileHSize, tileWSize});
-      }
-    }
-    inTuneFs.close();
-  }
-  */
   auto IR = generateAndOptimizeIR(F, *this, shouldShareBuffers());
   VTASaveContext ctx(&IR->getVariableMap());
   std::string weightFileName = outputDir;

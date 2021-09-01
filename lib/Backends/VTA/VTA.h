@@ -88,8 +88,15 @@ namespace glow {
 #else
     bool V = false;
 #endif
+
     return V;
   }
+
+        void setIdxMultiEVTA(uint32_t idx){
+          idxMultiEVTA = idx;
+        }
+    private:
+        uint32_t idxMultiEVTA = 1;
     };
 
 } // namespace glow
