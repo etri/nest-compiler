@@ -85,6 +85,12 @@ public:
   }
 
   void parseBackendSpecificOptions(const BackendOptions &opts) const;
+  void setTarget(std::string target) {target_ = target;}
+  void setOptLevel(uint32_t opt_level) {opt_level_ = opt_level;}
+
+private:
+  std::string target_;
+  uint32_t opt_level_;
 };
 
 } // namespace glow

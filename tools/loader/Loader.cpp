@@ -39,7 +39,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "lib/Backends/VTA/VTA.h"
-
+#include "lib/Backends/Relay/Relay.h"
 #include <algorithm>
 #include <future>
 #include <sstream>
@@ -334,6 +334,13 @@ llvm::cl::opt<unsigned> idxMultiEVTA(
     "index-multi-evta", llvm::cl::desc("Target EVTA Index"),
     llvm::cl::Optional, llvm::cl::init(1), llvm::cl::cat(loaderCat));
 
+llvm::cl::opt<std::string> relayTarget(
+    "relay-target", llvm::cl::desc("Relay Target Name"),
+    llvm::cl::Optional, llvm::cl::init("llvm"), llvm::cl::cat(loaderCat));
+
+llvm::cl::opt<unsigned> relayOptLevel(
+    "relay-opt-level", llvm::cl::desc("Relay Optimzation Level"),
+    llvm::cl::Optional, llvm::cl::init(0), llvm::cl::cat(loaderCat));
 
 std::string Loader::getModelOptPath() {
   // If given a single path, return it.
@@ -950,6 +957,12 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
   if(backend_->getBackendName()=="VTA"){
     static_cast<VTA*>(backend_.get())->setIdxMultiEVTA(idxMultiEVTA);
   }
+
+  if(backend_->getBackendName()=="Relay"){
+    static_cast<Relay*>(backend_.get())->setTarget(relayTarget.c_str());
+    static_cast<Relay*>(backend_.get())->setOptLevel(relayOptLevel);
+  }
+
   F_ = M_->createFunction(modelPathOpt[0]);
   functionName_ = modelPathOpt[0];
 }
