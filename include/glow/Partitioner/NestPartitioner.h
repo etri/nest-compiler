@@ -41,7 +41,6 @@ public:
   std::string backendName_;
   std::set<CostNode*> outNodeSet_;
   std::vector<CostNode*> nodeList_;
-//  float totalCost_ = INFINITY;
   bool isParallelCPU_ = false;
   bool isParallelBranch_ = false;
   bool isParallelPartition_ = false;
@@ -49,7 +48,6 @@ public:
   int branchID_ = -1;
   bool partOfBranch_ = false;
   unsigned int level_ = 0;
-//  std::vector<NodeGroup*> branchList_;
   std::vector<NodeGroup*> inBranchList_;
 };
 

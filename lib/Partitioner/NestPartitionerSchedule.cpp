@@ -180,45 +180,39 @@ void NestPartitionerSchedule::generateYamlFile(string& wfilec, std::size_t parti
 
 void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
 
-  for(int i = 0; i < partitionNum - 1; i++)
-  {
-    if(!partitionConfig.backendNames[i].compare("VTA"))
-    {
-      wfilec.append("\tp" + std::to_string(i) + "_destroy_module();\n");
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if(!partitionConfig.backendNames[i].compare("VTA")) {
+            wfilec.append("\tp" + std::to_string(i) + "_destroy_module();\n");
+        }
     }
-  }
-  wfilec.append("\n");
+    wfilec.append("\n");
+    wfilec.append("\t// Free all resources.\n");
 
-  wfilec.append("\t// Free all resources.\n");
+    for(int i = 0; i < partitionNum - 1; i++) {
+        wfilec.append("\tfree(activationsAddr" + std::to_string(i) + ");\n");
+        wfilec.append("\tfree(constantWeightVarsAddr" + std::to_string(i) + ");\n");
+        wfilec.append("\tfree(mutableWeightVarsAddr" + std::to_string(i) + ");\n\n");
+    }
 
- for(int i = 0; i < partitionNum - 1; i++)
-  {
-    wfilec.append("\tfree(activationsAddr" + std::to_string(i) + ");\n");
-    wfilec.append("\tfree(constantWeightVarsAddr" + std::to_string(i) + ");\n");
-    wfilec.append("\tfree(mutableWeightVarsAddr" + std::to_string(i) + ");\n\n");
-  }
+    bool vtaFlag = false;
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if(!partitionConfig.backendNames[i].compare("VTA"))
+          vtaFlag = true;
+    }
 
-  bool vtaFlag = false;
-  for(int i = 0; i < partitionNum - 1; i++)
-  {
-    if(!partitionConfig.backendNames[i].compare("VTA"))
-      vtaFlag = true;
-  }
+    if(vtaFlag) {
+        wfilec.append("#ifdef VTAMAIN\n");
+        wfilec.append("\tdestroyVTARuntime();\n");
+        wfilec.append("#endif\n");
+    }
+    wfilec.append("\n");
 
-  if(vtaFlag)
-  {
-    wfilec.append("#ifdef VTAMAIN\n");
-    wfilec.append("\tdestroyVTARuntime();\n");
-    wfilec.append("#endif\n");
-  }
+    if(profileMode_ == 1) {
+        wfilec.append("\tcreateYamlFile();\n");
+    }
 
-  if(profileMode_ == 1)
-  {
-    wfilec.append("\tcreateYamlFile();\n");
-  }
-
-  wfilec.append("\treturn 0;\n");
-  wfilec.append("}\n\n");
+    wfilec.append("\treturn 0;\n");
+    wfilec.append("}\n\n");
 }
 
 #include <boost/algorithm/string/replace.hpp>
@@ -476,315 +470,303 @@ void generateThreadCode(std::string &wfilec, int i, bool profileMode) {
 void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
 //  cout << "generateMain: " << wfilec << endl;
 
-  std::cout << "Partition plan fileName : " << getPartitionPlanFile() << std::endl;
-  std::vector<std::string> parallelPartitions;
-  std::map<std::string, std::string> pmap = deserializeStrStrMapFromYaml(getPartitionPlanFile());
-  if(pmap.find("parallelPartitions") != pmap.end()) {
-    boost::split(parallelPartitions, pmap.find("parallelPartitions")->second, [](char c){return c == ':';});
-    for(int i = 0; i < parallelPartitions.size(); i++)
-    {
-      parallelPartitions[i] = replaceAll(parallelPartitions[i], "(", "");
-      parallelPartitions[i] = replaceAll(parallelPartitions[i], ")", "");
-      parallelPartitions[i] = parallelPartitions[i].substr(0, parallelPartitions[i].find("||"));
-    }
-  }
-
-  if(parallelPartitions.size() > 0) {
-    wfilec.append("#define THREAD 1\n\n");
-
-    wfilec.append("#include <thread>\n\n");
-  }
-
-  wfilec.append("int main(int argc, char **argv) {\n");
-  wfilec.append("\tparseCommandLineOptions(argc, argv);\n\n");
-
-  bool vtaFlag = false;
-  for(int i = 0; i < partitionNum - 1; i++) {
-    if(!partitionConfig.backendNames[i].compare("VTA"))
-      vtaFlag = true;
-  }
-
-  if(vtaFlag) {
-    wfilec.append("#ifdef VTAMAIN\n");
-    wfilec.append("\tinitVTARuntime();\n");
-    wfilec.append("#endif\n");
-  }
-
- wfilec.append("\t//======== initialize variables =======//\n\n");
-
-//  cout << "//======== initialize variables start =======//" << endl;
-  std::string inputName;
-
-  BFSLevel bfs = getBFSLevel(funcList[0]);
-  size_t level = bfs.size();
-
-  std::string kindName_check;
-  for (int i2 = level - 1; i2 >= 0; i2--) {
-    Node *node = bfs[i2][0];
-
-    kindName_check = node->getNthInput(0).getNode()->getKindName();
-    if(i2 != 0 && !kindName_check.compare("Placeholder")) {
-      inputName = node->getNthInput(0).getNode()->getName();
-      break;
-    }
-  }
-
-  for(int i = 0; i < partitionNum - 1; i++) {
-    wfilec.append("\tuint8_t *constantWeightVarsAddr" + std::to_string(i) +
-                  " = \n\t\tinitConstantWeights(\"p" + std::to_string(i) +
-                  ".weights.bin\", p" + std::to_string(i) + "_config);\n");
-
-    if (i == 0) {
-      wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) +
-                    " = initMutableWeightVars(p" + std::to_string(i) +
-                    "_config, \"" + inputName + "\");\n");
-    }
-
-    wfilec.append("\tuint8_t *activationsAddr" + std::to_string(i) +
-                  " = initActivations(p" + std::to_string(i) + "_config);\n\n");
-  }
-
-//  cout << "//======== initialize mutableWeightVarsAddr start =======//" << endl;
-  wfilec.append("\t//======== initialize mutableWeightVarsAddr =======//\n\n");
-  for(int i = 1; i < partitionNum - 1; i++) {
-    wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) + " =  allocateMutableWeightVars(p" +
-                  std::to_string(i) + "_config);\n");
-  }
-  wfilec.append("\n");
-
-  for(int i = 0; i < partitionNum - 1; i++) {
-    if(!partitionConfig.backendNames[i].compare("VTA")){
-      wfilec.append("\tp" + std::to_string(i) + "_load_module(constantWeightVarsAddr" + std::to_string(i) + ");\n");
-    }
-  }
-  wfilec.append("\n");
-
-  // cout << "//======== multiple partitions start =======//" << endl;
-  wfilec.append("\t//======== multiple partitions =======//\n\n");
-
-  if(profileMode_ == 1) {
-    wfilec.append("\tunsigned long totalInftime;\n\n");
-  }
-
-  int resultNum = 0;
-  int resultVarNum = 0;
-  string resultList[partitionNum + partitionNum];
-  string resultCheckList[partitionNum + partitionNum];
-  std::vector<std::string> paraller;
-
-  for(int i = 0; i < partitionNum - 1; i++) {
-    auto func = funcList[i];
-
-    int inputCount = 0;
-    int outputCount = 0;
-    int checkResultNum = 0;
-    bool flag = false;
-
-    string inputList[maxInOut];
-    string outputList[maxInOut];
-    BFSLevel bfs = getBFSLevel(func);
-    size_t level = bfs.size();
-
-    setPartitionInputOutputList(func, inputList, outputList, &inputCount, &outputCount);
-
-    std::string outputName = func->getNodes().back().getName().trim("_save");
-
-    if(i == 0) {
-      //wfilec.append("\t// Perform the computation.\n");
-
-      wfilec.append("\tclock_t start_total = 0;\n");
-      wfilec.append("\tstart_total = clock();\n");
-
-      if(profileMode_ == 1) {
-        wfilec.append("\tif(REPEAT > 0){\n");
-        wfilec.append("\t\ttotalInftime = 0;\n");
-        wfilec.append("\t\tfor(int repeatCount = 0; repeatCount <= REPEAT; repeatCount++){\n");
-
-        wfilec.append("\t\t\tclock_t start_" + std::to_string(i) + ";\n");
-        wfilec.append("\t\t\tstart_" + std::to_string(i) + " = clock();\n\n");
-      }
-
-      wfilec.append("\tp" +
-                    std::to_string(i) + "(constantWeightVarsAddr" +
-                    std::to_string(i) + ", mutableWeightVarsAddr" +
-                    std::to_string(i) + ", activationsAddr" +
-                    std::to_string(i) + ");\n\n");
-
-      if(profileMode_ == 1) {
-        wfilec.append("\t\t\tclock_t now_" + std::to_string(i) + ";\n");
-        wfilec.append("\t\t\tnow_" + std::to_string(i) + " = clock();\n");
-        wfilec.append("\t\t\tunsigned long inftime_" + std::to_string(i) + " = (unsigned long)(now_" + std::to_string(i) + " - start_" + std::to_string(i) +");\n");
-       // wfilec.append("\t\t\t\t\t(float)(t_now_" + std::to_string(i) + ".millitm - t_start_" + std::to_string(i) + ".millitm);\n\n");
-
-        wfilec.append("\t\t\tif(repeatCount != 0){\n");
-        wfilec.append("\t\t\t\ttotalInftime = totalInftime + inftime_" + std::to_string(i) + ";\n");
-        wfilec.append("\t\t\t}\n");
-        wfilec.append("\t\t}\n");
-        wfilec.append("\t}\n\n");
-
-        wfilec.append("\tif(totalInftime > 0 && REPEAT > 1) {\n");
-        wfilec.append("\tdelay_time[" + std::to_string(i) + "] = totalInftime/(REPEAT);\n");
-        wfilec.append("\t}else {\n");
-        wfilec.append("\t\tdelay_time[" + std::to_string(i) + "] = totalInftime;\n");
-        wfilec.append("\t}\n");
-        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(i) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(i) + "]);\n\n");
-      }
-
-      if(outputCount == 1) {
-        wfilec.append("\tfloat* resultVar" + std::to_string(resultVarNum) +
-                      " = getInferenceResultVar(p" + std::to_string(i) +
-                      "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                      ", \"" + outputList[0] + "\");\n");
-
-        resultCheckList[resultNum] = std::to_string(resultVarNum);
-        resultList[resultNum] = outputList[0];
-        resultNum++;
-      }
-      else {
-        for(int outputNum = 0; outputNum < outputCount; outputNum++) {
-          wfilec.append("\tfloat* resultVar" + std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1) +
-                        " = getInferenceResultVar(p" + std::to_string(i) +
-                        "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                        ", \"" + outputList[outputNum] + "\");\n");
-
-          resultCheckList[resultNum] = std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
-          resultList[resultNum] = outputList[outputNum];
-          resultNum++;
+    std::cout << "Partition plan fileName : " << getPartitionPlanFile() << std::endl;
+    std::vector<std::string> parallelPartitions;
+    std::map<std::string, std::string> pmap = deserializeStrStrMapFromYaml(getPartitionPlanFile());
+    if(pmap.find("parallelPartitions") != pmap.end()) {
+        boost::split(parallelPartitions, pmap.find("parallelPartitions")->second, [](char c){return c == ':';});
+        for(int i = 0; i < parallelPartitions.size(); i++){
+          parallelPartitions[i] = replaceAll(parallelPartitions[i], "(", "");
+          parallelPartitions[i] = replaceAll(parallelPartitions[i], ")", "");
+          parallelPartitions[i] = parallelPartitions[i].substr(0, parallelPartitions[i].find("||"));
         }
-      }
-      resultVarNum++;
-
-    } else {
-
-      for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-        if(!resultList[checkCount].compare(inputList[0])) {
-          flag = true;
-          checkResultNum = checkCount;
-        }
-      }
-
-      // 기존 선언된 resultVar 중 중복된 inputName이 없다면, 해당 로직 필요 여부 체크
-      if(!flag)  {
-        if(resultNum != 0)
-          checkResultNum = resultNum - 1; // 앞에서 선언한 resultVar 호출, inputName 중복이면 checkCount resultVar 호출
-      }
-      wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(i) +
-                    "_config, mutableWeightVarsAddr" + std::to_string(i) + ", \"" + inputList[0] + "\", resultVar" + resultCheckList[checkResultNum] + ");\n");
-    }
-
-    if(i != 0 && inputList->size() > 1) {
-      for(int count = 1; count < inputList->size(); count++) {
-          if(!inputList[count].compare("")) {
-              break;
-              //continue;
-          }
-
-        for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-          if(!resultList[checkCount].compare(inputList[count])) {
-            flag = true;
-            checkResultNum = checkCount;
-          }
-        }
-
-        if(!flag) { // 기존 선언된 resultVar 중 중복된 inputName이 없다면, 해당 로직 필요 여부 체크
-          if(resultNum != 0)
-            checkResultNum = resultNum - 1; // 앞에서 선언한 resultVar 호출, inputName 중복이면 checkCount resultVar 호출
-        }
-
-        flag = true;
-        for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-          if((checkCount != count) && (!inputList[checkCount].compare(inputList[count]))) {
-            flag = false;
-          }
-        }
-        if(flag) {
-          wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(i) + "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                        ", \"" + inputList[count] + "\", resultVar" + resultCheckList[checkResultNum] + ");\n");
-        }
-        flag = false;
-      }
-      wfilec.append("\n");
     }
 
     if(parallelPartitions.size() > 0) {
-      for(int partitionCount = 0; partitionCount < parallelPartitions.size(); partitionCount++) {
-        if(!parallelPartitions[partitionCount].compare("p" + std::to_string(i - 1))) {
-            generateThreadCode(wfilec, i, profileMode_);
-        }
-      }
+        wfilec.append("#define THREAD 1\n\n");
+        wfilec.append("#include <thread>\n\n");
     }
 
-    if(i != 0) {
+    wfilec.append("int main(int argc, char **argv) {\n");
+    wfilec.append("\tparseCommandLineOptions(argc, argv);\n\n");
 
-      bool notParallelPartition = true;
-      if(parallelPartitions.size() > 0){
-        for(int partitionCount = 0; partitionCount < parallelPartitions.size(); partitionCount++) {
-          if (!parallelPartitions[partitionCount].compare("p" + std::to_string(i - 1))){
-              notParallelPartition = false;
-          }
-          if (!parallelPartitions[partitionCount].compare("p" + std::to_string(i))){
-              notParallelPartition = false;
-          }
+    bool vtaFlag = false;
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if(!partitionConfig.backendNames[i].compare("VTA"))
+          vtaFlag = true;
+    }
+
+    if(vtaFlag) {
+        wfilec.append("#ifdef VTAMAIN\n");
+        wfilec.append("\tinitVTARuntime();\n");
+        wfilec.append("#endif\n");
+    }
+
+    wfilec.append("\t//======== initialize variables =======//\n\n");
+//  cout << "//======== initialize variables start =======//" << endl;
+    std::string inputName;
+
+    BFSLevel bfs = getBFSLevel(funcList[0]);
+    size_t level = bfs.size();
+
+    std::string kindName_check;
+    for (int i2 = level - 1; i2 >= 0; i2--) {
+        Node *node = bfs[i2][0];
+        kindName_check = node->getNthInput(0).getNode()->getKindName();
+        if(i2 != 0 && !kindName_check.compare("Placeholder")) {
+            inputName = node->getNthInput(0).getNode()->getName();
+            break;
         }
-      }
+    }
 
-      if(notParallelPartition) {
-          generateNonThreadCode(wfilec, i, profileMode_);
-      }
+    for(int i = 0; i < partitionNum - 1; i++) {
+        wfilec.append("\tuint8_t *constantWeightVarsAddr" + std::to_string(i) +
+                      " = \n\t\tinitConstantWeights(\"p" + std::to_string(i) +
+                      ".weights.bin\", p" + std::to_string(i) + "_config);\n");
 
-      if (i == partitionNum - 2) {
-
-        wfilec.append("\tclock_t now_total;\n");
-        wfilec.append("\tnow_total = clock();\n");
-        wfilec.append("\tunsigned long inftime_total = (unsigned long)(now_total - start_total);\n");
-        wfilec.append("\tprintf(\"\\n====> [Total inference time] %lu microsec.\\n\", inftime_total);\n\n");
-
-        wfilec.append("\t// Report the results.\n");
-        wfilec.append("\tprintf(\"====== final result of this neural net ========\\n\");\n");
-        wfilec.append("\tdumpInferenceResults(p" + std::to_string(i) +
-                      "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                      ", \"" + outputName + "\");\n\n");
-      } else {
-        bool flag = true;
-        for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-          // outputName 중복 여부 체크
-          if(!resultList[checkCount].compare(outputName))
-            flag = false;
+        if (i == 0) {
+            wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) +
+                        " = initMutableWeightVars(p" + std::to_string(i) +
+                        "_config, \"" + inputName + "\");\n");
         }
 
-        // output 개수에 따른 resultVar값 선언 부분 수정 필요
-        // 중복된 inputName이 없다면(전 파티션 outputName들 비교)
-        if(flag) {
+        wfilec.append("\tuint8_t *activationsAddr" + std::to_string(i) +
+                      " = initActivations(p" + std::to_string(i) + "_config);\n\n");
+    }
 
-          if(outputCount == 1) {
-            wfilec.append("\tfloat* resultVar" + std::to_string(resultVarNum) +
-                          " = getInferenceResultVar(p" + std::to_string(i) +
-                          "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                          ", \"" + outputList[0] + "\");\n");
+    //  cout << "//======== initialize mutableWeightVarsAddr start =======//" << endl;
+    wfilec.append("\t//======== initialize mutableWeightVarsAddr =======//\n\n");
+    for(int i = 1; i < partitionNum - 1; i++) {
+        wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) + " =  allocateMutableWeightVars(p" +
+                      std::to_string(i) + "_config);\n");
+    }
+    wfilec.append("\n");
 
-            resultCheckList[resultNum] = std::to_string(resultVarNum);
-            resultList[resultNum] = outputList[0];
-            resultNum++;
-          }
-          else {
-            for(int outputNum = 0; outputNum < outputCount; outputNum++) {
-              wfilec.append("\tfloat* resultVar" + std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1) +
-                            " = getInferenceResultVar(p" + std::to_string(i) +
-                            "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                            ", \"" + outputList[outputNum] + "\");\n");
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if(!partitionConfig.backendNames[i].compare("VTA")){
+            wfilec.append("\tp" + std::to_string(i) + "_load_module(constantWeightVarsAddr" + std::to_string(i) + ");\n");
+        }
+    }
+    wfilec.append("\n");
 
-              //std::cout << "check : " << resultVarNum << ", outputNum : " << outputNum << std::endl;
-              //std::cout << "check 1 : " << std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1) << std::endl;
-              resultCheckList[resultNum] = std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
-              resultList[resultNum] = outputList[outputNum];
-              resultNum++;
+    // cout << "//======== multiple partitions start =======//" << endl;
+    wfilec.append("\t//======== multiple partitions =======//\n\n");
+    if(profileMode_ == 1) {
+        wfilec.append("\tunsigned long totalInftime;\n\n");
+    }
+
+    int resultNum = 0;
+    int resultVarNum = 0;
+    string resultList[partitionNum*2];
+    string resultCheckList[partitionNum*2];
+
+    for(int i = 0; i < partitionNum - 1; i++) {
+        auto func = funcList[i];
+        int inputCount = 0;
+        int outputCount = 0;
+        int checkResultNum = 0;
+        bool flag = false;
+
+        string inputList[maxInOut];
+        string outputList[maxInOut];
+
+        setPartitionInputOutputList(func, inputList, outputList, &inputCount, &outputCount);
+        std::string outputName = func->getNodes().back().getName().trim("_save");
+
+        if(i == 0) {
+          //wfilec.append("\t// Perform the computation.\n");
+
+            wfilec.append("\tclock_t start_total = 0;\n");
+            wfilec.append("\tstart_total = clock();\n");
+
+            if(profileMode_ == 1) {
+                wfilec.append("\tif(REPEAT > 0){\n");
+                wfilec.append("\t\ttotalInftime = 0;\n");
+                wfilec.append("\t\tfor(int repeatCount = 0; repeatCount <= REPEAT; repeatCount++){\n");
+
+                wfilec.append("\t\t\tclock_t start_" + std::to_string(i) + ";\n");
+                wfilec.append("\t\t\tstart_" + std::to_string(i) + " = clock();\n\n");
             }
-          }
-          resultVarNum++;
+
+            wfilec.append("\tp" +
+                        std::to_string(i) + "(constantWeightVarsAddr" +
+                        std::to_string(i) + ", mutableWeightVarsAddr" +
+                        std::to_string(i) + ", activationsAddr" +
+                        std::to_string(i) + ");\n\n");
+
+            if(profileMode_ == 1) {
+                wfilec.append("\t\t\tclock_t now_" + std::to_string(i) + ";\n");
+                wfilec.append("\t\t\tnow_" + std::to_string(i) + " = clock();\n");
+                wfilec.append("\t\t\tunsigned long inftime_" + std::to_string(i) + " = (unsigned long)(now_" + std::to_string(i) + " - start_" + std::to_string(i) +");\n");
+                // wfilec.append("\t\t\t\t\t(float)(t_now_" + std::to_string(i) + ".millitm - t_start_" + std::to_string(i) + ".millitm);\n\n");
+
+                wfilec.append("\t\t\tif(repeatCount != 0){\n");
+                wfilec.append("\t\t\t\ttotalInftime = totalInftime + inftime_" + std::to_string(i) + ";\n");
+                wfilec.append("\t\t\t}\n");
+                wfilec.append("\t\t}\n");
+                wfilec.append("\t}\n\n");
+
+                wfilec.append("\tif(totalInftime > 0 && REPEAT > 1) {\n");
+                wfilec.append("\tdelay_time[" + std::to_string(i) + "] = totalInftime/(REPEAT);\n");
+                wfilec.append("\t}else {\n");
+                wfilec.append("\t\tdelay_time[" + std::to_string(i) + "] = totalInftime;\n");
+                wfilec.append("\t}\n");
+                wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(i) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(i) + "]);\n\n");
+            }
+
+            if(outputCount == 1) {
+                std::string rVarName = "resultVar" + std::to_string(resultVarNum);
+                wfilec.append("\tfloat* " + rVarName +
+                              " = getInferenceResultVar(p" + std::to_string(i) +
+                              "_config, mutableWeightVarsAddr" + std::to_string(i) +
+                              ", \"" + outputList[0] + "\");\n");
+
+                resultCheckList[resultNum] = std::to_string(resultVarNum);
+                resultList[resultNum] = outputList[0];
+                resultNum++;
+            } else {
+                for(int outputNum = 0; outputNum < outputCount; outputNum++) {
+                    std::string rVarName = "resultVar" + std::to_string(resultVarNum)  + "_" + std::to_string(outputNum + 1);
+                    wfilec.append("\tfloat* " + rVarName +
+                                " = getInferenceResultVar(p" + std::to_string(i) +
+                                "_config, mutableWeightVarsAddr" + std::to_string(i) +
+                                ", \"" + outputList[outputNum] + "\");\n");
+
+                    resultCheckList[resultNum] = std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
+                    resultList[resultNum] = outputList[outputNum];
+                    resultNum++;
+                }
+            }
+            resultVarNum++;
+        } else {
+
+            for(int checkCount = 0; checkCount < resultNum; checkCount++) {
+                if(!resultList[checkCount].compare(inputList[0])) {
+                    flag = true;
+                    checkResultNum = checkCount;
+                }
+            }
+
+            // 기존 선언된 resultVar 중 중복된 inputName이 없다면, 해당 로직 필요 여부 체크
+            if(!flag)  {
+                if(resultNum != 0)
+                  checkResultNum = resultNum - 1; // 앞에서 선언한 resultVar 호출, inputName 중복이면 checkCount resultVar 호출
+            }
+            wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(i) +
+                        "_config, mutableWeightVarsAddr" + std::to_string(i) + ", \"" + inputList[0] + "\", resultVar" + resultCheckList[checkResultNum] + ");\n");
         }
-      }
+
+        if(i != 0 && inputList->size() > 1) {
+            for(int count = 1; count < inputList->size(); count++) {
+                if(!inputList[count].compare("")) {
+                    break;
+                    //continue;
+                }
+
+                for(int checkCount = 0; checkCount < resultNum; checkCount++) {
+                    if(!resultList[checkCount].compare(inputList[count])) {
+                        flag = true;
+                        checkResultNum = checkCount;
+                    }
+                }
+
+                if(!flag) { // 기존 선언된 resultVar 중 중복된 inputName이 없다면, 해당 로직 필요 여부 체크
+                    if(resultNum != 0)
+                        checkResultNum = resultNum - 1; // 앞에서 선언한 resultVar 호출, inputName 중복이면 checkCount resultVar 호출
+                }
+
+                flag = true;
+                for(int checkCount = 0; checkCount < resultNum; checkCount++) {
+                    if((checkCount != count) && (!inputList[checkCount].compare(inputList[count]))) {
+                        flag = false;
+                    }
+                }
+                if(flag) {
+                    wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(i) + "_config, mutableWeightVarsAddr" + std::to_string(i) +
+                                ", \"" + inputList[count] + "\", resultVar" + resultCheckList[checkResultNum] + ");\n");
+                }
+                flag = false;
+
+            }
+            wfilec.append("\n");
+        }
+
+        if(parallelPartitions.size() > 0) {
+            for(int partitionCount = 0; partitionCount < parallelPartitions.size(); partitionCount++) {
+                if(!parallelPartitions[partitionCount].compare("p" + std::to_string(i - 1))) {
+                    generateThreadCode(wfilec, i, profileMode_);
+                }
+            }
+        }
+
+        if(i != 0) {
+            bool notParallelPartition = true;
+            if(parallelPartitions.size() > 0){
+                for(int partitionCount = 0; partitionCount < parallelPartitions.size(); partitionCount++) {
+                    if (!parallelPartitions[partitionCount].compare("p" + std::to_string(i - 1))){
+                        notParallelPartition = false;
+                    }
+                    if (!parallelPartitions[partitionCount].compare("p" + std::to_string(i))){
+                        notParallelPartition = false;
+                    }
+                }
+            }
+
+            if(notParallelPartition) {
+                generateNonThreadCode(wfilec, i, profileMode_);
+            }
+
+            if (i == partitionNum - 2) {
+                wfilec.append("\tclock_t now_total;\n");
+                wfilec.append("\tnow_total = clock();\n");
+                wfilec.append("\tunsigned long inftime_total = (unsigned long)(now_total - start_total);\n");
+                wfilec.append("\tprintf(\"\\n====> [Total inference time] %lu microsec.\\n\", inftime_total);\n\n");
+
+                wfilec.append("\t// Report the results.\n");
+                wfilec.append("\tprintf(\"====== final result of this neural net ========\\n\");\n");
+                wfilec.append("\tdumpInferenceResults(p" + std::to_string(i) +
+                          "_config, mutableWeightVarsAddr" + std::to_string(i) +
+                          ", \"" + outputName + "\");\n\n");
+            } else {
+                bool flag = true;
+                for(int checkCount = 0; checkCount < resultNum; checkCount++) {
+                  // outputName 중복 여부 체크
+                  if(!resultList[checkCount].compare(outputName))
+                    flag = false;
+                }
+
+                // output 개수에 따른 resultVar값 선언 부분 수정 필요
+                // 중복된 inputName이 없다면(전 파티션 outputName들 비교)
+                if(flag) {
+                  if(outputCount == 1) {
+                      std::string rVarName = "resultVar" + std::to_string(resultVarNum);
+                      wfilec.append("\tfloat* " + rVarName +
+                                  " = getInferenceResultVar(p" + std::to_string(i) +
+                                  "_config, mutableWeightVarsAddr" + std::to_string(i) +
+                                  ", \"" + outputList[0] + "\");\n");
+
+                      resultCheckList[resultNum] = std::to_string(resultVarNum);
+                      resultList[resultNum] = outputList[0];
+                      resultNum++;
+                  } else {
+
+                      for(int outputNum = 0; outputNum < outputCount; outputNum++) {
+                          std::string rVarName = "resultVar" + std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
+                          wfilec.append("\tfloat* " + rVarName +
+                                    " = getInferenceResultVar(p" + std::to_string(i) +
+                                    "_config, mutableWeightVarsAddr" + std::to_string(i) +
+                                    ", \"" + outputList[outputNum] + "\");\n");
+
+                          resultCheckList[resultNum] = std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
+                          resultList[resultNum] = outputList[outputNum];
+                          resultNum++;
+                      }
+                  }
+                  resultVarNum++;
+                }
+            }
+        }
     }
-  }
 }
 
 void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName) {
@@ -807,6 +789,7 @@ void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, s
     string inference_main;
     string memfree;
     string yamlFile;
+    std::vector<std::string> resultVarList;
 
     generateDeclaration(declare, partitionNum, partitionConfig); // 헤더 선언
     generateMain(inference_main, partitionNum, funcList, partitionConfig);

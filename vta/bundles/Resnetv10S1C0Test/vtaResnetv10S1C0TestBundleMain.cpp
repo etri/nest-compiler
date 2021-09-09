@@ -220,6 +220,8 @@ static int8_t *initMutableWeightVars(const BundleConfig &config) {
           getMutableWeightVar(config, "input");
   memcpy(mutableWeightVarsAddr + inputGPUDataVar.offset, inputT,
          imageDataSizeInBytes);
+  free(inputT);
+
   return mutableWeightVarsAddr;
 }
 

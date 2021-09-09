@@ -361,6 +361,8 @@ static uint8_t *initMutableWeightVars(const BundleConfig &config, const char *na
           getMutableWeightVar(config, name);
   memcpy(mutableWeightVarsAddr + inputGPUDataVar.offset, inputT,
          imageDataSizeInBytes);
+  free(inputT);
+
   return mutableWeightVarsAddr;
 }
 
