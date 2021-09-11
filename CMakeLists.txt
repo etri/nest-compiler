@@ -37,7 +37,7 @@ if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h)
 
 endif()
 
-execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory ${NESTC_ROOT_DIR}/cmake ${NESTC_ROOT_DIR})
+execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory ${NESTC_ROOT_DIR}/cmake/glow ${NESTC_ROOT_DIR}/glow)
 
 if (NESTC_WITH_EVTA)
     add_definitions(-DNESTC_WITH_VTAINTERPRETER=1)
