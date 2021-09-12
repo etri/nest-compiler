@@ -24,12 +24,13 @@
 
 
 #include "mxnet_exported_resnet18.h"
-#include <dlpack/dlpack.h>
-#include <tvm/runtime/module.h>
-#include <tvm/runtime/packed_func.h>
-#include <tvm/runtime/registry.h>
+//#include <dlpack/dlpack.h>
+//#include <tvm/runtime/module.h>
+//#include <tvm/runtime/packed_func.h>
+//#include <tvm/runtime/registry.h>
 
 
+#include <cstring>
 #include <cstdio>
 #include <png.h>
 #include <assert.h>

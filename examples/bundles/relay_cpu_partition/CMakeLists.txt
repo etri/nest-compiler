@@ -40,7 +40,7 @@ add_dependencies(ResNet18RelayPartitionBundle ResNet18RelayPartitionBundleMain R
 # Regular Bundle
 add_custom_command(
         OUTPUT
-        ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/relay/genCode.py ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p1.o ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p2.o ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p3.o
+        ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/relay__p0/genCode.py ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p1.o ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p2.o ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p3.o
         COMMAND
         model-partition-tuner -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
         -model-input=${MODEL_INPUT_NAME},float,[1,224,224,3]
@@ -79,21 +79,21 @@ add_custom_target(ResNet18RelayPartitionBundleNet DEPENDS ${RESNET18_RELAY_PARTI
 
 add_custom_command(
         OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/module/p0.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.cpp
         COMMAND
-        python3 relay/genCode.py
-        DEPENDS ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/relay/genCode.py tvm
+        python3 relay__p0/genCode.py
+        DEPENDS ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/relay__p0/genCode.py tvm
 )
 
 add_custom_command(
         OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/module/p0.o
-        ${CMAKE_CURRENT_BINARY_DIR}/module/p0.h
+        ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.o
+        ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.h
         COMMAND
         make
         WORKING_DIRECTORY
-        ${CMAKE_CURRENT_BINARY_DIR}/module/
-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/module/p0.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/module__p0/
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.cpp
 )
 
 add_custom_command(
@@ -101,15 +101,15 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/p0.o
         ${CMAKE_CURRENT_BINARY_DIR}/p0.h
         COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_CURRENT_BINARY_DIR}/module/p0.o
+        ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.o
         ${CMAKE_CURRENT_BINARY_DIR}/p0.o
         COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_CURRENT_BINARY_DIR}/module/p0.h
+        ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.h
         ${CMAKE_CURRENT_BINARY_DIR}/p0.h
-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/module/p0.o ${CMAKE_CURRENT_BINARY_DIR}/module/p0.h
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.o ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.h
 )
 
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/module/)
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/module__p0/)
 include_directories(BEFORES
         ${NESTC_ROOT_DIR}/tvm/include
         ${NESTC_ROOT_DIR}/tvm/3rdparty/dlpack/include

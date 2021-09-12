@@ -43,6 +43,7 @@ std::ostream& operator<<(std::ostream& os, const out_quoted<CharT>& q)
 
 // header wrapping
 std::string hh(std::string org) {
+  if(org.length()==0) return "";
    std::stringstream ss11;
    ss11 << "header.append(" << quoted(org) << ")\n";
   return ss11.str();
@@ -50,6 +51,7 @@ std::string hh(std::string org) {
 
 // cpp code wrapping
 std::string cc(std::string org) {
+  if(org.length()==0) return "";
    std::stringstream ss11;
    ss11 << "cpp.append(" << quoted(org) << ")\n";
   return ss11.str();
@@ -124,6 +126,7 @@ public:
   std::vector<std::string> output_names;
   std::vector<std::string> input_DLTensor_names;
   std::vector<std::string> output_DLTensor_names;
+  int qnn_mode = 0;
 
 
 private:
@@ -426,7 +429,7 @@ void initCtx(struct SaveCtx &Ctx,
   //
   py.append("import numpy as np\nimport tvm\nfrom tvm import te, runtime\nimport tvm.relay as relay\n"
         "from tvm.relay.frontend.common import infer_type\nfrom tvm.relay.testing import check_grad, run_infer_type, run_opt_pass, _np_randn_from_type\n"
-        "import onnx\nfrom tvm.relay import op as _op\n\ndef load_wgt(filename, shape):\n\tf=open(filename,\"rb\")\n\td=f.read()\n\treturn np.frombuffer(d, dtype=np.float32).reshape(shape)\n\n");
+        "import onnx\nfrom tvm.relay import op as _op\n\ndef load_wgt(filename, shape,dtype):\n\tf=open(filename,\"rb\")\n\td=f.read()\n\treturn np.frombuffer(d, dtype=dtype).reshape(shape)\n\n");
 
 
 }
@@ -439,7 +442,8 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
   auto& py = Ctx.pyRelayCode;
   auto& mk = Ctx.partMakeGen;
 
-
+  std::string relay_mkpath = (std::string)outputDir + "/relay__" + (std::string)bundleName ;
+  std::string  module_mkpath = (std::string)outputDir + "/module__" + (std::string)bundleName;
 
   //#input에 대해서는 이름을 알 수 있지만
   //#output은 별도 name을 유지하지 않음. index로 가져옴.
@@ -489,12 +493,12 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
   inc.append(hh("#endif"));
 
 
-    inc.append("with open(\"" +  (std::string)outputDir + "/module/" + (std::string)bundleName + ".h\",\"w\") as f_h:\n");
+    inc.append("with open(\"" +  module_mkpath + "/" + (std::string)bundleName + ".h\",\"w\") as f_h:\n");
     inc.append("  for item in header:\n");
     inc.append("    f_h.write(\"%s\\n\" % item)\n");
 
 
-  py.append("\ndesired_layouts = { \"nn.conv2d\": [\"NCHW\", \"default\"]}  \
+  py.append("\ndesired_layouts = { \"nn.conv2d\": [\"NCHW\", \"default\"], \"qnn.conv2d\": [\"NCHW\", \"default\"]}  \
              \nseq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(), \
              \n\t\trelay.transform.ConvertLayout(desired_layouts)]) \
              \nwith tvm.transform.PassContext(opt_level=3): \
@@ -505,7 +509,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
         \n\t\tlib = relay.build(relay_mod, target,params=params) \
     \n#cross_compile = 'aarch64-linux-gnu-c++' \
     \n#lib.export_library(\"output.so\", cc=cross_compile)    \
-    \nlib.export_library(\"" + (std::string)outputDir + "/module/" + (std::string)bundleName + "_tvm.so\")        \
+    \nlib.export_library(\"" + module_mkpath + "/" + (std::string)bundleName + "_tvm.so\")        \
     \n# = lib.get_params()\
     \n#    for item in b:\
     \n#        print(item)\
@@ -548,7 +552,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
      cpp.append(cc("" ));
      cpp.append(procCtx.var_declare); // mutable variables
      cpp.append(cc("  DLDevice dev{kDLCPU, 0};"))  ;
-     cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"" +  (std::string)outputDir + "/module/" + (std::string)bundleName + "_tvm.so\");"))  ;
+     cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"" +  module_mkpath + "/" + (std::string)bundleName + "_tvm.so\");"))  ;
   
      // create the graph executor module
      cpp.append(cc(" tvm::runtime::Module gmod = mod_factory.GetFunction(\"default\")(dev);"));
@@ -573,7 +577,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     cpp.append(cc("  return 0;"));
     cpp.append(cc("}"));
 
-    cpp.append("with open(\"" +  (std::string)outputDir + "/module/" + (std::string)bundleName + ".cpp\",\"w\") as f_cpp:\n");
+    cpp.append("with open(\"" +  module_mkpath + "/" + (std::string)bundleName + ".cpp\",\"w\") as f_cpp:\n");
     cpp.append("  for item in cpp:\n");
     cpp.append("    f_cpp.write(\"%s\\n\" % item)\n");
 
@@ -636,10 +640,10 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   std::vector<std::string> params_name;
 
   int status;
-  std::string mkpath = (std::string)outputDir + "/relay";
-  status = mkdir(mkpath.c_str(),  S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-  mkpath = (std::string)outputDir + "/module";
-  status = mkdir(mkpath.c_str(),  S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  std::string relay_mkpath = (std::string)outputDir + "/relay__" + (std::string)bundleName ;
+  status = mkdir(relay_mkpath.c_str(),  S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+  std::string  module_mkpath = (std::string)outputDir + "/module__" + (std::string)bundleName;
+  status = mkdir(module_mkpath.c_str(),  S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
   
   initCtx(saveCtx,bundleName,mainEntryName);
   std::stringstream pyss;
@@ -666,7 +670,10 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
     // tvm에서 활용하는 params 형태로 변경가능한게 좋음가 좋음
     // int32 갯수
     // {name, }
+        std::string dtype_str = "";
         TypeRef T = W->getType();
+      
+           // std::cout << T->toString() << std::endl;
       
         if(T->elementType_ == ElemKind::FloatTy) {
           pyss<< (std::string) W->getName() << " = relay.var(\"" << (std::string) W->getName() << "\", shape=(";
@@ -675,9 +682,29 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
           }
           if(T->numSizes_ == 1) pyss<< ",";
           pyss<< "),dtype=\"float32\")"<<std::endl;
+          dtype_str = "\"float32\"";
          
-        }  else {
-           pyss<< "!TYPE:"<<(int)T->elementType_ << std::endl;
+        }  else if (T->elementType_ == ElemKind::Int32QTy) {
+          pyss<< (std::string) W->getName() << " = relay.var(\"" << (std::string) W->getName() << "\", shape=(";
+          for(int i=0;i<T->numSizes_;i++) {
+             pyss<< (int)T->sizes_[i] << ((i!=T->numSizes_-1) ? "," : ""); 
+          }
+          if(T->numSizes_ == 1) pyss<< ",";
+          pyss<< "),dtype=\"int32\")"<<std::endl;
+          dtype_str = "\"int32\"";
+         
+        }  else if (T->elementType_ == ElemKind::Int8QTy) {
+          pyss<< (std::string) W->getName() << " = relay.var(\"" << (std::string) W->getName() << "\", shape=(";
+          for(int i=0;i<T->numSizes_;i++) {
+             pyss<< (int)T->sizes_[i] << ((i!=T->numSizes_-1) ? "," : ""); 
+          }
+          if(T->numSizes_ == 1) pyss<< ",";
+          pyss<< "),dtype=\"int8\")"<<std::endl;
+          dtype_str = "\"int8\"";
+
+        } else {
+
+           std::cout << (int)T->elementType_ << std::endl;
         } 
 
 
@@ -697,23 +724,41 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
             }
           }
           assert(tensor);
+          if(T->elementType_ == ElemKind::FloatTy) {
           auto handle = tensor->getHandle<float>();
           
-          std::ofstream fos( (std::string) outputDir + "/relay/" + (std::string)W->getName(), std::ios::out);        
+            std::ofstream fos( relay_mkpath + "/" + (std::string)W->getName(), std::ios::out);        
           for (size_t i = 0, e = handle.size(); i < e; i++) {
             auto data = handle.raw(i);
             fos.write((const char *)&data, 4);
+          }
+          } else if(T->elementType_ == ElemKind::Int32QTy) {
+            auto handle = tensor->getHandle<int32_t>();
+            
+            std::ofstream fos( relay_mkpath + "/" + (std::string)W->getName(), std::ios::out);        
+            for (size_t i = 0, e = handle.size(); i < e; i++) {
+              auto data = handle.raw(i);
+              fos.write((const char *)&data, 4);
+            }            
+          } else if(T->elementType_ == ElemKind::Int8QTy) {
+            auto handle = tensor->getHandle<int8_t>();
+            
+            std::ofstream fos( relay_mkpath + "/" + (std::string)W->getName(), std::ios::out);        
+            for (size_t i = 0, e = handle.size(); i < e; i++) {
+              auto data = handle.raw(i);
+              fos.write((const char *)&data, 1);
+            }                 
           }
 
           addConstantSymbolEntry(W, &procCtx);
 
           //load in python
-          pyss<< "W_" << (std::string) W->getName() << "= load_wgt(" << "\"" << (std::string) outputDir << "/relay/" << (std::string) W->getName() << "\",(";
+          pyss<< "W_" << (std::string) W->getName() << "= load_wgt(" << "\"" << relay_mkpath << "/" << (std::string) W->getName() << "\",(";
           for(int i=0;i<T->numSizes_;i++) {
              pyss<< (int)T->sizes_[i] << ((i!=T->numSizes_-1) ? "," : ""); 
           }
           if(T->numSizes_ == 1) pyss<< ",";
-          pyss<< "))"<<std::endl;
+          pyss<< "), " << dtype_str << ")"<<std::endl;
 
           params_name.push_back(W->getName() );
 
@@ -736,6 +781,8 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   
 
   }
+  
+  std::cout<< "mutable var checked" << std::endl;
 
   pyss<<"params = {";
   for(auto s : params_name) {
@@ -744,6 +791,10 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   pyss<<"}"<<std::endl;
 
   int ir_idx=0;
+  //Instruction *prevInst;
+  std::string prev_alloc_name="";
+  TypeRef prev_alloc_type;
+  
   for (auto &I : IR->getInstrs()) {
 
     //std::cout<< (std::string)I.toString()<<std::endl;
@@ -771,16 +822,19 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
       case Kinded::Kind::AllocActivationInstKind:
       {
-        /*
+        
         //inputs = {"input": ((1, 224, 224, 3), "uint8")}
         //x = relay.var("x", shape=(1, 3, 224, 224))
 //  data = relay.var("data", relay.TensorType(d_shape, "float32"))
         //weight = relay.var("weight", relay.TensorType(w_shape, "float32"))        
         auto II =  static_cast<AllocActivationInst*>(&I);
         TypeRef T = II->getTy();
-        //std::cout<< (int)T->elementType_ << std::endl;
-        //std::cout<< (int)T->numSizes_ << std::endl;
 
+
+        prev_alloc_type = T;
+        prev_alloc_name = (std::string) I.getName();
+
+/*
         if(T->elementType_ == ElemKind::FloatTy) {
           std::cout<< (std::string) I.getName() << " = relay.var(\"" << (std::string) I.getName() << "\", shape=( ";
           for(int i=0;i<T->numSizes_;i++) {
@@ -848,6 +902,76 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
        
         break;
 
+      case Kinded::Kind::QuantizeInstKind:
+      {
+      
+
+      // sum1 = relay.add(a, b)
+        auto II =  static_cast<QuantizeInst*>(&I);
+        auto src = II->getSrc();
+        auto dest = II->getDest();
+
+        if(dest->getName() != prev_alloc_name || !prev_alloc_type->isQuantizedType()) {
+          std::cout << "[ERROR] can't get quantized type info" << std::endl;
+          break;
+        
+        }
+        pyss<< (std::string) dest->getName() << " = relay.qnn.op.quantize(" <<  (std::string)src->getName() << ", relay.const(" << prev_alloc_type->getScale() <<",\"float32\"),relay.const(" << prev_alloc_type->getOffset() << ",\"int32\"), out_dtype=";
+        if(prev_alloc_type->elementType_ == ElemKind::Int8QTy) {
+            pyss<< "\"int8\"";
+        } else if(prev_alloc_type->elementType_ == ElemKind::Int32QTy) {
+            pyss<< "\"int32\"";
+        }
+        pyss << ")"<<std::endl;
+   
+
+        std::cout<< (std::string) dest->getName() << " = relay.qnn.op.quantize(" <<  (std::string)src->getName() << "," << prev_alloc_type->getScale() << "," << prev_alloc_type->getOffset() << ", out_dtype=";
+        if(prev_alloc_type->elementType_ == ElemKind::Int8QTy) {
+            std::cout<< "\"int8\"";
+        } else if(prev_alloc_type->elementType_ == ElemKind::Int32QTy) {
+            std::cout<< "\"int32\"";
+        }
+        std::cout<<  ")"<<std::endl;
+
+
+     //   std::cout<< (std::string) I.getName() << " = relay.add(" << std::endl;
+
+        // net = relay.nn.avg_pool2d(net,  pool_size=(3, 3), strides=(2, 2), padding=(1, 1),count_include_pad=True)
+
+
+
+      }
+      break;
+      case Kinded::Kind::DequantizeInstKind:
+      {
+        // net = relay.nn.avg_pool2d(net,  pool_size=(3, 3), strides=(2, 2), padding=(1, 1),count_include_pad=True)
+
+        auto II =  static_cast<DequantizeInst*>(&I);
+        auto src = II->getSrc();
+        auto dest = II->getDest();
+
+
+        if(src->getName() != prev_alloc_name || !prev_alloc_type->isQuantizedType()) {
+          std::cout << "[ERROR] can't get quantized type info" << std::endl;
+          break;
+        
+        }
+
+        pyss<< (std::string) dest->getName() << " = relay.qnn.op.dequantize(" <<  (std::string)src->getName() << ",";
+
+        TypeRef srcT = src->getType();
+        pyss << "input_scale=relay.const(" << srcT->getScale() <<", \"float32\"),";
+        pyss << "input_zero_point=relay.const(" << srcT->getOffset() << ", \"int32\")";
+
+        // [TODO] check layout
+        // axis: int.  The channel axis for quantization. Default value is -1 which corresponds to the last axis.
+
+        pyss << ")"<<std::endl;
+   
+
+
+      }
+      break;
       case Kinded::Kind::AvgPoolInstKind:
       {
         // net = relay.nn.avg_pool2d(net,  pool_size=(3, 3), strides=(2, 2), padding=(1, 1),count_include_pad=True)
@@ -921,11 +1045,18 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
       case Kinded::Kind::ElementDivInstKind:
       {
-        auto II =  static_cast<ElementAddInst*>(&I);
+        auto II =  static_cast<ElementDivInst*>(&I);
         pyss<< (std::string) II->getOperand(0).first->getName() << " = relay.divide(" <<  (std::string)II->getOperand(1).first->getName() << "," <<  (std::string)II->getOperand(2).first->getName()<<")"<<std::endl;
 
       }
 
+        break;
+    case Kinded::Kind::ElementMulInstKind:
+      {
+        auto II =  static_cast<ElementMulInst*>(&I);
+        pyss<< (std::string) II->getOperand(0).first->getName() << " = relay.divide(" <<  (std::string)II->getOperand(1).first->getName() << "," <<  (std::string)II->getOperand(2).first->getName()<<")"<<std::endl;
+
+      }
     
         break;
     case Kinded::Kind::TransposeInstKind: 
@@ -967,7 +1098,29 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
           auto filter = II->getFilter();
           auto bias = II->getBias();
 
-         pyss<< "conv2d_" << ir_idx << " = relay.nn.conv2d(" <<  (std::string)src->getName() << "," << (std::string)filter->getName() << ",";
+         // std::cout<< (std::string)I.toString()<<std::endl;
+
+         pyss<< "conv2d_" << ir_idx;
+         TypeRef srcT = src->getType();
+         if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+            pyss << " = relay.qnn.op.conv2d(" ;
+             pyss<<  (std::string)src->getName() << "," << (std::string)filter->getName() << ",";
+            pyss << "input_zero_point=relay.const(" << srcT->getOffset() << ", \"int32\"),";
+            pyss << "kernel_zero_point=relay.const(" << filter->getType()->getOffset() << ", \"int32\"),";
+          pyss << "input_scale=relay.const(" << srcT->getScale() <<", \"float32\"),";
+           pyss << "kernel_scale=relay.const(" << filter->getType()->getScale() <<", \"float32\"),";
+           pyss << "out_dtype=\"int32\"," ;
+
+             
+
+         } else {
+           pyss << " = relay.nn.conv2d(" ;
+            pyss<<  (std::string)src->getName() << "," << (std::string)filter->getName() << ",";
+
+            
+
+         }
+        
 
 
           //vec<int>
@@ -1024,7 +1177,12 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
         
         if(prev) pyss << ",";
         pyss << "groups=" << group ;
+
+         if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+          pyss << ", dilation=(" << dilation <<"," << dilation <<")";  
+         } else {
         pyss << ", dilation=" << dilation;
+         }
 
         // 넘어오는것은 data layout밖에 없는듯
         pyss << ", data_layout=";
@@ -1052,10 +1210,30 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
         if(doRelu) {
           
             pyss << "bias_" << ir_idx << "=relay.nn.bias_add(" << "conv2d_" << ir_idx << "," << (std::string) bias->getName() << ",axis=3)" << std::endl;
+            if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+              if(dst->getType()->elementType_ == ElemKind::Int8QTy) {
+                  
+                pyss << "bias_" << ir_idx << "_clip = relay.clip( bias_" << ir_idx << ",-128,127)" << std::endl;
+                pyss << (std::string) dst->getName() << "=relay.cast( relay.nn.relu( bias_" << ir_idx << "_clip ), \"int8\")" << std::endl;
+              }
+            } else {
             pyss << (std::string) dst->getName() << "=relay.nn.relu( bias_" << ir_idx << " )" << std::endl;
+            }
+            
         } else 
         {
+            if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+              if(dst->getType()->elementType_ == ElemKind::Int8QTy) {
+                  //[TODO] clip
+                  pyss << "bias_added_" << ir_idx  << "=relay.nn.bias_add(" << "conv2d_" << ir_idx << "," << (std::string) bias->getName() << ",axis=3)" << std::endl;
+                  pyss << (std::string) dst->getName() << "= relay.cast(relay.clip( bias_added_" << ir_idx << ",-128,127), \"int8\")" << std::endl;
+              }
+            }
+            else {
            pyss << (std::string) dst->getName() << "=relay.nn.bias_add(" << "conv2d_" << ir_idx << "," << (std::string) bias->getName() << ",axis=3)" << std::endl;
+            }
+
+           
         }
         
       }
@@ -1072,7 +1250,30 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
                auto weight = II->getWeights();
                auto bias= II->getBias();
 
-            pyss<< "fc_" << ir_idx << " = relay.nn.dense(" <<  (std::string)src->getName() << ",_op.transpose(" <<   (std::string)weight->getName()<<", [1, 0]))"<<std::endl;
+            pyss<< "fc_" << ir_idx;
+
+         TypeRef srcT = src->getType();
+         if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+            pyss <<    " = relay.qnn.op.dense(" ;
+         } else {
+           pyss <<    " = relay.nn.dense(" ;
+         }            
+          
+             
+             pyss <<  (std::string)src->getName() << ",_op.transpose(" <<   (std::string)weight->getName()<<", [1, 0])";
+
+        
+         if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+           TypeRef wT = weight->getType();
+            pyss << ",input_zero_point=relay.const(" << srcT->getOffset() << ", \"int32\"),";
+            pyss << "kernel_zero_point=relay.const(" << weight->getType()->getOffset() << ", \"int32\"),";
+            pyss << "input_scale=relay.const(" << srcT->getScale() <<", \"float32\"),";
+             pyss << "kernel_scale=relay.const(" << weight->getType()->getScale() <<", \"float32\"),";
+             pyss << "units= " << wT->sizes_[1];
+         }
+         pyss << ")" << std::endl;
+
+
             pyss<< (std::string) dest->getName() << " = relay.nn.bias_add(fc_" << ir_idx << ", " << (std::string)bias->getName()  << ")" << std::endl;
 
       }
@@ -1101,6 +1302,93 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       case Kinded::Kind::WeightVarKind:
           pyss<< "WeightVarKind " << I.toString() << " = " << std::endl;
         break;
+
+      case Kinded::Kind::LocalResponseNormalizationInstKind:
+      {
+        //  auto *A = new LocalResponseNormalizationInst(uniqueName(name), Dest, Src, Scale, HalfWindowSize, Alpha, Beta, K);
+         std::cout<< (std::string) I.toString() << std::endl;
+            auto II =  static_cast<LocalResponseNormalizationInst*>(&I);
+
+               auto dest = II->getDest();
+               auto src = II->getSrc();
+               auto scale = II->getScale(); // Value
+               auto alpha= II->getAlpha();  // f
+               auto beta= II->getBeta();    // f
+               auto bias = II->getK();  //f
+               auto size = II->getHalfWindowSize() * 2+1;  // unsigned
+
+              // axis = channel. default = 1 for NCHW
+              std::cout << (std::string) scale->toString() << std::endl;
+
+              std::cout << (std::string) dest->getName() << " = relay.nn.lrn(" << (std::string) src->getName() << ", size=" << size << ", bias="<<bias << ",alpha=" << alpha << ",beta=" << beta << ")" << std::endl;
+              pyss << (std::string) dest->getName() << " = relay.nn.lrn(" << (std::string) src->getName() << ", size=" << size << ", bias="<<bias << ",alpha=" << alpha << ",beta=" << beta << ")" << std::endl;
+                
+
+      }
+
+       break;
+
+      case Kinded::Kind::TouchInstKind:
+      //do nothing
+      break;
+
+      case Kinded::Kind::InsertTensorInstKind:
+      {
+          // InsertTensorInst is not matched with relay.concat perfectly. assume that insertTensor is used only for concat(count=1)
+          auto II =  static_cast<InsertTensorInst*>(&I);
+
+               auto dest = II->getDest();
+               auto src = II->getSrc();
+               auto count = II->getCount(); // unsigned_t
+               auto axis= II->getAxis();  // unsigned_t
+               auto offsets = II->getOffsets(); // arrayref<dim_t>
+
+              auto srcT =src->getType();
+               auto destT =dest->getType();
+
+               if(count!=1) {
+                 std::cout << "[ERROR] cannot handle with relay.concat" << std::endl;
+               }
+
+               if(destT->sizes_[axis] < offsets[axis] + srcT->sizes_[axis]) {
+                 std::cout << "[ERROR] invalid size" << std::endl;
+               }
+
+               std::cout << "d:" << destT->sizes_[axis] << "off:" <<offsets[axis] << "src:" << srcT->sizes_[axis] << std::endl;
+
+              if(offsets[axis]==0) {
+                  std::cout << (std::string) dest->getName() << " = " << (std::string)src->getName() << std::endl;
+                  pyss << (std::string) dest->getName() << " = " << (std::string)src->getName() << std::endl;
+              } else {
+                  
+                  std::cout << (std::string) dest->getName() << " = relay.concatenate( [" << (std::string) dest->getName() <<" , " << (std::string)src->getName() << "]," <<axis << ")" << std::endl;
+                  pyss << (std::string) dest->getName() << " = relay.concatenate( [" << (std::string) dest->getName() <<" , " << (std::string)src->getName() << "]," <<axis << ")" << std::endl;
+              }
+              
+
+
+
+        std::cout << "\n" << I.toString()<<std::endl;
+
+}
+      //do nothing
+      break;      
+
+      case Kinded::Kind::SoftMaxInstKind:
+      {
+        std::cout<< (std::string) I.toString() << std::endl;
+                auto II =  static_cast<SoftMaxInst*>(&I);
+
+               auto dest = II->getDest();
+               auto src = II->getSrc();
+
+            pyss<< (std::string) dest->getName() << " = relay.nn.softmax(" << (std::string)src->getName()  << ")" << std::endl;
+
+      }
+
+
+
+      break;
 
       default:
         std::cout << "\n\n[ERROR] !! not added " << I.getKindName()<<std::endl;
@@ -1136,8 +1424,15 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       pyss << procCtx.output_names[i] << ",";
     }
     pyss << "])\n\nfunc = relay.Function(relay.analysis.free_vars(output_tuples), output_tuples)";
-  } else {
+  } else if(procCtx.output_names.size() == 1){
     pyss << "\n\nfunc = relay.Function(relay.analysis.free_vars(" << procCtx.output_names[0] << "), " << procCtx.output_names[0] <<")";
+  } else {
+    
+  //  std::cout << pyss.str();
+    std::cout << "NO OUTPUT variables. check mutable variables!!" << std::endl;
+    assert(procCtx.output_names.size() >= 1);
+
+
   }
   
 
@@ -1147,7 +1442,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx);
   
   // write genCode.py
-  std::string pyFileName = (std::string)outputDir + "/relay";
+  std::string pyFileName = relay_mkpath;
   //std::cout << pyFileName.c_str();
   pyFileName.append("/genCode.py");
   std::ofstream wfos(pyFileName.c_str(), std::ios::out);
@@ -1156,7 +1451,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   wfos.write(cpp.c_str(),cpp.size());
   wfos.close();
 
-  std::string mkFileName = (std::string)outputDir + "/module";
+  std::string mkFileName = module_mkpath;
   mkFileName.append("/Makefile");
   std::ofstream mfos(mkFileName.c_str(), std::ios::out);
   mfos.write(mk.c_str(),mk.size());
