@@ -3,4 +3,6 @@ add_subdirectory(vtalib)
 add_subdirectory(tests)
 add_nestc_test(name VTABackendSimulatorTest ${NESTC_BINARY_DIR}/tests/VTABackendSimulatorTest --gtest_output=xml:VTABackendSimulatorTest.xml)
 add_subdirectory(bundles)
-
+if(NESTC_EVTA_MULTI)
+    add_subdirectory(multievta_bundles)
+endif()

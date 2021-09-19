@@ -58,7 +58,12 @@ public:
   {
     return variable_map;
   }
-
+  void setIdxMultiEVTA(uint32_t idx){
+    idxMultiEVTA = idx;
+  }
+  uint32_t getIdxMultiEVTA(){
+    return idxMultiEVTA;
+  }
 private:
 
   IRFunction::VariableMap *variable_map;
@@ -68,6 +73,7 @@ private:
   uint64_t constantWeightVarsMemSize;
   uint64_t mutableWeightVarsMemSize;
   std::ofstream* wfos;
+  uint32_t idxMultiEVTA;
 };
 
 struct SymbolTableEntry {
@@ -867,8 +873,12 @@ void generateVTAConvolutionCall(const glow::ConvolutionInst *Inst, std::string *
   bundle->append(", ");
   bundle->append(std::to_string(dest->dims()[2]));
   bundle->append(", vtaCmdH");
-
+  uint32_t idxMultiEVTA = ctx->getIdxMultiEVTA();
+  if(idxMultiEVTA){
+    bundle->append(std::to_string(idxMultiEVTA));
+  }
 #include "VTASchedules.h"
+  bool isTuned = 0;
   for(auto elem : convTune.ConvolutionTune_){
     if(elem.isMatch(N, H, W, C, KN, KH, KW, C, stride_size, pad_size))
     {
@@ -878,7 +888,16 @@ void generateVTAConvolutionCall(const glow::ConvolutionInst *Inst, std::string *
       bundle->append(std::to_string(elem.tileHSize_));
       bundle->append(", ");
       bundle->append(std::to_string(elem.tileWSize_));
+      bundle->append(", ");
+      bundle->append(std::to_string(ctx->getIdxMultiEVTA()));
+      isTuned = 1;
+      break;
     }
+  }
+
+  if(!isTuned){
+    bundle->append(", 1, 14, 14, ");
+    bundle->append(std::to_string(ctx->getIdxMultiEVTA()));
   }
 
   bundle->append(");\n");
@@ -2499,7 +2518,11 @@ void finalizeBundleEntrySave(struct BundleSaveCtx &bundleCtx,
   bundleConfig.append("};\n");
 
 
+
   auto& initConst = bundleCtx.initConst;
+  initConst.append("namespace namespace_");
+  initConst.append(bundleName);
+  initConst.append(" {\n");
   // Generate Init Constant values
   for(auto ste : *ctx.getConstantSymbols()){
     if(ste.kind=='0') {
@@ -2519,7 +2542,15 @@ void finalizeBundleEntrySave(struct BundleSaveCtx &bundleCtx,
     }
 #endif
   }
-  initConst.append("extern VTACommandHandle vtaCmdH;\n");
+  initConst.append("}\n");
+  initConst.append("using namespace namespace_");
+  initConst.append(bundleName);
+  initConst.append(";\n");
+  initConst.append("extern VTACommandHandle vtaCmdH");
+  if(ctx.getIdxMultiEVTA()){
+    initConst.append(std::to_string(ctx.getIdxMultiEVTA()));
+  }
+  initConst.append(";\n");
 
   initConst.append("\nvoid ");
   initConst.append(mainEntryName);
@@ -2696,8 +2727,24 @@ void exportBundleHeader(llvm::StringRef outputDir,
 void VTA::save(Function *F, llvm::StringRef outputDir,
                llvm::StringRef bundleName,
                llvm::StringRef mainEntryName) const {
+  if(( (idxMultiEVTA&1) + ((idxMultiEVTA>>1)&1) + ((idxMultiEVTA>>2)&1) + ((idxMultiEVTA>>3)&1)) != 1) {
+    llvm::errs() << "Not supported Multi-EVTA combination\n"
+                    "Please use one EVTA at one time\n";
+    std::exit(1);
+  }
+
+
   auto IR = generateAndOptimizeIR(F, *this, shouldShareBuffers());
   VTASaveContext ctx(&IR->getVariableMap());
+
+  for(int i = 0; i<4; i++){
+    if(((idxMultiEVTA>>i)&1)==1){
+      ctx.setIdxMultiEVTA(i);
+      break;
+    }
+  }
+
+
   std::string weightFileName = outputDir;
   weightFileName.append("/");
   weightFileName.append(bundleName);

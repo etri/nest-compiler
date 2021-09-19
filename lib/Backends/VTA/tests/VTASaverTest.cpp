@@ -10,6 +10,9 @@
 #include "VTABackendTestUtils.h"
 
 #include "llvm/ADT/StringMap.h"
+
+#include "lib/Backends/VTA/VTA.h"
+
 using namespace glow;
 static Placeholder *createQuantizedPlaceholder(Module &mod,
                                                PlaceholderBindings &bindings,
@@ -211,6 +214,81 @@ TEST(VTASaverTest, resnetv10S1C0Test) {
   out1.toBin("vtaResnetv10S1C0TestGolden");
   EXPECT_TRUE(out1.isEqual(out2, 0.0));
 }
+
+TEST(VTASaverTest, multievtaConvTest) {
+  for(int i = 0; i < 4; i++) {
+    PseudoRNG PRNG;
+    std::string inputname = "multievtaConvTestInput"+std::to_string(i);
+    std::string outputname = "multievtaConvTestGolden"+std::to_string(i);
+    std::string bundlename = "multievtaConvTestBundle"+std::to_string(i);
+    std::string mainentryname = "multievtaConvTestMainEntry"+std::to_string(i);
+
+    Tensor inputs(ElemKind::Int8QTy, {1, 14, 14, 32}, 1, 0);
+    Tensor filter(ElemKind::Int8QTy, {32, 3, 3, 32}, 1, 0);
+    Tensor bias(ElemKind::Int32QTy, {32}, 1, 0);
+
+    inputs.getHandle<int8_t>().randomize(0, 60, PRNG);
+    filter.getHandle<int8_t>().randomize(-10, 10, PRNG);
+    inputs.toBin(inputname.c_str());
+    bias.getHandle<int32_t>().randomize(0, 32768, PRNG);
+
+    std::array<dim_t, 4> S{{1, 14, 14, 32}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 64, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 64, 0);
+
+    PlaceholderBindings bindings;
+    Module M;
+    Function *F = M.createFunction("main");
+    Placeholder *inputP;
+    Constant *filterP;
+    Constant *biasP;
+    Placeholder *outP;
+    TypeRef OT1;
+
+    auto &outType1 = out1.getType();
+    auto &inType = inputs.getType();
+    auto &filterType = filter.getType();
+    auto &biasType = bias.getType();
+
+    std::string inputPname= "inputP" +std::to_string(i);
+    std::string filterPname= "filterP" +std::to_string(i);
+    std::string biasPname= "biasP" +std::to_string(i);
+    std::string outPname= "outP" +std::to_string(i);
+    inputP = createQuantizedPlaceholder(
+        M, bindings, &inputs, inType.getScale(), inType.getOffset(), inputPname.c_str());
+
+    filterP = createQuantizedConstant(M, bindings, &filter, filterType.getScale(),
+                                      filterType.getOffset(), filterPname.c_str());
+    biasP = createQuantizedConstant(M, bindings, &bias, biasType.getScale(),
+                                    biasType.getOffset(), biasPname.c_str());
+    outP = createQuantizedPlaceholder(M, bindings, &out2, outType1.getScale(),
+                                      outType1.getOffset(), outPname.c_str());
+    OT1 = F->getParent()->uniqueType(out1.getElementType(), out1.dims(),
+                                     outType1.getScale(), outType1.getOffset());
+    auto *conv = F->createConv("conv", inputP, filterP, biasP, OT1, 3, 1, 1, 1);
+
+    F->createSave("ret", conv, outP);
+
+    //Optimize & Lowering
+    std::unique_ptr<Backend> backend(createBackend("VTA"));
+    static_cast<VTA*>(backend.get())->setIdxMultiEVTA(1<<i);
+    CompilationContext cctx;
+    auto error = ::glow::optimizeFunction(F, *backend, cctx);
+
+    EXIT_ON_ERR(std::move(error));
+    // Save bundle.
+    llvm::StringRef outputDir = ".";
+    llvm::StringRef bundleName = bundlename.c_str(); //file name
+    llvm::StringRef mainEntryName = mainentryname.c_str(); //main function name
+
+    backend->save(F, outputDir, bundleName, mainEntryName);
+    inferVTAConvNet(&inputs, &filter, &bias, &out1, 3, 1, 1, "VTA");
+    inferVTAConvNet(&inputs, &filter, &bias, &out2, 3, 1, 1, "VTAInterpreter");
+    out1.toBin(outputname.c_str());
+  }
+}
+
 
 TEST(VTASaverTest, convTest2) {
   PseudoRNG PRNG;

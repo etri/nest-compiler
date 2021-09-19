@@ -8,7 +8,8 @@ project(NESTC C CXX)
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
 option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_VTA_RUN_ON_AARCH64 "Run VTA on AArch64" OFF)
-
+option(NESTC_EVTA_MULTI "use Multi-EVTA" OFF)
+option(NESTC_USE_PRECOMPILED_BUNDLE "use pre-compiled bundle code from nestc-data" OFF)
 include(CTest)
 include(NESTCTestSupport)
 
@@ -67,7 +68,10 @@ add_subdirectory(glow)
 
 get_property(NESTC_TEST_DEPENDS GLOBAL PROPERTY NESTC_TEST_DEPENDS)
 get_property(ZCU102_TEST_DEPENDS GLOBAL PROPERTY ZCU102_TEST_DEPENDS)
+get_property(MULTIEVTA_TEST_DEPENDS GLOBAL PROPERTY MULTIEVTA_TEST_DEPENDS)
 add_custom_target(check_nestc COMMAND ${CMAKE_CTEST_COMMAND} -L NESTC
         DEPENDS ${NESTC_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_zcu102 COMMAND ${CMAKE_CTEST_COMMAND} -L ZCU102
         DEPENDS ${ZCU102_TEST_DEPENDS} USES_TERMINAL)
+add_custom_target(check_multievta COMMAND ${CMAKE_CTEST_COMMAND} -L MULTIEVTA
+        DEPENDS ${MULTIEVTA_TEST_DEPENDS} USES_TERMINAL)
