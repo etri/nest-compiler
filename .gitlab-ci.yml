@@ -2,6 +2,7 @@ stages:
   - check
   - docker-build
   - build
+  - publish
   - test
 
 variables:
@@ -83,6 +84,35 @@ build:
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
+
+build-publish:
+  stage: build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - PWD=`pwd`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - cd ../../
+    - mkdir -p build_ci
+    - rm -rf build_ci/*
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - docker start build
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON"
+    - docker exec build sh -c "cd build_ci; ninja vtaMxnetResnet18Bundle"
+  artifacts:
+    paths:
+      - build_ci/vta/bundles
 
 build-multievta:
   stage: build
@@ -240,7 +270,19 @@ test-all:
     - docker exec build sh -c "ls;cd build_ci; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_VTA=ON -DGLOW_WITH_STC=ON"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check"
+  when: manual
+  allow_failure: true
 
-
+publish:
+  stage: publish
+  image:
+    name: banst/awscli
+    entrypoint: [""]
+  script:
+    - aws configure set region  ap-northeast-2
+    - aws s3 cp build_ci/vta/bundles/Resnet18Test/mxnet_exported_resnet18.cpp s3://$S3_BUCKET/vta/bundles/Resnet18Test/mxnet_exported_resnet18.cpp
+    - aws s3 cp build_ci/vta/bundles/Resnet18Test/mxnet_exported_resnet18.h s3://$S3_BUCKET/vta/bundles/Resnet18Test/mxnet_exported_resnet18.h
+    - aws s3 cp build_ci/vta/bundles/Resnet18Test/mxnet_exported_resnet18.weights.bin s3://$S3_BUCKET/vta/bundles/Resnet18Test/mxnet_exported_resnet18.weights.bin
+    - aws s3 cp build_ci/vta/bundles/Resnet18Test/VTARuntime.h s3://$S3_BUCKET/vta/bundles/Resnet18Test/VTARuntime.h
   when: manual
   allow_failure: true
