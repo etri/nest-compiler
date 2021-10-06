@@ -186,18 +186,11 @@ void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std
         }
     }
     wfilec.append("\n");
-    wfilec.append("\t// Free all resources.\n");
-
-    for(int i = 0; i < partitionNum - 1; i++) {
-        wfilec.append("\tfree(activationsAddr" + std::to_string(i) + ");\n");
-        wfilec.append("\tfree(constantWeightVarsAddr" + std::to_string(i) + ");\n");
-        wfilec.append("\tfree(mutableWeightVarsAddr" + std::to_string(i) + ");\n\n");
-    }
 
     bool vtaFlag = false;
     for(int i = 0; i < partitionNum - 1; i++) {
         if(!partitionConfig.backendNames[i].compare("VTA"))
-          vtaFlag = true;
+            vtaFlag = true;
     }
 
     if(vtaFlag) {
@@ -206,6 +199,14 @@ void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std
         wfilec.append("#endif\n");
     }
     wfilec.append("\n");
+
+    wfilec.append("\t// Free all resources.\n");
+
+    for(int i = 0; i < partitionNum - 1; i++) {
+        wfilec.append("\tfree(activationsAddr" + std::to_string(i) + ");\n");
+        wfilec.append("\tfree(constantWeightVarsAddr" + std::to_string(i) + ");\n");
+        wfilec.append("\tfree(mutableWeightVarsAddr" + std::to_string(i) + ");\n\n");
+    }
 
     if(profileMode_ == 1) {
         wfilec.append("\tcreateYamlFile();\n");

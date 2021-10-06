@@ -166,10 +166,12 @@ public:
   bool isUserDefinedFusable(Node *node);
 
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
-void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
+  void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
   void partitionBranchesReplaceCPU(std::vector<NodeGroup*>* branchList, bool isParallel);
   void loadPerformProfileInfo(std::string pdir);
+
+  bool isVTAConv(ConvolutionNode* convNode);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends);
   void getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCNode);
   void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* firstPrevCNode, CostNode* curCNode);

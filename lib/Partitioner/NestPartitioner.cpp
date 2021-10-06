@@ -1459,6 +1459,12 @@ void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backen
       cnode->backendName_ = backendName;
     }
   }
+
+  if(!cnode->backendName_.compare("VTA") && !isVTAConv((ConvolutionNode *)cnode->node_)) {
+      cnode->backendName_ = "CPU";
+      cnode->cost_ = backendProfileMap_["CPU"][key];
+      //std::cout << "nonVTA convolution " << std::endl;
+  }
 //    std::cout << "costNode->totalCost = " << cnode->totalCost << std::endl;
 //    std::cout << "node = " << cnode->name_<<  ", backendName = " << cnode->backendName_ << std::endl;
 }
@@ -1774,6 +1780,16 @@ void NestPartitioner::allocOptimalPUFusedNodes(std::vector<NodeGroup*>* branchLi
   }
 }
 
+bool NestPartitioner::isVTAConv(ConvolutionNode* convNode)
+{
+    //std::cout << "filter size: " << convNode->getFilter().dims()[0] << std::endl;
+    //std::cout << "input channel: " << convNode->getInput().dims()[3] << std::endl;
+    if(convNode->getFilter().dims()[0]%16 == 0 && convNode->getInput().dims()[3]%16 == 0) {
+        return true;
+    }
+
+    return false;
+}
 void NestPartitioner::allocateVTAOps(std::vector<NodeGroup*>* branchList) {
     // std::cout << "--------- allocateVTAOps -----------" << std::endl;
     //std::cout << "\n[allocateVTAOps] Allocate VTA to VTA-computable operations*." << std::endl;
@@ -1790,21 +1806,16 @@ void NestPartitioner::allocateVTAOps(std::vector<NodeGroup*>* branchList) {
                 if (backendMap_["VTA"].supportedNodesKinds.size() > 0 &&
                     (backendMap_["VTA"].supportedNodesKinds.find(cnode->node_->getKind()) !=
                      backendMap_["VTA"].supportedNodesKinds.end())) {
-
                     if(cnode->node_->getKind() == Kinded::Kind::ConvolutionNodeKind) {
-                        if(convcnt == 0) {
-                            cnode->backendName_ = "CPU";
-                        } else {
+                        if(isVTAConv((ConvolutionNode *)cnode->node_)) {
                             cnode->backendName_ = "VTA";
+                        } else {
+                            std::cout << "** nonVTA Convolution." << std::endl;
+                            cnode->backendName_ = "CPU";
                         }
-                        convcnt++;
                     } else if (cnode->node_->getKind() == Kinded::Kind::ReluNodeKind) {
-                        if(prevCnode->node_->getKind() == Kinded::Kind::ConvolutionNodeKind) {
-                            if(convcnt == 1) {
-                                cnode->backendName_ = "CPU";
-                            } else {
-                                cnode->backendName_ = "VTA";
-                            }
+                        if(prevCnode->node_->getKind() == Kinded::Kind::ConvolutionNodeKind && !prevCnode->backendName_.compare("VTA")) {
+                            cnode->backendName_ = "VTA";
                         } else {
                             cnode->backendName_ = "CPU";
                         }
@@ -1816,8 +1827,8 @@ void NestPartitioner::allocateVTAOps(std::vector<NodeGroup*>* branchList) {
                     cnode->backendName_ = "CPU";
                 }
             prevCnode = cnode;
-            std::cout << "name: " << cnode->node_->getName().str() << std::endl;
-            std::cout << "backend: " << cnode->backendName_ << std::endl;
+            //std::cout << "name: " << cnode->node_->getName().str() << std::endl;
+            //std::cout << "backend: " << cnode->backendName_ << std::endl;
         }
     }
 }
@@ -2206,8 +2217,8 @@ void NestPartitioner::backtrack(std::vector<std::vector<CostNode>>* cnodebfs, BF
 void NestPartitioner::analyzeDAG(std::vector<std::vector<CostNode>>* cnodebfs, BFSLevel dag, std::vector<NodeGroup*>* branchList)
 {
   unsigned int level = 0;
-  std::cout << "[analyzeDAG]"
-            << "save size = " << dag[0].size() << std::endl;
+  //std::cout << "[analyzeDAG]"
+  //          << "save size = " << dag[0].size() << std::endl;
 
   size_t saveNodeSize = dag[0].size();
   for(int i = 0; i < saveNodeSize; i++) {
@@ -2230,8 +2241,8 @@ void NestPartitioner::analyzeDAG(std::vector<std::vector<CostNode>>* cnodebfs, B
   }
 
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    std::cout << "branchID: " << (*i)->ID_ << ", level: " << (*i)->level_ << ", size: " << (*i)->nodeList_.size() << std::endl;
-    std::cout << "# inBranch: " << (*i)->inBranchList_.size() << std::endl;
+    //std::cout << "branchID: " << (*i)->ID_ << ", level: " << (*i)->level_ << ", size: " << (*i)->nodeList_.size() << std::endl;
+    //td::cout << "# inBranch: " << (*i)->inBranchList_.size() << std::endl;
 
     for (auto ii = (*i)->nodeList_.begin(); ii != (*i)->nodeList_.end(); ii++ ) {
 //      std::cout << "name: " << (*ii)->name_<< std::endl;
