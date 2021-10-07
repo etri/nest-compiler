@@ -78,6 +78,7 @@ public:
   {
     constantWeightVarsMemSize = 0;
     mutableWeightVarsMemSize = 0;
+    global_var_declare = "";
     var_declare = "";
     
   }
@@ -121,7 +122,8 @@ public:
   }  
 */
 
-  std::string var_declare;  // variable in main function
+  std::string global_var_declare;  // global variable 
+  std::string var_declare;  // variable in load module function
   std::vector<std::string> input_names;
   std::vector<std::string> output_names;
   std::vector<std::string> input_DLTensor_names;
@@ -215,7 +217,7 @@ SymbolTableEntry addSymbolEntryGenBundle(WeightVar* wgt, RelaySaveContext *ctx, 
       ctx->input_names.push_back(ste.name);
       ctx->input_DLTensor_names.push_back("input_" + std::to_string(ste.offset));
       
-      ctx->var_declare.append(cc("DLTensor input_" + std::to_string(ste.offset) + ";"));
+      ctx->global_var_declare.append(cc("DLTensor input_" + std::to_string(ste.offset) + ";"));
 
       ctx->var_declare.append("cpp.append(\"");
       ctx->var_declare.append("std::vector<int64_t> input_shape_" + std::to_string(ste.offset) + " = {");
@@ -246,7 +248,8 @@ SymbolTableEntry addSymbolEntryGenBundle(WeightVar* wgt, RelaySaveContext *ctx, 
     ctx->output_names.push_back(ste.name);
     ctx->output_DLTensor_names.push_back("output_" + std::to_string(ste.offset));
 
-    ctx->var_declare.append(cc("DLTensor output_" + std::to_string(ste.offset) + ";"));
+    ctx->global_var_declare.append(cc("DLTensor output_" + std::to_string(ste.offset) + ";"));
+
     ctx->var_declare.append("cpp.append(\"");
     ctx->var_declare.append("std::vector<int64_t> output_shape_" + std::to_string(ste.offset) + " = {");
     if(T->elementType_ == ElemKind::FloatTy) {
@@ -435,7 +438,7 @@ void initCtx(struct SaveCtx &Ctx,
 }
 
 void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRef bundleName,
-                             llvm::StringRef mainEntryName, RelaySaveContext &procCtx) {
+                             llvm::StringRef mainEntryName, RelaySaveContext &procCtx, std::string target_arch, uint32_t tvm_opt_level) {
 
   auto& inc = Ctx.partHeaderGen;
   auto& cpp = Ctx.partCppGen;
@@ -486,7 +489,9 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
 
   inc.append(hh("// Bundle entry point (inference function). Returns 0"));
   inc.append(hh("// for correct execution or some error code otherwise."));
+  inc.append(hh("int " + (std::string)mainEntryName + "_load_module(uint8_t *constantWeight);"));
   inc.append(hh("int " + (std::string)mainEntryName + "(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations);"));
+  inc.append(hh("int " + (std::string)mainEntryName + "_destory_module();"));  
   inc.append(hh("#ifdef __cplusplus"));
   inc.append(hh("}"));
   inc.append(hh("#endif"));
@@ -498,18 +503,24 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     inc.append("    f_h.write(\"%s\\n\" % item)\n");
 
 
+  std::string llvm_option="";
+  std::string export_option="";
+  if(target_arch == "aarch64") {
+    llvm_option = " -device=arm_cpu -mtriple=aarch64-linux-gnu -mattr=+neon";
+    export_option = ", cc='aarch64-linux-gnu-g++'";
+  }
+
+  if(tvm_opt_level > 3) tvm_opt_level = 0;
+
   py.append("\ndesired_layouts = { \"nn.conv2d\": [\"NCHW\", \"default\"], \"qnn.conv2d\": [\"NCHW\", \"default\"]}  \
              \nseq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(), \
              \n\t\trelay.transform.ConvertLayout(desired_layouts)]) \
              \nwith tvm.transform.PassContext(opt_level=3): \
             \n\t\trelay_mod = seq(tvm.IRModule.from_expr(func)) \
-            \n\n#target=\"llvm -device=arm_cpu -mtriple=aarch64-linux-gnu -mattr=+neon\" \
-            \ntarget=\"llvm\" \
-        \nwith tvm.transform.PassContext(opt_level=0): \
+            \n\ntarget=\"llvm" + llvm_option + "\" \
+        \nwith tvm.transform.PassContext(opt_level=" + std::to_string(tvm_opt_level) + "): \
         \n\t\tlib = relay.build(relay_mod, target,params=params) \
-    \n#cross_compile = 'aarch64-linux-gnu-c++' \
-    \n#lib.export_library(\"output.so\", cc=cross_compile)    \
-    \nlib.export_library(\"" + module_mkpath + "/" + (std::string)bundleName + "_tvm.so\")        \
+    \nlib.export_library(\"" + module_mkpath + "/" + (std::string)bundleName + "_tvm.so\"" + export_option + ")        \
     \n# = lib.get_params()\
     \n#    for item in b:\
     \n#        print(item)\
@@ -547,26 +558,39 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
      cpp.append(cc("   symbolTableEntry_" + (std::string)bundleName));
      cpp.append(cc("};"));
 
-     //function
+     //global var
+     cpp.append(procCtx.global_var_declare); // mutable variables
+     // create the graph executor module
+     cpp.append(cc("tvm::runtime::Module gmod;"));
+     cpp.append(cc("tvm::runtime::PackedFunc set_input;"));
+     cpp.append(cc("tvm::runtime::PackedFunc get_output;"));
+     cpp.append(cc("tvm::runtime::PackedFunc run;"));     
+
+     //function load_module
+     cpp.append(cc("int " + (std::string)bundleName + "_load_module(uint8_t* constantWeight) {" ));
+     cpp.append(cc("  DLDevice dev{kDLCPU, 0};"))  ;
+     //cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"" +  module_mkpath + "/" + (std::string)bundleName + "_tvm.so\");"))  ;
+     cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"./" + (std::string)bundleName + "_tvm.so\");"))  ;
+  
+     // create the graph executor module
+     cpp.append(cc(" gmod = mod_factory.GetFunction(\"default\")(dev);"));
+     cpp.append(cc(" set_input = gmod.GetFunction(\"set_input\");"));
+     cpp.append(cc(" get_output = gmod.GetFunction(\"get_output\");"));
+     cpp.append(cc(" run = gmod.GetFunction(\"run\");"));
+     cpp.append(cc("  return 0;"));
+     cpp.append(cc("}"));
+
+    //function run
      cpp.append(cc("int " + (std::string)bundleName + "(uint8_t* constantWeight, uint8_t *mutableWeight, uint8_t *activations) {" ));
      cpp.append(cc("" ));
      cpp.append(procCtx.var_declare); // mutable variables
-     cpp.append(cc("  DLDevice dev{kDLCPU, 0};"))  ;
-     cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"" +  module_mkpath + "/" + (std::string)bundleName + "_tvm.so\");"))  ;
-  
-     // create the graph executor module
-     cpp.append(cc(" tvm::runtime::Module gmod = mod_factory.GetFunction(\"default\")(dev);"));
-     cpp.append(cc(" tvm::runtime::PackedFunc set_input = gmod.GetFunction(\"set_input\");"));
-    cpp.append(cc(" tvm::runtime::PackedFunc get_output = gmod.GetFunction(\"get_output\");"));
-    cpp.append(cc(" tvm::runtime::PackedFunc run = gmod.GetFunction(\"run\");"));
 
     // set the right input
     for(int i=0;i<procCtx.input_names.size();i++) {
       cpp.append(cc(" set_input(\"" + procCtx.input_names[i] + "\", &" + procCtx.input_DLTensor_names[i]+ ");"));
     }
     
-  
-    // run the code
+  // run the code
     cpp.append(cc(" run();"));
   
     // get the output
@@ -576,6 +600,13 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
 
     cpp.append(cc("  return 0;"));
     cpp.append(cc("}"));
+
+    //function destory_module
+    cpp.append(cc("int " + (std::string)bundleName + "_destory_module() {" ));
+    cpp.append(cc("  return 0;"));
+    cpp.append(cc("}"));
+
+
 
     cpp.append("with open(\"" +  module_mkpath + "/" + (std::string)bundleName + ".cpp\",\"w\") as f_cpp:\n");
     cpp.append("  for item in cpp:\n");
@@ -589,12 +620,18 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     mk.append("\t-I${DMLC_CORE}/include\\\n");
     mk.append("\t-I${TVM_HOME}/3rdparty/dlpack/include\\\n");
     mk.append("\t-DDMLC_USE_LOGGING_LIBRARY=\\<tvm/runtime/logging.h\\>\n\n");
-    mk.append("PKG_LDFLAGS = -L${TVM_HOME}/build -ldl -pthread \n\n");
+    mk.append("PKG_LDFLAGS = -L${TVM_LIBRARY_PATH} -ldl -pthread \n\n");
+
     mk.append(".PHONY: clean all\n\n");
     mk.append("all: " + (std::string)bundleName + ".o\n\n");
-    mk.append((std::string)bundleName + ".o: " + (std::string)bundleName + ".cpp " + (std::string)bundleName + "_tvm.so\n");
+    mk.append((std::string)bundleName + ".o: " + (std::string)bundleName + ".cpp\n");
 	  mk.append("\t@mkdir -p $(@D)\n");
-    mk.append("\t$(CXX) $(PKG_CFLAGS) -c -o $@  $^ -ltvm_runtime $(PKG_LDFLAGS)\n");
+    if(target_arch == "aarch64") {
+      mk.append("\taarch64-linux-gnu-g++ $(PKG_CFLAGS) -c -o $@  $^ -ltvm_runtime $(PKG_LDFLAGS)\n");
+    } else {
+      mk.append("\t$(CXX) $(PKG_CFLAGS) -c -o $@  $^ -ltvm_runtime $(PKG_LDFLAGS)\n");
+    }
+    
     mk.append("clean:\n");
     mk.append("\trm -rf lib\n");
 
@@ -1438,8 +1475,10 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
   py.append(pyss.str());
   
+  std::cout << "--relay-target = " << target_ << std::endl;
+  std::cout << "--relay-opt-level = " << opt_level_ << std::endl;
 
-  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx);
+  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx, target_, opt_level_);
   
   // write genCode.py
   std::string pyFileName = relay_mkpath;

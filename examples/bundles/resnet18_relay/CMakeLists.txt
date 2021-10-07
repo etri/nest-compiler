@@ -46,9 +46,11 @@ add_custom_target(resnet18RelayBundleCPPGen DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.o
-        ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18_tvm.so
+        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_tvm.so
         COMMAND
         make
+        COMMAND
+        cp ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18_tvm.so ${CMAKE_CURRENT_BINARY_DIR}/
         WORKING_DIRECTORY
         ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/
         DEPENDS resnet18RelayBundleCPPGen
@@ -61,7 +63,7 @@ include_directories(BEFORE
         ${NESTC_ROOT_DIR}/tvm/3rdparty/dmlc-core/include
         )
 
-add_executable(resnet18RelayBundle deploy.cc ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.o ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18_tvm.so)
+add_executable(resnet18RelayBundle deploy.cc ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.o)
 set_target_properties(resnet18RelayBundle PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(resnet18RelayBundle -fPIC -I. -pthread png tvm_runtime)
 target_compile_features(resnet18RelayBundle PRIVATE cxx_std_17)

@@ -35,6 +35,8 @@ int main(int argc, char **argv) {
 
 
     //======== multiple partitions =======//
+    p0_load_module(0);
+
 
     clock_t start_total = 0;
     start_total = clock();

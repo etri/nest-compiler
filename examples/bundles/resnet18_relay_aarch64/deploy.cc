@@ -35,7 +35,9 @@
 #include <png.h>
 #include <assert.h>
 #include <math.h>
-
+#include <iostream>
+#include <limits>
+#include <sys/time.h>
 
 
 
@@ -295,8 +297,10 @@ int main(int argc, char** argv) {
   memcpy(mutableMem, inputT, sizeof(float)*1*224*224*3);
   
   mxnet_exported_resnet18_load_module(0);
+  timeval t1, t2;
+  gettimeofday(&t1, NULL);
   mxnet_exported_resnet18(0, mutableMem,0);
-  
+  gettimeofday(&t2, NULL);
   float output_storage[1000];
   memcpy(output_storage, mutableMem+mxnet_exported_resnet18_config.symbolTable[1].offset, mxnet_exported_resnet18_config.symbolTable[1].size * sizeof(float) );
 
@@ -311,8 +315,9 @@ int main(int argc, char** argv) {
 
   printf("Result: %u\n", max_index);
   printf("Confidence: %f\n", max_iter);
-
-
+  double result;
+  result = (t2.tv_sec - t1.tv_sec)*1000.0 + (t2.tv_usec - t1.tv_usec)/1000.0;
+  std::cout<<"Inference time: "<<result<<"ms\n";
   
   return 0;
 

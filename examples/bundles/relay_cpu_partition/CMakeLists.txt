@@ -89,8 +89,11 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.o
         ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.h
+        ${CMAKE_CURRENT_BINARY_DIR}/p0_tvm.so
         COMMAND
         make
+        COMMAND
+        cp ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0_tvm.so ${CMAKE_CURRENT_BINARY_DIR}/
         WORKING_DIRECTORY
         ${CMAKE_CURRENT_BINARY_DIR}/module__p0/
         DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/module__p0/p0.cpp
