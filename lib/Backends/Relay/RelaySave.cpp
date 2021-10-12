@@ -438,7 +438,7 @@ void initCtx(struct SaveCtx &Ctx,
 }
 
 void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRef bundleName,
-                             llvm::StringRef mainEntryName, RelaySaveContext &procCtx, std::string target_arch, uint32_t tvm_opt_level) {
+                             llvm::StringRef mainEntryName, RelaySaveContext &procCtx, std::string target, std::string target_host, std::string export_option, uint32_t tvm_opt_level, std::string required_pass, std::string disabled_pass) {
 
   auto& inc = Ctx.partHeaderGen;
   auto& cpp = Ctx.partCppGen;
@@ -502,23 +502,42 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     inc.append("  for item in header:\n");
     inc.append("    f_h.write(\"%s\\n\" % item)\n");
 
-
+/*
   std::string llvm_option="";
   std::string export_option="";
   if(target_arch == "aarch64") {
     llvm_option = " -device=arm_cpu -mtriple=aarch64-linux-gnu -mattr=+neon";
     export_option = ", cc='aarch64-linux-gnu-g++'";
   }
-
+*/
   if(tvm_opt_level > 3) tvm_opt_level = 0;
+
+  std::string target_host_str="";
+  if(target_host != "") {
+    target_host_str = ",host=\"" + target_host + "\"";
+
+  }
+
+  std::string opt_str="";
+  if(required_pass != "") {
+    std::stringstream sss;
+    sss << ",required_pass=" << quoted(required_pass);
+    opt_str+= sss.str();
+  }
+  if(disabled_pass != "") {
+    std::stringstream sss;
+    sss << ",disabled_pass=" << quoted(disabled_pass);
+    opt_str+=sss.str();
+  }
+
 
   py.append("\ndesired_layouts = { \"nn.conv2d\": [\"NCHW\", \"default\"], \"qnn.conv2d\": [\"NCHW\", \"default\"]}  \
              \nseq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(), \
              \n\t\trelay.transform.ConvertLayout(desired_layouts)]) \
              \nwith tvm.transform.PassContext(opt_level=3): \
             \n\t\trelay_mod = seq(tvm.IRModule.from_expr(func)) \
-            \n\ntarget=\"llvm" + llvm_option + "\" \
-        \nwith tvm.transform.PassContext(opt_level=" + std::to_string(tvm_opt_level) + "): \
+            \n\ntarget=tvm.target.Target(\"" + target + "\"" + target_host_str + ") \
+        \nwith tvm.transform.PassContext(opt_level=" + std::to_string(tvm_opt_level) + opt_str + "): \
         \n\t\tlib = relay.build(relay_mod, target,params=params) \
     \nlib.export_library(\"" + module_mkpath + "/" + (std::string)bundleName + "_tvm.so\"" + export_option + ")        \
     \n# = lib.get_params()\
@@ -566,9 +585,18 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
      cpp.append(cc("tvm::runtime::PackedFunc get_output;"));
      cpp.append(cc("tvm::runtime::PackedFunc run;"));     
 
+    //
+    std::string dl_dev_str="kDLCPU"; // DLCPU
+
+    if(target.find("cuda") != std::string::npos) {
+      dl_dev_str = "kDLCUDA";
+    } else if(target.find("opencl") != std::string::npos) {
+      dl_dev_str = "kDLOpenCL";
+    }
+
      //function load_module
      cpp.append(cc("int " + (std::string)bundleName + "_load_module(uint8_t* constantWeight) {" ));
-     cpp.append(cc("  DLDevice dev{kDLCPU, 0};"))  ;
+     cpp.append(cc("  DLDevice dev{" + dl_dev_str + ", 0};"))  ;
      //cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"" +  module_mkpath + "/" + (std::string)bundleName + "_tvm.so\");"))  ;
      cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"./" + (std::string)bundleName + "_tvm.so\");"))  ;
   
@@ -626,7 +654,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     mk.append("all: " + (std::string)bundleName + ".o\n\n");
     mk.append((std::string)bundleName + ".o: " + (std::string)bundleName + ".cpp\n");
 	  mk.append("\t@mkdir -p $(@D)\n");
-    if(target_arch == "aarch64") {
+    if(target.find("aarch64") != std::string::npos || target_host.find("aarch64") != std::string::npos) {
       mk.append("\taarch64-linux-gnu-g++ $(PKG_CFLAGS) -c -o $@  $^ -ltvm_runtime $(PKG_LDFLAGS)\n");
     } else {
       mk.append("\t$(CXX) $(PKG_CFLAGS) -c -o $@  $^ -ltvm_runtime $(PKG_LDFLAGS)\n");
@@ -1478,7 +1506,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   std::cout << "--relay-target = " << target_ << std::endl;
   std::cout << "--relay-opt-level = " << opt_level_ << std::endl;
 
-  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx, target_, opt_level_);
+  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx, target_, target_host_, export_option_, opt_level_, required_pass_, disabled_pass);
   
   // write genCode.py
   std::string pyFileName = relay_mkpath;

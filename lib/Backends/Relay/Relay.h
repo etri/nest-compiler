@@ -90,6 +90,10 @@ public:
 
 private:
   std::string target_;
+  std::string target_host_;
+  std::string export_option_;  // option for export lib
+  std::string required_pass_;
+  std::string disabled_pass;
   uint32_t opt_level_;
 };
 
