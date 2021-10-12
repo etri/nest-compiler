@@ -147,6 +147,40 @@ build-multievta:
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_multievta"
     - du -h -d 1
 
+build-vtaconv:
+  stage: build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - df -h
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - DATE=`date '+%Y%m%d'`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - cd ../../
+    - mkdir -p build_ci
+    - ls
+    - rm -rf build_ci/*
+    - df -h
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - docker start build
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_EVTA_GRAPH_OPT=ON"
+    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}"
+    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
+    - du -h -d 1
 
 build-debug:
   stage: build

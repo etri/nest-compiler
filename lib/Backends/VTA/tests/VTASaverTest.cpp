@@ -351,6 +351,7 @@ TEST(VTASaverTest, convTest2) {
   inferVTAConvNet(&inputs, &filter, &bias, &out1, 3, 1, 1, "VTA");
   inferVTAConvNet(&inputs, &filter, &bias, &out2, 3, 1, 1, "VTAInterpreter");
   out1.toBin("vtaConv2TestGolden");
+  out2.toBin("vtainterConv2TestGolden");
   EXPECT_TRUE(out1.isEqual(out2, 0.0));
 }
 
