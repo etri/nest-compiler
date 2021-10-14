@@ -514,12 +514,17 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
 
   //check interface params
   if(target== "") target="llvm";
-
+  if(target == "aarch64") {
+    target = "llvm -device=arm_cpu -mtriple=aarch64-linux-gnu -mattr=+neon";
+  }
+  if(export_option == "aarch64") {
+    export_option = ", cc='aarch64-linux-gnu-g++'";
+  }
   std::string target_host_str="";
   if(target_host != "") {
     target_host_str = ",host=\"" + target_host + "\"";
-
   }
+
 
   std::string opt_str="";
   if(required_pass != "") {

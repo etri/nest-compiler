@@ -14,6 +14,9 @@ option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_VTA_RUN_ON_AARCH64 "Run VTA on AArch64" OFF)
 option(NESTC_EVTA_MULTI "use Multi-EVTA" OFF)
 option(NESTC_USE_PRECOMPILED_BUNDLE "use pre-compiled bundle code from nestc-data" OFF)
+option(NESTC_OPENCL_TEST "Enable OpenCL TEST" OFF)
+option(NESTC_CUDA_TEST "Enable CUDA TEST" OFF)
+
 include(CTest)
 include(NESTCTestSupport)
 
@@ -65,7 +68,13 @@ include_directories(BEFORE
 )
 message(STATUS "START CMAKE TVM")
 SET(USE_LLVM ON)
+if(NESTC_OPENCL_TEST)
+    SET(USE_OPENCL ON)
+endif()
 
+if(NESTC_CUDA_TEST)
+    SET(USE_CUDA ON)
+endif()
 add_subdirectory(tvm)
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)

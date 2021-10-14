@@ -1,4 +1,5 @@
 option(NESTC_USE_PRECOMPILED_BUNDLE "Use pre-compiled bundle" OFF)
+option(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS "Download bundles from AWS S3" OFF)
 
 if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
     add_custom_command(
@@ -23,7 +24,8 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
             -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
             -bundle-api=dynamic
             -model-input=data,float,[1,224,224,3]
-            -relay-target=aarch64
+            -relay-target='aarch64'
+            -relay-export-option='aarch64'
             -relay-opt-level=3
             -dump-graph-DAG=opt.dot
             DEPENDS
@@ -47,28 +49,43 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
     add_custom_target(resnet18RelayAarch64BundleCPPGen DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp)
 
 else()
-    add_custom_command(
-            OUTPUT
-            ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
-            ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h
-            ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
-            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_tvm.so
-            COMMAND
-            mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18
-            COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.cpp
-            -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
-            COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.h
-            -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h
-            COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18_tvm.so
-            -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_tvm.so
-            COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/Makefile
-            -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
-    )
-
+    if(NOT NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS)
+        add_custom_command(
+                OUTPUT
+                ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
+                ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h
+                ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
+                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_tvm.so
+                COMMAND
+                mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18
+                COMMAND
+                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.cpp
+                -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
+                COMMAND
+                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.h
+                -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h
+                COMMAND
+                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18_tvm.so
+                -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_tvm.so
+                COMMAND
+                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/Makefile
+                -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
+        )
+    else()
+        add_custom_command(
+                OUTPUT
+                ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
+                ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h
+                ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
+                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_tvm.so
+                COMMAND
+                mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18
+                COMMAND
+                aws s3 cp s3://$ENV{S3_BUCKET}/examples/bundles/resnet18_relay_aarch64/module__mxnet_exported_resnet18 ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18 --recursive
+                COMMAND
+                cp ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18_tvm.so ${CMAKE_CURRENT_BINARY_DIR}/
+        )
+    endif()
     add_custom_target(resnet18RelayAarch64BundleCPPGen DEPENDS
             ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
             ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h

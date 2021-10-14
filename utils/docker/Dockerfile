@@ -14,6 +14,7 @@ RUN apt-get update && \
         opencl-headers libgoogle-glog-dev libboost-all-dev \
         libdouble-conversion-dev libevent-dev libssl-dev libgflags-dev \
         libjemalloc-dev libpthread-stubs0-dev \
+        ocl-icd-opencl-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu\
         # Additional dependencies
         git python python-numpy python3-pip && \
     # Delete outdated llvm to avoid conflicts

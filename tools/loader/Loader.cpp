@@ -338,9 +338,26 @@ llvm::cl::opt<std::string> relayTarget(
     "relay-target", llvm::cl::desc("Relay Target Name"),
     llvm::cl::Optional, llvm::cl::init("llvm"), llvm::cl::cat(loaderCat));
 
+llvm::cl::opt<std::string> relayTargetHost(
+    "relay-target-host", llvm::cl::desc("Relay Target Host Name"),
+    llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
+
 llvm::cl::opt<unsigned> relayOptLevel(
     "relay-opt-level", llvm::cl::desc("Relay Optimzation Level"),
     llvm::cl::Optional, llvm::cl::init(0), llvm::cl::cat(loaderCat));
+
+llvm::cl::opt<std::string> relayRequiredPass(
+    "relay-required-pass", llvm::cl::desc("Relay Required Passes"),
+    llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
+
+llvm::cl::opt<std::string> relayDisabledPass(
+    "relay-disabled-pass", llvm::cl::desc("Relay Disabled Passes"),
+    llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
+
+llvm::cl::opt<std::string> relayExportOption(
+    "relay-export-option", llvm::cl::desc("Relay Export Option"),
+    llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
+
 
 std::string Loader::getModelOptPath() {
   // If given a single path, return it.
@@ -960,6 +977,10 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
 
   if(backend_->getBackendName()=="Relay"){
     static_cast<Relay*>(backend_.get())->setTarget(relayTarget.c_str());
+    static_cast<Relay*>(backend_.get())->setTargetHost(relayTargetHost.c_str());
+    static_cast<Relay*>(backend_.get())->setExportOption(relayExportOption.c_str());
+    static_cast<Relay*>(backend_.get())->setRequiredPass(relayRequiredPass.c_str());
+    static_cast<Relay*>(backend_.get())->setDisabledPass(relayDisabledPass.c_str());
     static_cast<Relay*>(backend_.get())->setOptLevel(relayOptLevel);
   }
 
