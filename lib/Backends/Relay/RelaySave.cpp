@@ -510,7 +510,10 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     export_option = ", cc='aarch64-linux-gnu-g++'";
   }
 */
-  if(tvm_opt_level > 3) tvm_opt_level = 0;
+  if(tvm_opt_level > 4) tvm_opt_level = 0;
+
+  //check interface params
+  if(target== "") target="llvm";
 
   std::string target_host_str="";
   if(target_host != "") {
@@ -1506,7 +1509,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   std::cout << "--relay-target = " << target_ << std::endl;
   std::cout << "--relay-opt-level = " << opt_level_ << std::endl;
 
-  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx, target_, target_host_, export_option_, opt_level_, required_pass_, disabled_pass);
+  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx, target_, target_host_, export_option_, opt_level_, required_pass_, disabled_pass_);
   
   // write genCode.py
   std::string pyFileName = relay_mkpath;
