@@ -1,17 +1,6 @@
 set(MODEL_INPUT_NAME "input")
 
 
-add_custom_command(
-        OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/resnext50.onnx
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/resnext50.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnext50.onnx
-)
-
-add_custom_target(ResNext50BundleONNX
-        DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/resnext50.onnx
-        )
 
 add_custom_command(
         OUTPUT

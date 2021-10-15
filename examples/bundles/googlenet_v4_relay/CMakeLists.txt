@@ -1,16 +1,6 @@
 set(MODEL_INPUT_NAME "data_0")
 
-add_custom_command(
-        OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/googlenet.onnx
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/googlenet_v4.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/googlenet.onnx
-)
 
-add_custom_target(GoogleNetBundleONNX
-        DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/googlenet.onnx
-        )
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/relay/genCode.py
