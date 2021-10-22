@@ -22,7 +22,8 @@
  * \file cpp_deploy.cc
  */
 
-
+#include <iostream>
+#include <limits>
 #include "mxnet_exported_resnet18.h"
 //#include <dlpack/dlpack.h>
 //#include <tvm/runtime/module.h>

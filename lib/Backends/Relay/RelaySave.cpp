@@ -440,13 +440,13 @@ void initCtx(struct SaveCtx &Ctx,
 void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRef bundleName,
                              llvm::StringRef mainEntryName, RelaySaveContext &procCtx, std::string target, std::string target_host, std::string export_option, uint32_t tvm_opt_level, std::string required_pass, std::string disabled_pass) {
 
-  auto& inc = Ctx.partHeaderGen;
-  auto& cpp = Ctx.partCppGen;
-  auto& py = Ctx.pyRelayCode;
-  auto& mk = Ctx.partMakeGen;
+  auto &inc = Ctx.partHeaderGen;
+  auto &cpp = Ctx.partCppGen;
+  auto &py = Ctx.pyRelayCode;
+  auto &mk = Ctx.partMakeGen;
 
-  std::string relay_mkpath = (std::string)outputDir + "/relay__" + (std::string)bundleName ;
-  std::string  module_mkpath = (std::string)outputDir + "/module__" + (std::string)bundleName;
+  std::string relay_mkpath = (std::string) outputDir + "/relay__" + (std::string) bundleName;
+  std::string module_mkpath = (std::string) outputDir + "/module__" + (std::string) bundleName;
 
   //#input에 대해서는 이름을 알 수 있지만
   //#output은 별도 name을 유지하지 않음. index로 가져옴.
@@ -483,24 +483,23 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
   inc.append(hh("extern \"C\" {"));
   inc.append(hh("#endif"));
 
-
   inc.append(hh("// Bundle memory configuration (memory layout)."));
-  inc.append(hh("extern BundleConfig " + (std::string)bundleName + "_config;"));
+  inc.append(hh("extern BundleConfig " + (std::string) bundleName + "_config;"));
 
   inc.append(hh("// Bundle entry point (inference function). Returns 0"));
   inc.append(hh("// for correct execution or some error code otherwise."));
-  inc.append(hh("int " + (std::string)mainEntryName + "_load_module(uint8_t *constantWeight);"));
-  inc.append(hh("int " + (std::string)mainEntryName + "(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations);"));
-  inc.append(hh("int " + (std::string)mainEntryName + "_destory_module();"));  
+  inc.append(hh("int " + (std::string) mainEntryName + "_load_module(uint8_t *constantWeight);"));
+  inc.append(hh("int " + (std::string) mainEntryName
+                    + "(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations);"));
+  inc.append(hh("int " + (std::string) mainEntryName + "_destory_module();"));
   inc.append(hh("#ifdef __cplusplus"));
   inc.append(hh("}"));
   inc.append(hh("#endif"));
   inc.append(hh("#endif"));
 
-
-    inc.append("with open(\"" +  module_mkpath + "/" + (std::string)bundleName + ".h\",\"w\") as f_h:\n");
-    inc.append("  for item in header:\n");
-    inc.append("    f_h.write(\"%s\\n\" % item)\n");
+  inc.append("with open(\"" + module_mkpath + "/" + (std::string) bundleName + ".h\",\"w\") as f_h:\n");
+  inc.append("  for item in header:\n");
+  inc.append("    f_h.write(\"%s\\n\" % item)\n");
 
 /*
   std::string llvm_option="";
@@ -510,44 +509,55 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     export_option = ", cc='aarch64-linux-gnu-g++'";
   }
 */
-  if(tvm_opt_level > 4) tvm_opt_level = 0;
+  if (tvm_opt_level > 4) tvm_opt_level = 0;
 
   //check interface params
-  if(target== "") target="llvm";
-  if(target == "aarch64") {
+  if (target == "") target = "llvm";
+  if (target == "aarch64") {
     target = "llvm -device=arm_cpu -mtriple=aarch64-linux-gnu -mattr=+neon";
   }
-  if(export_option == "aarch64") {
+  if (target_host == "aarch64") {
+    target_host = "llvm -device=arm_cpu -mtriple=aarch64-linux-gnu";
+  }
+  if (export_option == "aarch64") {
     export_option = ", cc='aarch64-linux-gnu-g++'";
   }
-  std::string target_host_str="";
-  if(target_host != "") {
+  std::string target_host_str = "";
+  if (target_host != "") {
     target_host_str = ",host=\"" + target_host + "\"";
   }
 
-
-  std::string opt_str="";
-  if(required_pass != "") {
+  std::string opt_str = "";
+  if (required_pass != "") {
     std::stringstream sss;
     sss << ",required_pass=" << quoted(required_pass);
-    opt_str+= sss.str();
+    opt_str += sss.str();
   }
-  if(disabled_pass != "") {
+  if (disabled_pass != "") {
     std::stringstream sss;
     sss << ",disabled_pass=" << quoted(disabled_pass);
-    opt_str+=sss.str();
+    opt_str += sss.str();
   }
-
 
   py.append("\ndesired_layouts = { \"nn.conv2d\": [\"NCHW\", \"default\"], \"qnn.conv2d\": [\"NCHW\", \"default\"]}  \
              \nseq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(), \
              \n\t\trelay.transform.ConvertLayout(desired_layouts)]) \
              \nwith tvm.transform.PassContext(opt_level=3): \
             \n\t\trelay_mod = seq(tvm.IRModule.from_expr(func)) \
-            \n\ntarget=tvm.target.Target(\"" + target + "\"" + target_host_str + ") \
-        \nwith tvm.transform.PassContext(opt_level=" + std::to_string(tvm_opt_level) + opt_str + "): \
-        \n\t\tlib = relay.build(relay_mod, target,params=params) \
-    \nlib.export_library(\"" + module_mkpath + "/" + (std::string)bundleName + "_tvm.so\"" + export_option + ")        \
+            \n\n");
+  if (target == "mali") {
+    py.append("target=tvm.target.mali()");
+  } else {
+    py.append("target=tvm.target.Target(\"" + target + "\"" + target_host_str + ") ");
+  }
+  py.append("\nwith tvm.transform.PassContext(opt_level=" + std::to_string(tvm_opt_level) + opt_str + "): ");
+  if (target == "mali") {
+    py.append("\n\t\tlib = relay.build(relay_mod, target=target, target_host=\"llvm -device=arm_cpu -mtriple=aarch64-linux-gnu\",params=params)");
+  }
+  else{
+    py.append("\n\t\tlib = relay.build(relay_mod, target,params=params)");
+  }
+  py.append("\nlib.export_library(\"" + module_mkpath + "/" + (std::string)bundleName + "_tvm.so\"" + export_option + ")        \
     \n# = lib.get_params()\
     \n#    for item in b:\
     \n#        print(item)\
@@ -598,7 +608,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
 
     if(target.find("cuda") != std::string::npos) {
       dl_dev_str = "kDLCUDA";
-    } else if(target.find("opencl") != std::string::npos) {
+    } else if((target.find("opencl") != std::string::npos) || (target.find("mali") != std::string::npos)) {
       dl_dev_str = "kDLOpenCL";
     }
 
