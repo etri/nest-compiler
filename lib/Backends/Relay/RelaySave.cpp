@@ -744,6 +744,22 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 // }
 
   
+  // check in/out count first. use last input as output if there is no output
+  int in_count=0;
+  int out_count=0;
+  for (const auto &W : IR->getWeights()) {
+    
+    if(W->getMutability() != WeightVar::MutabilityKind::Constant) { 
+          int type = getInOut(W);
+          if (type == 2) { 
+            out_count++; 
+          } else if (type==1) {
+            in_count++;
+          }
+    }
+  }
+  
+  int mutable_count =0;
   for (const auto &W : IR->getWeights()) {
     
       //debug
@@ -855,6 +871,9 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
           } else if (type==1) {
             std::cout << "IN // " << W->getKindName() << " :  " << W->toString() << std::endl;
           }
+
+          mutable_count++;
+          if(out_count==0 && mutable_count == in_count) type = 2;
             
             
             addSymbolEntryGenBundle(W,&procCtx,type);
