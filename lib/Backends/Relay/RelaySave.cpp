@@ -852,7 +852,8 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
           addConstantSymbolEntry(W, &procCtx);
 
           //load in python
-          pyss<< "W_" << (std::string) W->getName() << "= load_wgt(" << "\"" << relay_mkpath << "/" << (std::string) W->getName() << "\",(";
+          //pyss<< "W_" << (std::string) W->getName() << "= load_wgt(" << "\"" << relay_mkpath << "/" << (std::string) W->getName() << "\",(";
+          pyss<< "W_" << (std::string) W->getName() << "= load_wgt(" << "\"relay__"  << (std::string)bundleName << "/" << (std::string) W->getName() << "\",(";
           for(int i=0;i<T->numSizes_;i++) {
              pyss<< (int)T->sizes_[i] << ((i!=T->numSizes_-1) ? "," : ""); 
           }
