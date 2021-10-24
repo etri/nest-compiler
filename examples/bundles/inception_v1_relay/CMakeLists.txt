@@ -4,7 +4,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/inception.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/inception_v1.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/inception.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/inception_v1.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/inception.onnx --no-verbose
 )
 
 add_custom_target(InceptionRelayBundleONNX

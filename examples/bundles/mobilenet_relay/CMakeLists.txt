@@ -2,7 +2,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/onnxzoo_mobilenet_v210.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/onnxzoo_mobilenet_v210.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/onnxzoo_mobilenet_v210.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/onnxzoo_mobilenet_v210.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/onnxzoo_mobilenet_v210.onnx --no-verbose
 )
 
 add_custom_target(MobileNetRelayONNX
