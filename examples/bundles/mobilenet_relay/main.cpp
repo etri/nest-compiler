@@ -23,9 +23,9 @@
 #include <string>
 #include <vector>
 
-//#include "onnxzoo_mobilenet_v210.h"
-#include "p0.h"
-#include "p1.h"
+#include "onnxzoo_mobilenet_v210.h"
+//#include "p0.h"
+//#include "p1.h"
 
 /// This is an example demonstrating how to use auto-generated bundles and
 /// create standalone executables that can perform neural network computations.
@@ -387,7 +387,7 @@ int main(int argc, char **argv) {
   
 
   // Report the results.
-  int maxIdx = dumpInferenceResults(p1_config, mutableWeightVarsAddr);
+  int maxIdx = dumpInferenceResults(onnxzoo_mobilenet_v210_config, mutableWeightVarsAddr);
 
   // Free all resources.
 //  free(activationsAddr1);
