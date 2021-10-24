@@ -760,6 +760,8 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   }
   
   int mutable_count =0;
+  std::string output_temp_name="";
+  WeightVar *output_temp_var;
   for (const auto &W : IR->getWeights()) {
     
       //debug
@@ -850,7 +852,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
           }
 
           addConstantSymbolEntry(W, &procCtx);
-
+ 
           //load in python
           //pyss<< "W_" << (std::string) W->getName() << "= load_wgt(" << "\"" << relay_mkpath << "/" << (std::string) W->getName() << "\",(";
           pyss<< "W_" << (std::string) W->getName() << "= load_wgt(" << "\"relay__"  << (std::string)bundleName << "/" << (std::string) W->getName() << "\",(";
@@ -874,10 +876,18 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
           }
 
           mutable_count++;
-          if(out_count==0 && mutable_count == in_count) type = 2;
+          if(out_count==0 && mutable_count == in_count) {
+            output_temp_name = W->getName().data();
+            output_temp_var = W;
+            //std::cout << "TEMP_OUTPUT" << output_temp_name;
+            
+          } else {
+              addSymbolEntryGenBundle(W,&procCtx,type);
+          }
+          
             
             
-            addSymbolEntryGenBundle(W,&procCtx,type);
+          
         }
 
     
@@ -906,7 +916,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
     switch(I.getKind()) {
       case Kinded::Kind::DeallocActivationInstKind:
       {
-        auto II =  static_cast<DeallocActivationInst*>(&I);
+        //auto II =  static_cast<DeallocActivationInst*>(&I);
        //std::cout<< "del " << (std::string)II->getSrc()->getName()<<std::endl;
        //DO nothing
       }
@@ -1395,6 +1405,13 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
               pyss << "new_shape.append(" << (int)T->sizes_[i] << ")" <<std::endl;
           }
           pyss<< (std::string) II->getName() << " = _op.reshape(" << (std::string)II->getSrc()->getName() << ",new_shape)" << std::endl;
+
+          if( output_temp_name == (std::string)II->getSrc()->getName()) {
+
+            output_temp_var->setName((std::string) II->getName());
+            output_temp_var->setType(T);
+            addSymbolEntryGenBundle(output_temp_var,&procCtx,2);
+          }
       }
         break;
 
