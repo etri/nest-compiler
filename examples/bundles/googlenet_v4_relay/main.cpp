@@ -477,5 +477,5 @@ int main(int argc, char **argv) {
   //free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
 
-  return !(maxIdx==281);
+  return !(maxIdx==285);
 }

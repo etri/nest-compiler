@@ -21,6 +21,7 @@ add_custom_command(
         -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
         -bundle-api=dynamic
         -model-input=${MODEL_INPUT_NAME},float,[1,3,224,224]
+        -relay-opt-level=3
         DEPENDS
         model-compiler Relay GoogleNetRelayBundleONNX
 )
