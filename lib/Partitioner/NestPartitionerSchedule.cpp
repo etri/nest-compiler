@@ -14,12 +14,6 @@ void NestPartitionerSchedule::setKeyName(std::string key, int i)
   keyList_[i] = key;
 }
 
-double NestPartitionerSchedule::getDelayTime(int i)
-{
-  return delayTime_[i];
-}
-
-
 void NestPartitionerSchedule::setProfileMode(int mode)
 {
   profileMode_ = mode;

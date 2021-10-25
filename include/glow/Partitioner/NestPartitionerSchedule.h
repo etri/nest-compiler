@@ -48,7 +48,6 @@ public:
 
   void setFunction(Function* function);
   void setKeyName(std::string key, int i);
-  double getDelayTime(int i);
   void setProfileMode(int mode);
   void setPartitionExeMode(int mode);
   int getProfileMode();

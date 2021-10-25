@@ -162,33 +162,31 @@ public:
   Expected<DAGListTy> partition(CompilationContext &cctx) override;
   Expected<DAGListTy> partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
 
-  void outPartitionPlanForFusion(Function* function, DeviceInfo deviceInfo, std::string filename);
-  bool isUserDefinedFusable(Node *node);
 
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
-  void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
+void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
   void partitionBranchesReplaceCPU(std::vector<NodeGroup*>* branchList, bool isParallel);
   void loadPerformProfileInfo(std::string pdir);
-
-  bool isVTAConv(ConvolutionNode* convNode);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends);
   void getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCNode);
   void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* firstPrevCNode, CostNode* curCNode);
-  int getFusedPartitionCount(Function* function);
+  int getFusedPartitionCount(std::vector<NodeGroup*>* branchList);
 
-  void outPartitionPlanForSingleNode(Function* function, DeviceInfo deviceInfo, std::string filename);
-  void outPerformProfileForEachNode(Function* function, std::string filename, DeviceInfo device);
-  void outPerformProfileForFusedNode(Function* function, std::string filename, DeviceInfo device);
+  void outPartitionPlanForFusion(std::string funcName, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
+  bool isUserDefinedFusable(Node *node);
+  void outPartitionPlanForSingleNode(Function *function, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
+  void outPerformProfileForEachNode(std::vector<NodeGroup*>* branchList, std::string filename, DeviceInfo device);
+  void outPerformProfileForFusedNode(std::vector<NodeGroup*>* branchList, std::string filename, DeviceInfo device);
   void allocOptimalPUFusedNodes(std::vector<NodeGroup*>* branchList);
   void loadFuseOperatorsConfig(std::string fname);
-  void allocateCPUToParallelBranch(std::vector<NodeGroup*>* branchList);
   void allocateOptimalPUSingleNode(std::vector<NodeGroup*>* branchList);
   void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
   void findParallelBranchesForMultiVTA(std::vector<NodeGroup*>* branchList, int vtaNum);
 
-  void findParallelBranches(std::vector<NodeGroup*>* branchList);
+  bool findParallelBranches(std::vector<NodeGroup*>* branchList);
   void allocateVTAOps(std::vector<NodeGroup*>* branchList);
+  bool isVTAConv(ConvolutionNode* convNode);
 
   void generatePlanForVTAOps(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   float getCostOfSingleNode(CostNode *cnode, std::string backendName);
@@ -198,7 +196,6 @@ public:
   void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int vtaNum);
 
-  void changeBackendAndGeneratePlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateDAGStatistics(Function *function);
   Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
 

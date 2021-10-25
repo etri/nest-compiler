@@ -7,7 +7,7 @@
 - name:    PU2
   backendName: VTA
   parameters: |
-    "supportedNodes":"Convolution,Relu"
+    "supportedNodes":"Convolution"
     "deviceID" : "1"
   dramMemory: 200000000
 ...

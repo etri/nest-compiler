@@ -1,5 +1,5 @@
 ---
   name: Profile1
   fuseOperators: |
-    Convolution-Relu:AvgPool-Reshape-Gemm
+    Convolution-Relu
 ...
