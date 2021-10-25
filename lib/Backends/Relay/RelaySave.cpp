@@ -539,11 +539,17 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     opt_str += sss.str();
   }
 
+  std::string additional_pass="";
+  if(procCtx.qnn_mode==1) {
+    additional_pass+="\nrelay_mod = relay.transform.InferType()(relay_mod) \
+                      \nrelay_mod = relay.qnn.transform.CanonicalizeOps()(relay_mod)";
+  }
+  
   py.append("\ndesired_layouts = { \"nn.conv2d\": [\"NCHW\", \"default\"], \"qnn.conv2d\": [\"NCHW\", \"default\"]}  \
              \nseq = tvm.transform.Sequential([relay.transform.RemoveUnusedFunctions(), \
              \n\t\trelay.transform.ConvertLayout(desired_layouts)]) \
              \nwith tvm.transform.PassContext(opt_level=3): \
-            \n\t\trelay_mod = seq(tvm.IRModule.from_expr(func)) \
+            \n\t\trelay_mod = seq(tvm.IRModule.from_expr(func))" +  additional_pass + " \
             \n\n");
   if (target == "mali") {
     py.append("target=tvm.target.mali()");
@@ -1018,6 +1024,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       case Kinded::Kind::QuantizeInstKind:
       {
       
+        procCtx.qnn_mode=1;
 
       // sum1 = relay.add(a, b)
         auto II =  static_cast<QuantizeInst*>(&I);
@@ -1057,6 +1064,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       break;
       case Kinded::Kind::DequantizeInstKind:
       {
+        procCtx.qnn_mode=1;
         // net = relay.nn.avg_pool2d(net,  pool_size=(3, 3), strides=(2, 2), padding=(1, 1),count_include_pad=True)
 
         auto II =  static_cast<DequantizeInst*>(&I);
@@ -1216,6 +1224,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
          pyss<< "conv2d_" << ir_idx;
          TypeRef srcT = src->getType();
          if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+           procCtx.qnn_mode=1;
             pyss << " = relay.qnn.op.conv2d(" ;
              pyss<<  (std::string)src->getName() << "," << (std::string)filter->getName() << ",";
             pyss << "input_zero_point=relay.const(" << srcT->getOffset() << ", \"int32\"),";
@@ -1326,8 +1335,11 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
             if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
               if(dst->getType()->elementType_ == ElemKind::Int8QTy) {
                   
-                pyss << "bias_" << ir_idx << "_clip = relay.clip( bias_" << ir_idx << ",-128,127)" << std::endl;
-                pyss << (std::string) dst->getName() << "=relay.cast( relay.nn.relu( bias_" << ir_idx << "_clip ), \"int8\")" << std::endl;
+                //pyss << "bias_" << ir_idx << "_clip = relay.clip( bias_" << ir_idx << ",-128,127)" << std::endl;
+                //pyss << (std::string) dst->getName() << "=relay.cast( relay.nn.relu( bias_" << ir_idx << "_clip ), \"int8\")" << std::endl;
+                
+                pyss << (std::string) dst->getName() << "= relay.cast(relay.clip( relay.nn.relu( bias_" << ir_idx << "),-128,127), \"int8\")" << std::endl;
+                //pyss << (std::string) dst->getName() << "= relay.nn.relu( bias_" << ir_idx << "_clip )" << std::endl;
               }
             } else {
             pyss << (std::string) dst->getName() << "=relay.nn.relu( bias_" << ir_idx << " )" << std::endl;
@@ -1367,6 +1379,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
          TypeRef srcT = src->getType();
          if(srcT->elementType_ == ElemKind::Int32QTy ||  srcT->elementType_ == ElemKind::Int8QTy) {
+           procCtx.qnn_mode=1;
             pyss <<    " = relay.qnn.op.dense(" ;
          } else {
            pyss <<    " = relay.nn.dense(" ;
