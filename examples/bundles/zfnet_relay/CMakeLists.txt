@@ -70,4 +70,4 @@ set_target_properties(ZfNetRelayBundle PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMA
 target_link_libraries(ZfNetRelayBundle -fPIC -I. -pthread png tvm_runtime)
 target_compile_features(ZfNetRelayBundle PRIVATE cxx_std_17)
 add_dependencies(ZfNetRelayBundle ZfNetRelayBundleObjectGen tvm_runtime)
-add_nestc_test(NAME ZfNetRelayBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ZfNetRelayBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+#add_nestc_test(NAME ZfNetRelayBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ZfNetRelayBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)

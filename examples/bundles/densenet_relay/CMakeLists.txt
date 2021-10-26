@@ -68,6 +68,6 @@ set_target_properties(DenseNetRelayBundle PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${
 target_link_libraries(DenseNetRelayBundle -fPIC -I. -pthread png tvm_runtime)
 target_compile_features(DenseNetRelayBundle PRIVATE cxx_std_17)
 add_dependencies(DenseNetRelayBundle DenseNetRelayBundleObjectGen tvm_runtime)
-add_nestc_test(NAME DenseNetRelayBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/DenseNetRelayBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+#add_nestc_test(NAME DenseNetRelayBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/DenseNetRelayBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
 
 
