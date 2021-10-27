@@ -16,7 +16,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/efficientnet_lite4.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/efficientnet_lite4.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/efficientnet_lite4.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/efficientnet_lite4.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/efficientnet_lite4.onnx --no-verbose
 )
 
 add_custom_target(EfficientNetBundleONNX

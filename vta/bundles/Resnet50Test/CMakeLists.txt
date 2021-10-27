@@ -5,7 +5,7 @@ add_custom_command(
         COMMAND
         wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50_calib_2.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx --no-verbose
 )
 
 add_custom_target(vtaCaffe2Resnet50BundleONNX

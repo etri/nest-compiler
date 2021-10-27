@@ -21,7 +21,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/resnet18v2.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/resnet18v2.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnet18v2.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/resnet18v2.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnet18v2.onnx --no-verbose
 )
 
 add_custom_target(ResNet18BundleONNX

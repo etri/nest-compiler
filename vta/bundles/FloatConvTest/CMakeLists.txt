@@ -21,11 +21,11 @@ else()
             COMMAND
             wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestBundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.cpp
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestInput.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestInput.bin --no-verbose
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.weights.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.weights.bin --no-verbose
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestGolden.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestGolden.bin --no-verbose
             COMMAND
             wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestMainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestMainEntry.h
 

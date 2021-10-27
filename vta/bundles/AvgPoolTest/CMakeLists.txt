@@ -22,11 +22,11 @@ else()
             COMMAND
             wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestBundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.cpp
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestInput.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestInput.bin --no-verbose
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.weights.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.weights.bin --no-verbose
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin --no-verbose
             COMMAND
             wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestMainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestMainEntry.h
     )

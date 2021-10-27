@@ -16,7 +16,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/alexnet.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/bvlcalexnet.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/alexnet.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/bvlcalexnet.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/alexnet.onnx --no-verbose
 )
 
 add_custom_target(AlexNetBundleONNX

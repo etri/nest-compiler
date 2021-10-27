@@ -16,7 +16,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/resnext50.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/resnext50.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnext50.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/resnext50.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnext50.onnx --no-verbose
 )
 
 add_custom_target(ResNext50BundleONNX

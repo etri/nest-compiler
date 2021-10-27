@@ -14,7 +14,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/squeezenet.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/squeezenet.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/squeezenet.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/squeezenet.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/squeezenet.onnx --no-verbose
 )
 
 add_custom_target(SqueezeNetBundleONNX

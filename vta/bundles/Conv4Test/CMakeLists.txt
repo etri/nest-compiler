@@ -26,11 +26,11 @@ else()
             COMMAND
             wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestBundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestBundle.cpp
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestInput.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestInput.bin --no-verbose
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestBundle.weights.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestBundle.weights.bin --no-verbose
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestGolden.bin
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestGolden.bin --no-verbose
             COMMAND
             wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv4Test/vtaConv4TestMainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv4TestMainEntry.h
             COMMAND
