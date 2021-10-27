@@ -318,6 +318,7 @@ publish:
     entrypoint: [""]
   script:
     - aws configure set region  ap-northeast-2
+    - aws s3 rm s3://$S3_BUCKET/ --recursive
     - aws s3 cp build_ci s3://$S3_BUCKET/ --recursive
   when: manual
   allow_failure: true
