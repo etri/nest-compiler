@@ -81,52 +81,37 @@ void Provisioner::setCompileOptions(PartitionerCompileOptions* compileOptions) {
     if (backends_.find("VTA") != backends_.end()) {
         if(compileOptions->idxMultiEVTA_ > 0) {
             std::cout << "idxMultiEVTA_: " << compileOptions->idxMultiEVTA_ << std::endl;
-            ((VTA *) (&backends_["VTA"]))->setIdxMultiEVTA(compileOptions->idxMultiEVTA_);
+            static_cast<VTA*>(backends_["VTA"].get())->setIdxMultiEVTA(compileOptions->idxMultiEVTA_);
         }
     }
     if (backends_.find("Relay") != backends_.end()) {
 
         if(!compileOptions->relayTarget_.empty()) {
-            std::cout << "relayTarget_: " << compileOptions->relayTarget_ << std::endl;
-            ((Relay *) (&backends_["Relay"]))->setTarget(compileOptions->relayTarget_.c_str());
+            //std::cout << "relayTarget_: " << compileOptions->relayTarget_ << std::endl;
+            static_cast<Relay*>(backends_["Relay"].get())->setTarget(compileOptions->relayTarget_.c_str());
         }
         if(!compileOptions->relayTargetHost_.empty()) {
-            std::cout << "relayTargetHost_: " << compileOptions->relayTargetHost_ << std::endl;
-            ((Relay *) (&backends_["Relay"]))->setTargetHost(compileOptions->relayTargetHost_.c_str());
+            //std::cout << "relayTargetHost_: " << compileOptions->relayTargetHost_ << std::endl;
+            static_cast<Relay*>(backends_["Relay"].get())->setTargetHost(compileOptions->relayTargetHost_.c_str());
         }
         if(compileOptions->relayOptLevel_ > 0) {
-            std::cout << "relayOptLevel_: " << compileOptions->relayOptLevel_ << std::endl;
-            ((Relay *) (&backends_["Relay"]))->setOptLevel(compileOptions->relayOptLevel_);
+            //std::cout << "relayOptLevel_: " << compileOptions->relayOptLevel_ << std::endl;
+            static_cast<Relay*>(backends_["Relay"].get())->setOptLevel(compileOptions->relayOptLevel_);
         }
         if(!compileOptions->relayRequiredPass_.empty()) {
-            std::cout << "relayRequiredPass_: " << compileOptions->relayRequiredPass_ << std::endl;
-            ((Relay *) (&backends_["Relay"]))->setRequiredPass(compileOptions->relayRequiredPass_.c_str());
+            //std::cout << "relayRequiredPass_: " << compileOptions->relayRequiredPass_ << std::endl;
+            static_cast<Relay*>(backends_["Relay"].get())->setRequiredPass(compileOptions->relayRequiredPass_.c_str());
         }
-        if (!compileOptions->relayDisabledPass_.empty()) {
-            std::cout << "relayDisabledPass_: " << compileOptions->relayDisabledPass_ << std::endl;
-        }
+
         if(!compileOptions->relayDisabledPass_.empty()) {
-            ((Relay *) (&backends_["Relay"]))->setDisabledPass(compileOptions->relayDisabledPass_.c_str());
+            //std::cout << "relayDisabledPass_: " << compileOptions->relayDisabledPass_ << std::endl;
+            static_cast<Relay*>(backends_["Relay"].get())->setDisabledPass(compileOptions->relayDisabledPass_.c_str());
         }
         if(!compileOptions->relayExportOption_.empty()) {
-            std::cout << "relayExportOption_: " << compileOptions->relayExportOption_ << std::endl;
-            ((Relay *) (&backends_["Relay"]))->setExportOption(compileOptions->relayExportOption_.c_str());
+            //std::cout << "relayExportOption_: " << compileOptions->relayExportOption_ << std::endl;
+            static_cast<Relay*>(backends_["Relay"].get())->setExportOption(compileOptions->relayExportOption_.c_str());
         }
     }
-
-//    if(!backendName.compare("VTA")) {
-//        ((VTA *)(&newBackend))->setIdxMultiEVTA(compileOptions_.idxMultiEVTA_);
-//    } else if(!backendName.compare("Relay")) {
-//        std::cout << "==Relay==" << std::endl;
-//        std::cout << compileOptions_.relayTarget_ << std::endl;
-////                ((Relay *)(&newBackend))->setTarget(compileOptions_.relayTarget_.c_str());
-////                ((Relay *)(&newBackend))->setTargetHost(compileOptions_.relayTargetHost_.c_str());
-////                ((Relay *)(&newBackend))->setOptLevel(compileOptions_.relayOptLevel_);
-////                ((Relay *)(&newBackend))->setRequiredPass(compileOptions_.relayRequiredPass_.c_str());
-////                ((Relay *)(&newBackend))->setDisabledPass(compileOptions_.relayDisabledPass_.c_str());
-////                ((Relay *)(&newBackend))->setExportOption(compileOptions_.relayExportOption_.c_str());
-//    }
-
 }
 
 Error Provisioner::checkActiveNetworks(

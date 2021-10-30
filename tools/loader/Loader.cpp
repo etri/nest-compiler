@@ -989,7 +989,6 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
   compileOptions.idxMultiEVTA_= idxMultiEVTA;
   compileOptions.relayTargetHost_ = relayTargetHost;
   compileOptions.relayTarget_ = relayTarget;
-  std::cout << "loader relay target : " << compileOptions.relayTarget_ << std::endl;
   compileOptions.relayExportOption_ = relayExportOption;
   compileOptions.relayRequiredPass_ = relayRequiredPass;
   compileOptions.relayDisabledPass_ = relayDisabledPass;
