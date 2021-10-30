@@ -33,6 +33,8 @@
 #include <vector>
 
 namespace glow {
+
+struct PartitionerCompileOptions;
 namespace runtime {
 /// The HostManager serves as an entry point into the Runtime environment. It
 /// provides an interface to add, run, and evict networks from the host. It
@@ -200,7 +202,7 @@ public:
   Error addNetworkForNestPartition(std::unique_ptr<Module> module, CompilationContext &cctx, size_t exeType,
                                  std::string profilePath, std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode, int partitionExe);
   std::vector<DeviceInfo> getDeviceInfoList();
-
+  void setCompileOptions(PartitionerCompileOptions* compileOptions) {provisioner_->setCompileOptions(compileOptions);}
 
     /// Given \p networkName removes that network from the host. This also
   /// removes the network from any backends setup to execute it.

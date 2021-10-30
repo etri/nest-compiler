@@ -24,6 +24,17 @@
 #include <map>
 
 namespace glow {
+
+struct PartitionerCompileOptions {
+    unsigned idxMultiEVTA_;
+    std::string relayTarget_;
+    std::string relayTargetHost_;
+    unsigned relayOptLevel_;
+    std::string relayRequiredPass_;
+    std::string relayDisabledPass_;
+    std::string relayExportOption_;
+};
+
 namespace runtime {
 
 /// The Provisioner is responsible for assigning networks to an actual device.
@@ -31,7 +42,7 @@ namespace runtime {
 /// device.
 class Provisioner final {
 public:
-  Provisioner(DeviceManagerMapTy &devices);
+    Provisioner(DeviceManagerMapTy &devices);
 
   /// Traverses the DAG \p networks and:
   ///   1. Retrieves each node's Function from the provided \p module.
@@ -61,6 +72,9 @@ public:
     devices_ = devices;
     deviceMappings_ = mappings;
   }
+
+//  PartitionerCompileOptions* getCompileOptions() {return &compileOptions_;};
+  void setCompileOptions(PartitionerCompileOptions* compileOptions);
 
 private:
   /// Map of backends for all devices, one backend per device type.

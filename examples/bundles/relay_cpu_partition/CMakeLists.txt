@@ -49,6 +49,9 @@ add_custom_command(
         -exe-type=0
         -emit-bundle=${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}
         -bundle-api=dynamic
+#        -relay-target=aarch64
+#        -relay-export-option=aarch64
+#        -relay-opt-level=3
         DEPENDS
         model-partition-tuner ResNet18RelayPartitionBundleDir
 )

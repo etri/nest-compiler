@@ -23,6 +23,8 @@
 
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
+#include "lib/Backends/Relay/Relay.h"
+#include "lib/Backends/VTA/VTA.h"
 
 #include <future>
 #include <map>
@@ -60,17 +62,71 @@ auto sortMostMemory = [](const std::pair<DeviceIDTy, uint64_t> &a,
 };
 } // namespace
 
+
 Provisioner::Provisioner(DeviceManagerMapTy &devices) {
-  unsigned deviceMapping{0};
-  for (auto &device : devices) {
-    devices_.push_back(device.second.get());
-    deviceMappings_.push_back(deviceMapping++);
-    auto backendName = device.second->getBackendName();
-    if (backends_.find(backendName) == backends_.end()) {
-      std::unique_ptr<Backend> newBackend(createBackend(backendName));
-      backends_.emplace(std::string(backendName), std::move(newBackend));
+    unsigned deviceMapping{0};
+    for (auto &device : devices) {
+        devices_.push_back(device.second.get());
+        deviceMappings_.push_back(deviceMapping++);
+        auto backendName = device.second->getBackendName();
+        if (backends_.find(backendName) == backends_.end()) {
+            std::unique_ptr<Backend> newBackend(createBackend(backendName));
+            backends_.emplace(std::string(backendName), std::move(newBackend));
+        }
     }
-  }
+}
+
+void Provisioner::setCompileOptions(PartitionerCompileOptions* compileOptions) {
+
+    if (backends_.find("VTA") != backends_.end()) {
+        if(compileOptions->idxMultiEVTA_ > 0) {
+            std::cout << "idxMultiEVTA_: " << compileOptions->idxMultiEVTA_ << std::endl;
+            ((VTA *) (&backends_["VTA"]))->setIdxMultiEVTA(compileOptions->idxMultiEVTA_);
+        }
+    }
+    if (backends_.find("Relay") != backends_.end()) {
+
+        if(!compileOptions->relayTarget_.empty()) {
+            std::cout << "relayTarget_: " << compileOptions->relayTarget_ << std::endl;
+            ((Relay *) (&backends_["Relay"]))->setTarget(compileOptions->relayTarget_.c_str());
+        }
+        if(!compileOptions->relayTargetHost_.empty()) {
+            std::cout << "relayTargetHost_: " << compileOptions->relayTargetHost_ << std::endl;
+            ((Relay *) (&backends_["Relay"]))->setTargetHost(compileOptions->relayTargetHost_.c_str());
+        }
+        if(compileOptions->relayOptLevel_ > 0) {
+            std::cout << "relayOptLevel_: " << compileOptions->relayOptLevel_ << std::endl;
+            ((Relay *) (&backends_["Relay"]))->setOptLevel(compileOptions->relayOptLevel_);
+        }
+        if(!compileOptions->relayRequiredPass_.empty()) {
+            std::cout << "relayRequiredPass_: " << compileOptions->relayRequiredPass_ << std::endl;
+            ((Relay *) (&backends_["Relay"]))->setRequiredPass(compileOptions->relayRequiredPass_.c_str());
+        }
+        if (!compileOptions->relayDisabledPass_.empty()) {
+            std::cout << "relayDisabledPass_: " << compileOptions->relayDisabledPass_ << std::endl;
+        }
+        if(!compileOptions->relayDisabledPass_.empty()) {
+            ((Relay *) (&backends_["Relay"]))->setDisabledPass(compileOptions->relayDisabledPass_.c_str());
+        }
+        if(!compileOptions->relayExportOption_.empty()) {
+            std::cout << "relayExportOption_: " << compileOptions->relayExportOption_ << std::endl;
+            ((Relay *) (&backends_["Relay"]))->setExportOption(compileOptions->relayExportOption_.c_str());
+        }
+    }
+
+//    if(!backendName.compare("VTA")) {
+//        ((VTA *)(&newBackend))->setIdxMultiEVTA(compileOptions_.idxMultiEVTA_);
+//    } else if(!backendName.compare("Relay")) {
+//        std::cout << "==Relay==" << std::endl;
+//        std::cout << compileOptions_.relayTarget_ << std::endl;
+////                ((Relay *)(&newBackend))->setTarget(compileOptions_.relayTarget_.c_str());
+////                ((Relay *)(&newBackend))->setTargetHost(compileOptions_.relayTargetHost_.c_str());
+////                ((Relay *)(&newBackend))->setOptLevel(compileOptions_.relayOptLevel_);
+////                ((Relay *)(&newBackend))->setRequiredPass(compileOptions_.relayRequiredPass_.c_str());
+////                ((Relay *)(&newBackend))->setDisabledPass(compileOptions_.relayDisabledPass_.c_str());
+////                ((Relay *)(&newBackend))->setExportOption(compileOptions_.relayExportOption_.c_str());
+//    }
+
 }
 
 Error Provisioner::checkActiveNetworks(
@@ -846,8 +902,11 @@ Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module
             llvm::sys::fs::create_directory(bundleDir);
           }
 
-          std::cout << "Partition name = " << function->getName().str() << std::endl;
+          std::cout << "Partition name = " << function->getName().str() << "(" << deviceBackendName << ")" << std::endl;
 
+//          if(!deviceBackendName.compare("Relay")) {
+//              std::cout << ((Relay *) (&backends_["Relay"]))->getTarget() << std::endl;
+//          }
           backends_[deviceBackendName]->save(function, bundleDir + "/",
                                              function->getName(),
                                              function->getName());

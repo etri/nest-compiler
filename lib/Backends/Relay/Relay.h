@@ -92,6 +92,8 @@ public:
   void setDisabledPass(std::string disabled_pass) {disabled_pass_ = disabled_pass;}
   void setOptLevel(uint32_t opt_level) {opt_level_ = opt_level;}
 
+    std::string getTarget() {return target_;}
+
 private:
   std::string target_;
   std::string target_host_;

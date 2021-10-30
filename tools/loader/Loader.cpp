@@ -28,7 +28,6 @@
 #include "glow/Runtime/RuntimeTypes.h"
 
 #include "glow/Partitioner/NestPartitioner.h"
-#include "glow/Partitioner/PartitionerUtils.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
@@ -813,7 +812,8 @@ void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, s
 //  std::cout << "bundle dir = " << emitBundle << std::endl;
   // Emit IR for the graph and compile it.
   cctx.saturateHost = !runAllInputsOnAllDevices;
-  auto error = hostManager_->addNetworkForNestPartition(std::move(M_), cctx, exeType, profilePath, partitionPlanFile, emitBundle.c_str(), loadVTAProfileFileOpt, profileMode, partitionExe);
+  auto error = hostManager_->addNetworkForNestPartition(std::move(M_), cctx, exeType, profilePath, partitionPlanFile,
+                                                        emitBundle.c_str(), loadVTAProfileFileOpt, profileMode, partitionExe);
   EXIT_ON_ERR(std::move(error));
   // After partitioning, the original function may be removed. Need to update
   // F_.
@@ -983,6 +983,19 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
     static_cast<Relay*>(backend_.get())->setDisabledPass(relayDisabledPass.c_str());
     static_cast<Relay*>(backend_.get())->setOptLevel(relayOptLevel);
   }
+
+  PartitionerCompileOptions compileOptions;
+
+  compileOptions.idxMultiEVTA_= idxMultiEVTA;
+  compileOptions.relayTargetHost_ = relayTargetHost;
+  compileOptions.relayTarget_ = relayTarget;
+  std::cout << "loader relay target : " << compileOptions.relayTarget_ << std::endl;
+  compileOptions.relayExportOption_ = relayExportOption;
+  compileOptions.relayRequiredPass_ = relayRequiredPass;
+  compileOptions.relayDisabledPass_ = relayDisabledPass;
+  compileOptions.relayOptLevel_ = relayOptLevel;
+
+  hostManager_->setCompileOptions(&compileOptions);
 
   F_ = M_->createFunction(modelPathOpt[0]);
   functionName_ = modelPathOpt[0];
