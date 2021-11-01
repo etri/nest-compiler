@@ -1,13 +1,12 @@
 ---
 - name:    PU1
-  backendName: CPU
+  backendName: Relay
   parameters: |
     "deviceID" : "0"
   dramMemory: 200000000
 - name:    PU2
-  backendName: Relay
+  backendName: VTA
   parameters: |
-    "supportedNodes":"Convolution"
-    "deviceID" : "2"
+    "deviceID" : "1"
   dramMemory: 200000000
 ...
