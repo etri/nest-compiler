@@ -382,6 +382,21 @@ void initCtx(struct SaveCtx &Ctx,
   inc.append(hh("// Glow bundle error code for correct execution."));
   inc.append(hh("#define GLOW_SUCCESS 0"));
 
+  inc.append(hh("// a node info table for TVM node debugging"));
+  inc.append(hh("struct TVMNodeInfoTable {"));
+  inc.append(hh("\t// Name of a variable."));
+  inc.append(hh("\tconst char *name;"));
+  inc.append(hh("\t// dim"));
+  inc.append(hh("\tuint64_t dim;"));
+  inc.append(hh("\t// size"));
+  inc.append(hh("\tuint64_t size;"));
+  inc.append(hh("\t// type. kDLInt, kDLFloat"));
+  inc.append(hh("\tconst char* typeStr;"));
+  inc.append(hh("\t// shape string. ex {1,64,64,3}"));
+  inc.append(hh("\tconst char* shapeStr;"));
+  inc.append(hh("};"));
+
+
   inc.append(hh("// Type describing a symbol table entry of a generated bundle."));
   inc.append(hh("struct SymbolTableEntry {"));
   inc.append(hh("\t// Name of a variable."));
@@ -432,13 +447,13 @@ void initCtx(struct SaveCtx &Ctx,
   //
   py.append("import numpy as np\nimport tvm\nfrom tvm import te, runtime\nimport tvm.relay as relay\n"
         "from tvm.relay.frontend.common import infer_type\nfrom tvm.relay.testing import check_grad, run_infer_type, run_opt_pass, _np_randn_from_type\n"
-        "import onnx\nfrom tvm.relay import op as _op\n\ndef load_wgt(filename, shape,dtype):\n\tf=open(filename,\"rb\")\n\td=f.read()\n\treturn np.frombuffer(d, dtype=dtype).reshape(shape)\n\n");
+        "import onnx\nfrom tvm.relay import op as _op\nimport json\n\ndef load_wgt(filename, shape,dtype):\n\tf=open(filename,\"rb\")\n\td=f.read()\n\treturn np.frombuffer(d, dtype=dtype).reshape(shape)\n\n");
 
 
 }
 
 void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRef bundleName,
-                             llvm::StringRef mainEntryName, RelaySaveContext &procCtx, std::string target, std::string target_host, std::string export_option, uint32_t tvm_opt_level, std::string required_pass, std::string disabled_pass) {
+                             llvm::StringRef mainEntryName, RelaySaveContext &procCtx, std::string target, std::string target_host, std::string export_option, uint32_t tvm_opt_level, std::string required_pass, std::string disabled_pass, std::string debug_mode) {
 
   auto &inc = Ctx.partHeaderGen;
   auto &cpp = Ctx.partCppGen;
@@ -569,6 +584,25 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     \n#        print(item)\
     \n#        print(item.nbytes)");
 
+  if(debug_mode!="") {
+    py.append("\ngraph = lib.get_graph_json() \
+    \nwith open(\"" +  relay_mkpath + "/graph.json\",\"w\") as f_graph: \
+    \n  f_graph.write(\"%s\\n\" % graph)\n \
+    \ngraph_node = json.loads(graph)\n \
+    \nidx=0 \
+    \nwhile idx < len(graph_node['nodes']) \
+    \n  print(\"{\" + graph_node['nodes'][\" + idx + \"][\"name\"] }\") \
+    \n  idx += 1");
+  }
+
+  if(debug_mode!="") {
+    std::string debugNodeInfoTable;
+    debugNodeInfoTable = "TVMNodeInfoTable debugNode[] = {";
+   // for(auto sym : *(procCtx.getSymbols())){
+
+    debugNodeInfoTable.append("};");
+  }
+
     // Generate SymbolTable struct
     std::string symbolTable;
     symbolTable = "SymbolTableEntry symbolTableEntry_";
@@ -609,6 +643,10 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
      cpp.append(cc("tvm::runtime::PackedFunc get_output;"));
      cpp.append(cc("tvm::runtime::PackedFunc run;"));     
 
+     if(debug_mode != "") {
+       cpp.append(cc("tvm::runtime::PackedFunc get_node_output;"));
+       cpp.append(cc("tvm::runtime::PackedFunc debug_get_output;"));
+     }
     //
     std::string dl_dev_str="kDLCPU"; // DLCPU
 
@@ -625,7 +663,15 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
      cpp.append(cc(" tvm::runtime::Module mod_factory = tvm::runtime::Module::LoadFromFile(\"./" + (std::string)bundleName + "_tvm.so\");"))  ;
   
      // create the graph executor module
+     if(debug_mode == "") { 
      cpp.append(cc(" gmod = mod_factory.GetFunction(\"default\")(dev);"));
+     } else {
+       cpp.append(cc(" gmod = mod_factory.GetFunction(\"debug_create\")(\"default\",dev);"));
+       cpp.append(cc(" get_node_output = gmod.GetFunction(\"get_node_output\");"));
+       cpp.append(cc(" debug_get_output = gmod.GetFunction(\"debug_get_output\");"));
+     }
+     
+
      cpp.append(cc(" set_input = gmod.GetFunction(\"set_input\");"));
      cpp.append(cc(" get_output = gmod.GetFunction(\"get_output\");"));
      cpp.append(cc(" run = gmod.GetFunction(\"run\");"));
@@ -1574,7 +1620,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   std::cout << "--relay-target = " << target_ << std::endl;
   std::cout << "--relay-opt-level = " << opt_level_ << std::endl;
 
-  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx, target_, target_host_, export_option_, opt_level_, required_pass_, disabled_pass_);
+  finalizeCtx(saveCtx,outputDir,bundleName, mainEntryName, procCtx, target_, target_host_, export_option_, opt_level_, required_pass_, disabled_pass_, debug_mode_);
   
   // write genCode.py
   std::string pyFileName = relay_mkpath;

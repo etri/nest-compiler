@@ -91,6 +91,7 @@ public:
   void setRequiredPass(std::string req_pass) {required_pass_ = req_pass;}
   void setDisabledPass(std::string disabled_pass) {disabled_pass_ = disabled_pass;}
   void setOptLevel(uint32_t opt_level) {opt_level_ = opt_level;}
+  void setDebugMode(std::string debug_mode) {debug_mode_ = debug_mode;}
 
   std::string getTarget() {return target_;}
 
@@ -101,6 +102,7 @@ private:
   std::string required_pass_;
   std::string disabled_pass_;
   uint32_t opt_level_;
+  std::string debug_mode_;
 };
 
 } // namespace glow

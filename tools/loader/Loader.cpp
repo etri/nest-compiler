@@ -357,6 +357,9 @@ llvm::cl::opt<std::string> relayExportOption(
     "relay-export-option", llvm::cl::desc("Relay Export Option"),
     llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
 
+llvm::cl::opt<std::string> relayDebugMode(
+    "relay-debug-mode", llvm::cl::desc("Relay Debug Mode"),
+    llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
 
 std::string Loader::getModelOptPath() {
   // If given a single path, return it.
@@ -982,6 +985,7 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
     static_cast<Relay*>(backend_.get())->setRequiredPass(relayRequiredPass.c_str());
     static_cast<Relay*>(backend_.get())->setDisabledPass(relayDisabledPass.c_str());
     static_cast<Relay*>(backend_.get())->setOptLevel(relayOptLevel);
+    static_cast<Relay*>(backend_.get())->setDebugMode(relayDebugMode.c_str());
   }
 
   PartitionerCompileOptions compileOptions;
