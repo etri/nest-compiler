@@ -6,17 +6,13 @@ set(MODEL_INPUT_NAME "data")
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
         COMMAND
         wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
 )
 
 add_custom_target(vtaMxnetResnet18RelayEVTAPartitionBundleONNX
         DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
 )
 if(NESTC_TARGET_AARCH64)
         add_custom_command(
@@ -26,7 +22,7 @@ if(NESTC_TARGET_AARCH64)
                 ${CMAKE_CURRENT_BINARY_DIR}/p0.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p1.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p2.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p3.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p4.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p5.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p6.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p7.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p8.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p9.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p10.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p11.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p12.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p13.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p14.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p15.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p16.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/p17.weights.bin
                 ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
                 COMMAND
-                model-partition-tuner -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                model-partition-tuner -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                 -model-input=${MODEL_INPUT_NAME},float,[1,224,224,3]
                 -target=aarch64 -mcpu=cortex-a53
                 -load-device-configs=${NESTC_ROOT_DIR}/tests/runtime_test/VTATestDeviceConfigs.yaml
@@ -36,7 +32,7 @@ if(NESTC_TARGET_AARCH64)
                 -bundle-api=dynamic
                 -load-vta-profile=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
                 DEPENDS
-                model-partition-tuner VTA vtaMxnetResnet18RelayEVTAPartitionBundleONNX)
+                model-partition-tuner VTA vtaMxnetResnet18RelayEVTAPartitionBundleONNX MxnetResnet18ONNXDownload)
         add_custom_target(vtaMxnetResnet18RelayEVTAPartitionBundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/p0.o ${CMAKE_CURRENT_BINARY_DIR}/p1.cpp ${CMAKE_CURRENT_BINARY_DIR}/p2.o ${CMAKE_CURRENT_BINARY_DIR}/p3.cpp ${CMAKE_CURRENT_BINARY_DIR}/p4.o ${CMAKE_CURRENT_BINARY_DIR}/p5.o ${CMAKE_CURRENT_BINARY_DIR}/p6.cpp ${CMAKE_CURRENT_BINARY_DIR}/p7.o ${CMAKE_CURRENT_BINARY_DIR}/p8.cpp ${CMAKE_CURRENT_BINARY_DIR}/p9.o ${CMAKE_CURRENT_BINARY_DIR}/p10.cpp ${CMAKE_CURRENT_BINARY_DIR}/p11.o ${CMAKE_CURRENT_BINARY_DIR}/p12.cpp ${CMAKE_CURRENT_BINARY_DIR}/p13.o ${CMAKE_CURRENT_BINARY_DIR}/p14.cpp ${CMAKE_CURRENT_BINARY_DIR}/p15.o ${CMAKE_CURRENT_BINARY_DIR}/p16.cpp ${CMAKE_CURRENT_BINARY_DIR}/p17.o)
 else()
         if(NESTC_USE_VTASIM)
@@ -62,7 +58,7 @@ else()
                         ${CMAKE_CURRENT_BINARY_DIR}/relay__p17/genCode.py
                         ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
                         COMMAND
-                        model-partition-tuner -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                        model-partition-tuner -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                         -model-input=${MODEL_INPUT_NAME},float,[1,224,224,3]
                         -load-device-configs=${NESTC_ROOT_DIR}/tests/runtime_test/RelayEVTATestDeviceConfigs.yaml
                         -partition-plan=${NESTC_ROOT_DIR}/tests/runtime_test/partition_perform_profile/NESTRelayEVTATestPlan.yaml

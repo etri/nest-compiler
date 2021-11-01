@@ -10,18 +10,6 @@ add_custom_target(ResNet18PartitionBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${PARTITION_BUNDLE_OUTPUT_DIRECTORY}
         )
 
-add_custom_command(
-        OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
-)
-
-add_custom_target(ResNet18PartitionBundleONNX
-        DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        )
-
 # Final Executables
 # =================
 # Regular
@@ -56,7 +44,7 @@ add_custom_command(
         OUTPUT
         ${PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p0.o ${PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p1.o ${PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p2.o
         COMMAND
-        model-partition-tuner -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+        model-partition-tuner -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
         -model-input=${MODEL_INPUT_NAME},float,[1,224,224,3]
         -load-device-configs=${NESTC_ROOT_DIR}/tests/runtime_test/OSTestDeviceConfigs.yaml
         -partition-plan=${NESTC_ROOT_DIR}/tests/runtime_test/partition_perform_profile/CPU4TestPartitionPlanMxNet.yaml
@@ -67,7 +55,7 @@ add_custom_command(
 #        -mcpu=cortex-a53
 #        -load-vta-profile=${GLOW_SOURCE_DIR}/tests/models/nestModels/mxnet_exported_resnet18/mxnet_exported_resnet18_calib_1.yaml
         DEPENDS
-        model-partition-tuner ResNet18PartitionBundleDir ResNet18PartitionBundleONNX
+        model-partition-tuner ResNet18PartitionBundleDir MxnetResnet18ONNXDownload
 )
 
 add_custom_command(

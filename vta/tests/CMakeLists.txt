@@ -25,17 +25,13 @@ add_nestc_test(NESTVTABackendTest ${NESTC_BINARY_DIR}/tests/NESTVTABackendTest -
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
         COMMAND
         wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
 )
 
 add_custom_target(NESTVTAImageclassifierResnet18ONNX
         DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
         )
 
 add_custom_command(
@@ -43,7 +39,7 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/results.txt
         COMMAND
         image-classifier ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png
-        -m=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+        -m=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
         -backend=VTA
         -model-input-name=data
         -image-layout=NHWC
@@ -55,7 +51,7 @@ add_custom_command(
         -expected-labels=281 > results.txt
         COMMAND
         image-classifier ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png
-        -m=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+        -m=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
         -backend=VTAInterpreter
         -model-input-name=data
         -image-layout=NHWC
@@ -68,7 +64,7 @@ add_custom_command(
         COMMAND
         cat results.txt
         DEPENDS
-        image-classifier NESTVTAImageclassifierResnet18ONNX
+        image-classifier NESTVTAImageclassifierResnet18ONNX MxnetResnet18ONNXDownload
 )
 
 add_custom_target(NESTVTAImageclassifierResnet18Test DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/results.txt)

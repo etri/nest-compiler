@@ -10,17 +10,6 @@ add_custom_target(ResNet18NHWCBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${NHWC_BUNDLE_OUTPUT_DIRECTORY}
         )
 
-add_custom_command(
-        OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
-)
-
-add_custom_target(ResNet18NHWCBundleONNX
-        DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        )
 
 # Final Executables
 # =================
@@ -42,13 +31,13 @@ add_custom_command(
         OUTPUT
         ${NHWC_BUNDLE_OUTPUT_DIRECTORY}/mxnet_exported_resnet18.o
         COMMAND
-        model-compiler -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+        model-compiler -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
         -model-input=${MODEL_INPUT_NAME},float,[1,224,224,3]
         -emit-bundle=${NHWC_BUNDLE_OUTPUT_DIRECTORY}
         -backend=CPU
         -bundle-api=dynamic
         DEPENDS
-        model-compiler ResNet18NHWCBundleDir ResNet18NHWCBundleONNX
+        model-compiler ResNet18NHWCBundleDir MxnetResnet18ONNXDownload
 )
 add_custom_target(ResNet18NHWCBundleNet DEPENDS ${NHWC_BUNDLE_OUTPUT_DIRECTORY}/mxnet_exported_resnet18.o)
 

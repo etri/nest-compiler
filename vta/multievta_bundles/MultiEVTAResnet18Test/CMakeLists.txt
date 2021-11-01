@@ -3,17 +3,13 @@ option(VTA_RESNET18_WITH_SKIPQUANT0 "Build the LLVM-based JIT CPU backend" OFF)
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
         COMMAND
         wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
 )
 
 add_custom_target(singlevtaMxnetResnet18BundleONNX
         DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
 )
 
 if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
@@ -30,7 +26,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
                 COMMAND
                 model-compiler -g
-                -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                 -backend=VTA
                 -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                 -bundle-api=dynamic
@@ -41,7 +37,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 #-instrument-debug
                 #-instrument-debug-format=rawbin
                 DEPENDS
-                model-compiler VTA singlevtaMxnetResnet18BundleONNX
+                model-compiler VTA singlevtaMxnetResnet18BundleONNX MxnetResnet18ONNXDownload
         )
         add_custom_command(
                 OUTPUT
@@ -56,7 +52,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
                 COMMAND
                 model-compiler -g
-                -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                 -backend=VTA
                 -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                 -bundle-api=dynamic
@@ -70,7 +66,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 #-instrument-debug
                 #-instrument-debug-format=rawbin
                 DEPENDS
-                model-compiler VTA singlevtaMxnetResnet18BundleONNX
+                model-compiler VTA singlevtaMxnetResnet18BundleONNX MxnetResnet18ONNXDownload
         )
         add_custom_command(
                 OUTPUT
@@ -85,7 +81,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
                 COMMAND
                 model-compiler -g
-                -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                 -backend=VTA
                 -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                 -bundle-api=dynamic
@@ -99,7 +95,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 #-instrument-debug
                 #-instrument-debug-format=rawbin
                 DEPENDS
-                model-compiler VTA singlevtaMxnetResnet18BundleONNX
+                model-compiler VTA singlevtaMxnetResnet18BundleONNX MxnetResnet18ONNXDownload
         )
         add_custom_command(
                 OUTPUT
@@ -114,7 +110,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
                 COMMAND
                 model-compiler -g
-                -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                 -backend=VTA
                 -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                 -bundle-api=dynamic
@@ -128,7 +124,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 #-instrument-debug
                 #-instrument-debug-format=rawbin
                 DEPENDS
-                model-compiler VTA singlevtaMxnetResnet18BundleONNX
+                model-compiler VTA singlevtaMxnetResnet18BundleONNX MxnetResnet18ONNXDownload
         )
 else()
     add_custom_command(

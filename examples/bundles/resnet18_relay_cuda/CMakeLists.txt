@@ -1,22 +1,11 @@
 if(NESTC_CUDA_TEST)
-    add_custom_command(
-            OUTPUT
-            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-            COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
-    )
-
-    add_custom_target(resnet18RelayCUDAONNX
-            DEPENDS
-            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-            )
 
     add_custom_command(
             OUTPUT
             ${CMAKE_CURRENT_BINARY_DIR}/relay__mxnet_exported_resnet18/genCode.py
             COMMAND
             model-compiler -g
-            -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+            -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
             -backend=Relay
             -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
             -bundle-api=dynamic
@@ -24,7 +13,7 @@ if(NESTC_CUDA_TEST)
             -dump-graph-DAG=opt.dot
             -relay-target="cuda"
             DEPENDS
-            model-compiler Relay resnet18RelayCUDAONNX
+            model-compiler Relay MxnetResnet18ONNXDownload
     )
 
     add_custom_target(resnet18RelayCUDABundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/relay__mxnet_exported_resnet18/genCode.py)

@@ -2,24 +2,13 @@ option(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS "Download bundles from AWS S3" OFF)
 option(NESTC_RELAY_TARGET_MALI "Generate bundles for publish" OFF)
 if(NESTC_OPENCL_TEST)
     if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
-        add_custom_command(
-                OUTPUT
-                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-                COMMAND
-                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
-        )
-
-        add_custom_target(resnet18RelayOpenCLONNX
-                DEPENDS
-                ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-                )
         if(NOT NESTC_RELAY_TARGET_MALI)
             add_custom_command(
                     OUTPUT
                     ${CMAKE_CURRENT_BINARY_DIR}/relay__mxnet_exported_resnet18/genCode.py
                     COMMAND
                     model-compiler -g
-                    -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                    -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                     -backend=Relay
                     -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                     -bundle-api=dynamic
@@ -29,7 +18,7 @@ if(NESTC_OPENCL_TEST)
                     -relay-target-host="llvm"
                     -relay-opt-level=3
                     DEPENDS
-                    model-compiler Relay resnet18RelayOpenCLONNX
+                    model-compiler Relay MxnetResnet18ONNXDownload
             )
         else()
             add_custom_command(
@@ -37,7 +26,7 @@ if(NESTC_OPENCL_TEST)
                     ${CMAKE_CURRENT_BINARY_DIR}/relay__mxnet_exported_resnet18/genCode.py
                     COMMAND
                     model-compiler -g
-                    -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+                    -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
                     -backend=Relay
                     -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                     -bundle-api=dynamic
@@ -48,7 +37,7 @@ if(NESTC_OPENCL_TEST)
                     -relay-export-option="aarch64"
                     -relay-opt-level=3
                     DEPENDS
-                    model-compiler Relay resnet18RelayOpenCLONNX
+                    model-compiler Relay MxnetResnet18ONNXDownload
             )
         endif()
         add_custom_target(resnet18RelayOpenCLBundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/relay__mxnet_exported_resnet18/genCode.py)

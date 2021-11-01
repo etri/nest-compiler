@@ -17,7 +17,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/shufflenet.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/shufflenet.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/shufflenet.onnx
+        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/shufflenet.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/shufflenet.onnx --no-verbose
 )
 
 add_custom_target(ShufflenetBundleONNX

@@ -1,21 +1,10 @@
-add_custom_command(
-        OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
-)
-
-add_custom_target(resnet18RelayQNNONNX
-        DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        )
 
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/relay__mxnet_exported_resnet18/genCode.py
         COMMAND
         model-compiler -g
-        -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+        -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
         -backend=Relay
         -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
         -bundle-api=dynamic
@@ -25,7 +14,7 @@ add_custom_command(
         -load-profile="qnn_test.yaml"
         -quantization-schema="symmetric_with_power2_scale"              
         DEPENDS
-        model-compiler Relay resnet18RelayQNNONNX
+        model-compiler Relay MxnetResnet18ONNXDownload
 )
 if(0)
     add_custom_target(resnet18RelayQNNBundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/relay__mxnet_exported_resnet18/genCode.py)

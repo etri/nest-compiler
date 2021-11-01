@@ -10,17 +10,7 @@ add_custom_target(ResNet18RelayPartitionBundleDir ALL
         COMMAND ${CMAKE_COMMAND} -E make_directory ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}
         )
 
-add_custom_command(
-        OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
-)
 
-add_custom_target(ResNet18RelayPartitionBundleONNX
-        DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
-        )
 # Final Executables
 # =================
 # Regular
@@ -42,7 +32,7 @@ add_custom_command(
         OUTPUT
         ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/relay__p0/genCode.py ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p1.o ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p2.o ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY}/p3.o
         COMMAND
-        model-partition-tuner -model=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
+        model-partition-tuner -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
         -model-input=${MODEL_INPUT_NAME},float,[1,224,224,3]
         -load-device-configs=${NESTC_SOURCE_DIR}/tests/runtime_test/RelayTestDeviceConfigs.yaml
         -partition-plan=${NESTC_SOURCE_DIR}/tests/runtime_test/partition_perform_profile/RelayTestPartitionPlan.yaml
@@ -53,7 +43,7 @@ add_custom_command(
 #        -relay-export-option=aarch64
 #        -relay-opt-level=3
         DEPENDS
-        model-partition-tuner ResNet18RelayPartitionBundleDir
+        model-partition-tuner ResNet18RelayPartitionBundleDir MxnetResnet18ONNXDownload
 )
 
 add_custom_command(
@@ -132,6 +122,6 @@ else()
     target_compile_options(ResNet18RelayPartitionBundleMain PRIVATE -std=c++11 -g -I/usr/local/include -L/usr/local/lib -w -lz -lpng)
 endif()
 target_include_directories(ResNet18RelayPartitionBundleMain PUBLIC ${RESNET18_RELAY_PARTITION_BUNDLE_OUTPUT_DIRECTORY})
-add_dependencies(ResNet18RelayPartitionBundleMain ResNet18RelayPartitionBundleNet ResNet18RelayPartitionBundleONNX)
+add_dependencies(ResNet18RelayPartitionBundleMain ResNet18RelayPartitionBundleNet)
 
 add_nestc_test(NAME ResNet18RelayPartitionBundle COMMAND ${CMAKE_CURRENT_BINARY_DIR}/ResNet18RelayPartitionBundle USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
