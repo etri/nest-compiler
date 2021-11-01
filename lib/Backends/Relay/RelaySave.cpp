@@ -462,6 +462,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
 
   std::string relay_mkpath = (std::string) outputDir + "/relay__" + (std::string) bundleName;
   std::string module_mkpath = (std::string) outputDir + "/module__" + (std::string) bundleName;
+  std::string module_rel_path = "module__" + (std::string) bundleName;
 
   //#input에 대해서는 이름을 알 수 있지만
   //#output은 별도 name을 유지하지 않음. index로 가져옴.
@@ -512,7 +513,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
   inc.append(hh("#endif"));
   inc.append(hh("#endif"));
 
-  inc.append("with open(\"" + module_mkpath + "/" + (std::string) bundleName + ".h\",\"w\") as f_h:\n");
+  inc.append("with open(\"" + module_rel_path + "/" + (std::string) bundleName + ".h\",\"w\") as f_h:\n");
   inc.append("  for item in header:\n");
   inc.append("    f_h.write(\"%s\\n\" % item)\n");
 
@@ -578,7 +579,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
   else{
     py.append("\n\t\tlib = relay.build(relay_mod, target,params=params)");
   }
-  py.append("\nlib.export_library(\"" + module_mkpath + "/" + (std::string)bundleName + "_tvm.so\"" + export_option + ")        \
+  py.append("\nlib.export_library(\"" + module_rel_path + "/" + (std::string)bundleName + "_tvm.so\"" + export_option + ")        \
     \n# = lib.get_params()\
     \n#    for item in b:\
     \n#        print(item)\
@@ -706,7 +707,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
 
 
 
-    cpp.append("with open(\"" +  module_mkpath + "/" + (std::string)bundleName + ".cpp\",\"w\") as f_cpp:\n");
+    cpp.append("with open(\"" +  module_rel_path + "/" + (std::string)bundleName + ".cpp\",\"w\") as f_cpp:\n");
     cpp.append("  for item in cpp:\n");
     cpp.append("    f_cpp.write(\"%s\\n\" % item)\n");
 
@@ -1632,7 +1633,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   wfos.write(cpp.c_str(),cpp.size());
   wfos.close();
 
-  std::string mkFileName = module_mkpath;
+  std::string mkFileName = "module__" + (std::string)bundleName;
   mkFileName.append("/Makefile");
   std::ofstream mfos(mkFileName.c_str(), std::ios::out);
   mfos.write(mk.c_str(),mk.size());
