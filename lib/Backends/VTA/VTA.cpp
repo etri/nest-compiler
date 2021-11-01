@@ -932,3 +932,12 @@ void VTA::parseBackendSpecificOptions(
                      << glow::runtime::GlowVTAMemory << "\n";
     }
 }
+
+
+void VTA::save(Function *F, llvm::StringRef outputDir,
+          llvm::StringRef bundleName,
+          llvm::StringRef mainEntryName,
+          unsigned idxMultiEVTA){
+  setIdxMultiEVTA(idxMultiEVTA);
+  save(F, outputDir, bundleName, mainEntryName);
+}

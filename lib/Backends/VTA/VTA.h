@@ -80,7 +80,14 @@ namespace glow {
         virtual void save(Function *F, llvm::StringRef outputDir,
                         llvm::StringRef bundleName,
                         llvm::StringRef mainEntryName) const override;
-        bool supportsFusedActivation(Node *parent, Node *activation) const override {
+
+        void save(Function *F, llvm::StringRef outputDir,
+                          llvm::StringRef bundleName,
+                          llvm::StringRef mainEntryName,
+                          unsigned idxMultiEVTA
+                          );
+
+      bool supportsFusedActivation(Node *parent, Node *activation) const override {
 #ifdef VTA_FUSION
     // Only support convolution+relu fusions for now.
     bool V = parent->getKind() == Kinded::Kind::ConvolutionNodeKind &&
