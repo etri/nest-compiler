@@ -1222,7 +1222,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
     case Kinded::Kind::ElementMulInstKind:
       {
         auto II =  static_cast<ElementMulInst*>(&I);
-        pyss<< (std::string) II->getOperand(0).first->getName() << " = relay.divide(" <<  (std::string)II->getOperand(1).first->getName() << "," <<  (std::string)II->getOperand(2).first->getName()<<")"<<std::endl;
+        pyss<< (std::string) II->getOperand(0).first->getName() << " = relay.multiply(" <<  (std::string)II->getOperand(1).first->getName() << "," <<  (std::string)II->getOperand(2).first->getName()<<")"<<std::endl;
 
       }
     
