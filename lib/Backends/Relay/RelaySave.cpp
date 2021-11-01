@@ -636,6 +636,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
      cpp.append(cc("   symbolTableEntry_" + (std::string)bundleName));
      cpp.append(cc("};"));
 
+     cpp.append(cc("namespace namespace_"+  (std::string)bundleName + " {"));
      //global var
      cpp.append(procCtx.global_var_declare); // mutable variables
      // create the graph executor module
@@ -648,6 +649,11 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
        cpp.append(cc("tvm::runtime::PackedFunc get_node_output;"));
        cpp.append(cc("tvm::runtime::PackedFunc debug_get_output;"));
      }
+
+     cpp.append(cc("} // end namespace"));
+     cpp.append(cc("using namespace namespace_"+  (std::string)bundleName + ";"));
+
+
     //
     std::string dl_dev_str="kDLCPU"; // DLCPU
 
