@@ -1155,6 +1155,10 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
         auto stride = II->getStrides();
         auto padding = II->getPads();
 
+        if(procCtx.qnn_mode==1) {
+          pyss << (std::string)II->getOperand(1).first->getName() << " = relay.cast(" << (std::string)II->getOperand(1).first->getName() << ",\"int32\")"<<std::endl;
+        }
+        
         pyss<< (std::string) II->getOperand(0).first->getName() << " = relay.nn.avg_pool2d(" <<  (std::string)II->getOperand(1).first->getName() << ",";
       //  std::cout<< kernel.size() << stride.size() << padding.size();
      
@@ -1193,6 +1197,11 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
         pyss<< ",layout=\"NHWC\")"<<std::endl;
      //   std::cout<< (std::string) I.getName() << " = relay.add(" << std::endl;
+
+        if(procCtx.qnn_mode==1) {
+          pyss <<(std::string) II->getOperand(0).first->getName() << " = relay.cast(relay.clip(" << (std::string) II->getOperand(0).first->getName() << ",-128,127),\"int8\")"<<std::endl;
+        }
+
 
       }
 
