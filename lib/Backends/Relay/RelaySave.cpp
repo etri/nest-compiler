@@ -1648,7 +1648,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   wfos.write(cpp.c_str(),cpp.size());
   wfos.close();
 
-  std::string mkFileName = "module__" + (std::string)bundleName;
+  std::string mkFileName = module_mkpath;
   mkFileName.append("/Makefile");
   std::ofstream mfos(mkFileName.c_str(), std::ios::out);
   mfos.write(mk.c_str(),mk.size());
