@@ -372,7 +372,10 @@ void initCtx(struct SaveCtx &Ctx,
   inc.append(hh("#ifndef _GLOW_BUNDLE_" + (std::string)bundleName + "_H"));
   inc.append(hh("#define _GLOW_BUNDLE_" + (std::string)bundleName + "_H"));
   
+  inc.append(hh("#include <dlpack/dlpack.h>"));
   inc.append(hh("#include <stdint.h>"));
+  inc.append(hh("#include <vector>"));
+
   inc.append(hh("// ---------------------------------------------------------------"));
   inc.append(hh("//                       Common definitions"));
   inc.append(hh("// ---------------------------------------------------------------"));
@@ -391,9 +394,9 @@ void initCtx(struct SaveCtx &Ctx,
   inc.append(hh("\t// size"));
   inc.append(hh("\tuint64_t size;"));
   inc.append(hh("\t// type. kDLInt, kDLFloat"));
-  inc.append(hh("\tconst char* typeStr;"));
+  inc.append(hh("\tDLDataType type;"));
   inc.append(hh("\t// shape string. ex {1,64,64,3}"));
-  inc.append(hh("\tconst char* shapeStr;"));
+  inc.append(hh("\tint64_t shape[6];"));
   inc.append(hh("};"));
 
 
@@ -442,12 +445,13 @@ void initCtx(struct SaveCtx &Ctx,
   cpp.append(cc(""));
   cpp.append(cc("#include <cstdio>"));
   cpp.append(cc("#include <assert.h>"));
+  cpp.append(cc("using namespace std;"));
 
 
   //
   py.append("import numpy as np\nimport tvm\nfrom tvm import te, runtime\nimport tvm.relay as relay\n"
         "from tvm.relay.frontend.common import infer_type\nfrom tvm.relay.testing import check_grad, run_infer_type, run_opt_pass, _np_randn_from_type\n"
-        "import onnx\nfrom tvm.relay import op as _op\nimport json\n\ndef load_wgt(filename, shape,dtype):\n\tf=open(filename,\"rb\")\n\td=f.read()\n\treturn np.frombuffer(d, dtype=dtype).reshape(shape)\n\n");
+        "import onnx\nfrom tvm.relay import op as _op\nimport json\nimport math\n\ndef load_wgt(filename, shape,dtype):\n\tf=open(filename,\"rb\")\n\td=f.read()\n\treturn np.frombuffer(d, dtype=dtype).reshape(shape)\n\n");
 
 
 }
@@ -591,9 +595,30 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     \n  f_graph.write(\"%s\\n\" % graph)\n \
     \ngraph_node = json.loads(graph)\n \
     \nidx=0 \
-    \nwhile idx < len(graph_node['nodes']) \
-    \n  print(\"{\" + graph_node['nodes'][\" + idx + \"][\"name\"] }\") \
-    \n  idx += 1");
+    \nnode_str=[]\
+    \nnode_str.append('int debug_node_count=' + str(len(graph_node['nodes'])) +';\\n')\
+    \nnode_str.append('struct TVMNodeInfoTable debug_node_info[]={')\
+    \nmax_size = 0\
+    \nwhile idx < len(graph_node['nodes']):\
+    \n  if idx!=0:\
+    \n    node_str.append(',')\
+    \n  size = 4\
+    \n  type_str = \"kDLFloat\"\
+    \n  if graph_node['attrs']['dltype'][1][idx]==\"int8\":\
+    \n    size = 1\
+    \n    type_str = \"kDLInt\"\
+    \n  elif graph_node['attrs']['dltype'][1][idx]==\"int32\":\
+    \n    size = 4\
+    \n    type_str = \"kDLInt\"\
+    \n  total_size = size *math.prod(graph_node['attrs']['shape'][1][idx])\
+    \n  if total_size > max_size:\
+    \n     max_size=total_size\
+    \n  arr = ','.join(str(e) for e in graph_node['attrs']['shape'][1][idx])\
+    \n  node_str.append(\"{\\\"\" + graph_node['nodes'][idx]['name'] + \"\\\",\" + str(len(graph_node['attrs']['shape'][1][idx])) + \",\" + str(total_size)+ \",{\" + type_str + \",\" + str(size*8) + \",1},{\"+arr+\"}}\")\
+    \n  idx += 1\
+    \nnode_str.append('};\\n')\
+    \nnode_str.append('int debug_buf_size='+str(max_size)+';\\n')\
+    \nnode_str = ''.join(node_str)" );
   }
 
   if(debug_mode!="") {
@@ -703,6 +728,55 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
       cpp.append(cc("  get_output(" + std::to_string(i) + ", &" + procCtx.output_DLTensor_names[i] + ");"));
     }
 
+    if(debug_mode != "") {
+        cpp.append(cc("  char filename[255];"));
+        cpp.append(cc("  DLTensor dbg_out;"));
+        cpp.append(cc(" char* dbg_buf = (char*)malloc(debug_buf_size);"));
+        cpp.append(cc(" dbg_out.data = dbg_buf;"));
+        cpp.append(cc(" dbg_out.device = DLDevice{kDLCPU, 0};"));
+        cpp.append(cc(" dbg_out.strides = nullptr;"));
+        cpp.append(cc(" dbg_out.byte_offset = 0; "));
+        cpp.append(cc(" for(int k=0;k<debug_node_count;k++) {"));
+        cpp.append(cc("   dbg_out.ndim = debug_node_info[k].dim;"));
+        cpp.append(cc("   dbg_out.dtype = debug_node_info[k].type;"));
+        cpp.append(cc("   dbg_out.shape = debug_node_info[k].shape;"));
+        cpp.append(cc("   debug_get_output(debug_node_info[k].name,&dbg_out);"));
+        
+        if(debug_mode == "txt") {
+          cpp.append(cc("   sprintf(filename, \"" + module_rel_path + "/%d__%s.txt\", k, debug_node_info[k].name);"));
+          cpp.append(cc("   FILE *fp = fopen(filename ,\"w\");"));
+          cpp.append(cc("   for(int m=0;m<debug_node_info[k].size;m+=(debug_node_info[k].type.bits/8)) {"));
+          cpp.append(cc("     if(debug_node_info[k].type.code == kDLInt && debug_node_info[k].type.bits==8) {"));
+          cpp.append(cc("       fprintf(fp,\"%d \", *(char*)(dbg_buf+m));"));
+          cpp.append(cc("     } else if(debug_node_info[k].type.code == kDLInt && debug_node_info[k].type.bits==32) {"));
+          cpp.append(cc("       fprintf(fp,\"%d \", *(int*)(dbg_buf+m));"));
+          cpp.append(cc("     } else if(debug_node_info[k].type.code == kDLUInt && debug_node_info[k].type.bits==8) {"));
+          cpp.append(cc("       fprintf(fp,\"%d \", *(unsigned char*)(dbg_buf+m));"));
+          cpp.append(cc("     } else if(debug_node_info[k].type.code == kDLUInt && debug_node_info[k].type.bits==32) {"));
+          cpp.append(cc("       fprintf(fp,\"%d \", *(unsigned int*)(dbg_buf+m));"));
+          cpp.append(cc("     } else if(debug_node_info[k].type.code == kDLFloat && debug_node_info[k].type.bits==32) {"));
+          cpp.append(cc("        fprintf(fp,\"%.6f \", *(float*)(dbg_buf+m));"));
+          cpp.append(cc("     }"));
+          cpp.append(cc("   }"));
+          cpp.append(cc("   fclose(fp);"));          
+
+          cpp.append(cc("   debug_get_output(debug_node_info[k].name,&dbg_out);"));
+        } else if(debug_mode == "bin") {
+          cpp.append(cc("   debug_get_output(debug_node_info[k].name,&dbg_out);"));
+          cpp.append(cc("   sprintf(filename, \"" + module_rel_path + "/%d__%s.bin\", k, debug_node_info[k].name);"));
+          cpp.append(cc("   FILE *fp = fopen(filename ,\"wb\");"));
+          cpp.append(cc("   int r = fwrite( dbg_buf, 1, debug_node_info[k].size, fp);"));
+          cpp.append(cc("   if (r < debug_node_info[k].size) { "));
+          cpp.append(cc("      printf(\"dump error: %s, write %d / %ld \\n\", filename, r, debug_node_info[k].size); "));
+          cpp.append(cc("   }"));
+          cpp.append(cc("   fclose(fp);"));
+
+        }
+
+        cpp.append(cc("  }"));
+
+    }
+
     cpp.append(cc("  return 0;"));
     cpp.append(cc("}"));
 
@@ -711,7 +785,9 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     cpp.append(cc("  return 0;"));
     cpp.append(cc("}"));
 
-
+    if(debug_mode != "") { 
+      cpp.append("cpp.insert(9,node_str)\n");       
+    }
 
     cpp.append("with open(\"" +  module_rel_path + "/" + (std::string)bundleName + ".cpp\",\"w\") as f_cpp:\n");
     cpp.append("  for item in cpp:\n");
