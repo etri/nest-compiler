@@ -412,7 +412,7 @@ void softmax(float* in, float* result)
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
-static void dumpInferenceResults(const BundleConfig &config,
+static int dumpInferenceResults(const BundleConfig &config,
                                  uint8_t *mutableWeightVars, char* resultName) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, resultName);
@@ -430,6 +430,7 @@ static void dumpInferenceResults(const BundleConfig &config,
   }
   printf("Result: %u\n", maxIdx);
   printf("Confidence: %f\n", maxValue);
+  return maxIdx;
 }
 
 

@@ -506,7 +506,7 @@ else()
 
 
                 add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTestNone COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTestNone USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
-#                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest0 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest0 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest0 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest0 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
                 add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest2 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest2 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
 #                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTestAll COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTestAll USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
         endif()

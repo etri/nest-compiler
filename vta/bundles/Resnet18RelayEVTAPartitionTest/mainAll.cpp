@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
 
 	// Report the results.
 	printf("====== final result of this neural net ========\n");
-	dumpInferenceResults(p17_config, mutableWeightVarsAddr17, "resnetv10_dense0_fwd");
+	int maxIdx = dumpInferenceResults(p17_config, mutableWeightVarsAddr17, "resnetv10_dense0_fwd");
 
 	p1_destroy_module();
 	p3_destroy_module();
@@ -342,5 +342,7 @@ int main(int argc, char **argv) {
 #ifdef VTAMAIN
 	destroyVTARuntime();
 #endif
+    return !(maxIdx==281);
+
 }
 
