@@ -94,9 +94,7 @@ else()
                         COMMAND
                         cp ${CMAKE_CURRENT_BINARY_DIR}/CPU/*.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/
                         DEPENDS
-                        model-partition-tuner VTA vtaMxnetResnet18RelayEVTAPartitionBundleONNX)
-                add_custom_target(YIKWON_TEST0 DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o)
-                add_custom_target(YIKWON_TEST2 DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Relay/relay__p0/genCode.py )
+                        model-partition-tuner VTA vtaMxnetResnet18RelayEVTAPartitionBundleONNX MxnetResnet18ONNXDownload)
 
                 add_custom_command(
                         OUTPUT
@@ -136,42 +134,6 @@ else()
                         ${CMAKE_CURRENT_BINARY_DIR}/Relay/relay__p0/genCode.py
                         tvm
                 )
-
-
-                add_custom_command(
-                        OUTPUT
-                        ${CMAKE_CURRENT_BINARY_DIR}/test.txt
-                        COMMAND
-                        python3 relay__p0/genCode.py
-                        COMMAND
-                        python3 relay__p2/genCode.py
-                        COMMAND
-                        python3 relay__p4/genCode.py
-                        COMMAND
-                        python3 relay__p5/genCode.py
-                        COMMAND
-                        python3 relay__p7/genCode.py
-                        COMMAND
-                        python3 relay__p9/genCode.py
-                        COMMAND
-                        python3 relay__p11/genCode.py
-                        COMMAND
-                        python3 relay__p13/genCode.py
-                        COMMAND
-                        python3 relay__p15/genCode.py
-                        COMMAND
-                        python3 relay__p17/genCode.py
-                        COMMAND
-                        ls > ${CMAKE_CURRENT_BINARY_DIR}/test.txt
-                        WORKING_DIRECTORY
-                        ${CMAKE_CURRENT_BINARY_DIR}/Relay
-                        DEPENDS
-                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/relay__p0/genCode.py
-                        tvm
-
-                )
-                add_custom_target(YIKWON_TEST1 DEPENDS test.txt)
-
 
                 add_custom_command(
                         OUTPUT
@@ -348,6 +310,8 @@ else()
                         )
 
 
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest0
                 add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest0 main0.cpp
                         ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
 #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
@@ -400,6 +364,10 @@ else()
                         PROPERTIES
                         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
                         )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest0
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest2
 
 
                 add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest2 main2.cpp
@@ -454,7 +422,464 @@ else()
                         PROPERTIES
                         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
                         )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest2
 
+
+
+## START vtaMxnetResnet18RelayEVTAPartitionBundleTest4
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest4 main4.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest4
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest4 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest4
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+## END vtaMxnetResnet18RelayEVTAPartitionBundleTest4
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest5
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest5 main5.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest5
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest5 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest5
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest5
+
+
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest7
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest7 main7.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest7
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest7 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest7
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest7
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest9
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest9 main9.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest9
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest9 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest9
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest9
+
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest11
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest11 main11.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest11
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest11 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest11
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest11
+
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest13
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest13 main13.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest13
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest13 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest13
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest13
+
+
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest15
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest15 main15.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest15
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest15 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest15
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest15
+
+
+
+
+                ## START vtaMxnetResnet18RelayEVTAPartitionBundleTest17
+                add_executable(vtaMxnetResnet18RelayEVTAPartitionBundleTest17 main17.cpp
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/p2.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/p4.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/p5.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/p7.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/p9.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/p11.o
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/p13.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/p15.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p0.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p2.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p4.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p5.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p7.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p9.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p11.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p13.o
+                                                ${CMAKE_CURRENT_BINARY_DIR}/CPU/p15.o
+#                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/p17.o
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p1.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p3.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p6.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p8.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p10.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p12.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p14.cpp
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/p16.cpp
+                        )
+
+                target_include_directories(vtaMxnetResnet18RelayEVTAPartitionBundleTest17
+                        PUBLIC
+                        AFTER
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p2/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p4/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p5/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p7/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p9/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p11/
+                        #                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p13/
+#                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p15/
+                                                ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p17/
+                        ${CMAKE_CURRENT_BINARY_DIR}/Relay/
+                        ${CMAKE_CURRENT_BINARY_DIR}/CPU/
+                        )
+                target_link_libraries(vtaMxnetResnet18RelayEVTAPartitionBundleTest17 VTABundle ${BUNDLE_LINK_LIB} tvm_runtime)
+                set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTest17
+                        PROPERTIES
+                        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                        )
+                ## END vtaMxnetResnet18RelayEVTAPartitionBundleTest17
 
 
 
@@ -508,7 +933,15 @@ else()
                 add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTestNone COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTestNone USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
                 add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest0 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest0 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
                 add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest2 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest2 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
-#                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTestAll COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTestAll USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest4 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest4 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest5 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest5 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest7 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest7 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest9 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest9 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest11 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest11 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest13 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest13 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest15 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest15 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest17 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest17 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
+                add_nestc_test(NAME vtaMxnetResnet18RelayEVTAPartitionBundleTestAll COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTestAll USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
         endif()
 endif()
 

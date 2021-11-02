@@ -82,6 +82,7 @@ build:
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON"
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}"
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
 
@@ -217,6 +218,7 @@ build-debug:
     - docker start build
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Debug -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_VTA_INTERPRETER_FUSION=ON -DGLOW_VTA_FUSION=ON"
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
 
