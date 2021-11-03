@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "VTAFunction.h"
+#include "glow/Backends/VTA/VTAFunction.h"
 
 #include "glow/IR/IR.h"
 #include "glow/IR/IRUtils.h"

@@ -16,8 +16,8 @@
 #ifndef GLOW_BACKENDS_Relay_Relay_H
 #define GLOW_BACKENDS_Relay_Relay_H
 
-#include "RelayDeviceManager.h"
-#include "RelayFunction.h"
+#include "glow/Backends/Relay/RelayDeviceManager.h"
+#include "glow/Backends/Relay/RelayFunction.h"
 
 #include "glow/Backend/Backend.h"
 

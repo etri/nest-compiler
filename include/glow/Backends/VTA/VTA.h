@@ -16,8 +16,8 @@
 #ifndef GLOW_BACKENDS_INTERPRETER_INTERPRETER_H
 #define GLOW_BACKENDS_INTERPRETER_INTERPRETER_H
 
-#include "VTADeviceManager.h"
-#include "VTAFunction.h"
+#include "glow/Backends/VTA/VTADeviceManager.h"
+#include "glow/Backends/VTA/VTAFunction.h"
 
 #include "glow/Backend/Backend.h"
 

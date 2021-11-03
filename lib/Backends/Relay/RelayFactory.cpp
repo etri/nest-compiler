@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "Relay.h"
+#include "glow/Backends/Relay/Relay.h"
 
 namespace glow {
 

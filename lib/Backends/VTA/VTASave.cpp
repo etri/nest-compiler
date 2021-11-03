@@ -1,4 +1,4 @@
-#include "VTA.h"
+#include "glow/Backends/VTA/VTA.h"
 #include "VTACodeGen/VTASaver.h"
 #include "glow/Graph/Graph.h"
 #include "glow/Graph/Nodes.h"
@@ -1113,7 +1113,7 @@ void generateVTAConvolutionCall(const glow::ConvolutionInst *Inst, std::string *
   if(idxMultiEVTA){
     bundle->append(std::to_string(idxMultiEVTA));
   }
-#include "VTASchedules.h"
+#include "glow/Backends/VTA/VTASchedules.h"
   bool isTuned = 0;
   for(auto elem : convTune.ConvolutionTune_){
     if(elem.isMatch(N, H, W, C, KN, KH, KW, C, stride_size, pad_size))
@@ -1254,7 +1254,7 @@ void generateEVTAConvolutionCall(const glow::VTAConvolutionInst *Inst, std::stri
     if(idxMultiEVTA){
         bundle->append(std::to_string(idxMultiEVTA));
     }
-#include "VTASchedules.h"
+#include "glow/Backends/VTA/VTASchedules.h"
     bool isTuned = 0;
     for(auto elem : convTune.ConvolutionTune_){
         if(elem.isMatch(Nm*Ns, H, W, Cm*Cs, KNm*KNs, KH, KW, Cm*Cs, stride_size, pad_size))

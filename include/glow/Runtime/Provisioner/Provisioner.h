@@ -33,6 +33,7 @@ struct PartitionerCompileOptions {
     std::string relayRequiredPass_;
     std::string relayDisabledPass_;
     std::string relayExportOption_;
+    std::string relayDebugMode_;
 };
 
 namespace runtime {
@@ -52,7 +53,7 @@ public:
   Error provision(DAGListTy &networks, Module &module,
                   CompilationContext &cctx);
   Error provisionForNestPartition(DAGListTy &networks, Module &module,
-                   CompilationContext &cctx, std::string bundleDir);
+                   CompilationContext &cctx, std::string bundleDir, std::map<std::string, int>* puIdxMap);
   /// Remove stored compiledFunction.
   Error removeFunction(llvm::StringRef name);
 
@@ -73,7 +74,7 @@ public:
     deviceMappings_ = mappings;
   }
 
-//  PartitionerCompileOptions* getCompileOptions() {return &compileOptions_;};
+  void addBackend(std::string backendName, std::unique_ptr<glow::Backend>& newBackend);
   void setCompileOptions(PartitionerCompileOptions* compileOptions);
 
 private:

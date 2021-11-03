@@ -597,7 +597,7 @@ NestPartitioner::setupPrepartitionedModule(CompilationContext &cctx) {
 #include <dirent.h>
 #include <vector>
 
-void loadPartitionPlan(runtime::PartitionConfig* partitionConfig, std::string filename)
+void NestPartitioner::loadPartitionPlan(runtime::PartitionConfig* partitionConfig, std::string filename)
 {
 //  std::cout << "----------- loadPartitionPlan ---------------" << std::endl;
     std::string partitionPlanFile(filename);
@@ -609,7 +609,15 @@ void loadPartitionPlan(runtime::PartitionConfig* partitionConfig, std::string fi
     boost::split(partitionConfig->backendNames, pmap.find("backendNames")->second, [](char c){return c == ':';});
     boost::split(partitionConfig->partitionNames, pmap.find("partitionNames")->second, [](char c){return c == ':';});
 
-    // cout << "funcName = " <<  partitionConfig->funcName << endl;
+    for(int i = 0; i < partitionConfig->backendNames.size(); i++) {
+        int puIdx = 0;
+        if(partitionConfig->backendNames[i].find("-") != std::string::npos) {
+            int tmpidx = partitionConfig->backendNames[i].find("-");
+            puIdx = atoi(partitionConfig->backendNames[i].substr(tmpidx+1, partitionConfig->backendNames[i].size() - tmpidx).c_str());
+            partitionConfig->backendNames[i] = partitionConfig->backendNames[i].substr(0, tmpidx);
+        }
+        puIdxMap_->insert({partitionConfig->partitionNames[i], puIdx});
+    }
 
     std::vector<std::string> results;
     boost::split(results, pmap.find("nodeToPartition")->second, [](char c){return c == ':';});
@@ -1940,7 +1948,7 @@ bool NestPartitioner::findParallelBranches(std::vector<NodeGroup*>* branchList) 
 
 Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx) {
     std::string dir = "/home/msyu/Dropbox/Project/development/configs/partition_perform_profile";
-    return partition(cctx, 3, "", dir + "/NESTOptimalPlan.yaml", 0, 0);
+    return partition(cctx, 3, "", dir + "/NESTOptimalPlan.yaml", 0, 0, nullptr);
 }
 
 std::vector<Node*> getParallelNodes(BFSLevel  dag, Node* node) {
@@ -2415,8 +2423,9 @@ Expected<DAGListTy> NestPartitioner::generatePartitionCode(CompilationContext &c
     }
 }
 
-Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe) {
+Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe, std::map<std::string, int>* puIdxMap) {
 //  std::cout << "--------- partitionForNest exeType: " << exeType << "-----------" << std::endl;
+    puIdxMap_ = puIdxMap;
 
     Function *function = module_->getFunctions().front();
 

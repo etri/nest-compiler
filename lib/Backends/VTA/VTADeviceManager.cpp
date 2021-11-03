@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "VTADeviceManager.h"
-#include "VTA.h"
+#include "glow/Backends/VTA/VTADeviceManager.h"
+#include "glow/Backends/VTA/VTA.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FormatVariadic.h"

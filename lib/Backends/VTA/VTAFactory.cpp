@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "VTA.h"
+#include "glow/Backends/VTA/VTA.h"
 
 namespace glow {
 

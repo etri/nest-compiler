@@ -19,12 +19,14 @@
 #include "glow/Backend/CompiledFunction.h"
 #include "glow/Graph/Graph.h"
 #include "glow/Runtime/DeferredWeightLoader.h"
-#include "glow/Support/Debug.h"
 
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
-#include "lib/Backends/Relay/Relay.h"
-#include "lib/Backends/VTA/VTA.h"
+#include "glow/Backends/Relay/Relay.h"
+
+#ifdef GLOW_WITH_VTA
+#include "glow/Backends/VTA/VTA.h"
+#endif
 
 #include <future>
 #include <map>
@@ -78,12 +80,15 @@ Provisioner::Provisioner(DeviceManagerMapTy &devices) {
 
 void Provisioner::setCompileOptions(PartitionerCompileOptions* compileOptions) {
 
+#ifdef GLOW_WITH_VTA
     if (backends_.find("VTA") != backends_.end()) {
         if(compileOptions->idxMultiEVTA_ > 0) {
-            std::cout << "idxMultiEVTA_: " << compileOptions->idxMultiEVTA_ << std::endl;
+            //std::cout << "idxMultiEVTA_: " << compileOptions->idxMultiEVTA_ << std::endl;
             static_cast<VTA*>(backends_["VTA"].get())->setIdxMultiEVTA(compileOptions->idxMultiEVTA_);
         }
     }
+#endif
+
     if (backends_.find("Relay") != backends_.end()) {
 
         if(!compileOptions->relayTarget_.empty()) {
@@ -705,7 +710,7 @@ Error Provisioner::provision(DAGListTy &networks, Module &module,
 };
 
 Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module,
-                              CompilationContext &cctx, std::string bundleDir) {
+                              CompilationContext &cctx, std::string bundleDir, std::map<std::string, int>* puIdxMap) {
 
   // Check that the requested networks don't collide with the names of any other
   // networks being added.
@@ -887,14 +892,23 @@ Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module
             llvm::sys::fs::create_directory(bundleDir);
           }
 
-          std::cout << "Partition name = " << function->getName().str() << "(" << deviceBackendName << ")" << std::endl;
+#ifdef GLOW_WITH_VTA
+          if(!deviceBackendName.compare("VTA")) {
+                int vtaIdx = pow(2, (*puIdxMap)[function->getName().str()]);
+              std::cout << "Partition name = " << function->getName().str() << "(" << deviceBackendName << ") VTA index: " << vtaIdx << std::endl;
+              static_cast<VTA*>(backends_["VTA"].get())->save(function, bundleDir + "/",
+                                                              function->getName(),
+                                                              function->getName(), vtaIdx);
 
-//          if(!deviceBackendName.compare("Relay")) {
-//              std::cout << ((Relay *) (&backends_["Relay"]))->getTarget() << std::endl;
-//          }
-          backends_[deviceBackendName]->save(function, bundleDir + "/",
-                                             function->getName(),
-                                             function->getName());
+          } else {
+#endif
+              std::cout << "Partition name = " << function->getName().str() << "(" << deviceBackendName << ")"<< std::endl;
+              backends_[deviceBackendName]->save(function, bundleDir + "/",
+                                                 function->getName(),
+                                                 function->getName());
+#ifdef GLOW_WITH_VTA
+          }
+#endif
         }
 
         // Note: This needs to come after compile above because compile may

@@ -37,8 +37,8 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "lib/Backends/VTA/VTA.h"
-#include "lib/Backends/Relay/Relay.h"
+#include "glow/Backends/VTA/VTA.h"
+#include "glow/Backends/Relay/Relay.h"
 #include <algorithm>
 #include <future>
 #include <sstream>
@@ -941,66 +941,66 @@ void Loader::inferEndMiniBatch(PlaceholderBindings &bindings,
 }
 
 Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
-  if (modelPathOpt.size() == 1) {
-    if (llvm::sys::fs::is_directory(*modelPathOpt.begin())) {
-      caffe2NetDescFilename_ = modelPathOpt[0] + "/predict_net.pb";
-      caffe2NetWeightFilename_ = modelPathOpt[0] + "/init_net.pb";
+    if (modelPathOpt.size() == 1) {
+        if (llvm::sys::fs::is_directory(*modelPathOpt.begin())) {
+            caffe2NetDescFilename_ = modelPathOpt[0] + "/predict_net.pb";
+            caffe2NetWeightFilename_ = modelPathOpt[0] + "/init_net.pb";
+        } else {
+            llvm::StringRef modelPath = modelPathOpt[0];
+            if (modelPath.endswith("tflite")) {
+                tfliteModelFilename_ = modelPath.str();
+            } else {
+                onnxModelFilename_ = modelPath.str();
+            }
+        }
     } else {
-      llvm::StringRef modelPath = modelPathOpt[0];
-      if (modelPath.endswith("tflite")) {
-        tfliteModelFilename_ = modelPath.str();
-      } else {
-        onnxModelFilename_ = modelPath.str();
+        caffe2NetDescFilename_ = modelPathOpt[0];
+        caffe2NetWeightFilename_ = modelPathOpt[1];
+    }
+    M_.reset(new Module);
+
+    std::vector<std::unique_ptr<runtime::DeviceConfig>> configs;
+
+    if (configDeviceIDs.empty()) {
+        configs = runtime::generateDeviceConfigs(numDevices, ExecutionBackend);
+    } else {
+        for (size_t ID: configDeviceIDs) {
+            CHECK(ID < numDevices) << "IDs must be less than the number of devices";
+            auto config = glow::make_unique<runtime::DeviceConfig>(ExecutionBackend);
+            config->deviceID = ID;
+            configs.push_back(std::move(config));
+        }
+    }
+
+      hostManager_ = glow::make_unique<runtime::HostManager>(std::move(configs));
+      backend_ = std::unique_ptr<Backend>(createBackend(ExecutionBackend));
+      if(backend_->getBackendName()=="VTA"){
+        static_cast<VTA*>(backend_.get())->setIdxMultiEVTA(idxMultiEVTA);
       }
-    }
-  } else {
-    caffe2NetDescFilename_ = modelPathOpt[0];
-    caffe2NetWeightFilename_ = modelPathOpt[1];
-  }
-  M_.reset(new Module);
 
-  std::vector<std::unique_ptr<runtime::DeviceConfig>> configs;
+      if(backend_->getBackendName()=="Relay"){
+          static_cast<Relay*>(backend_.get())->setTarget(relayTarget.c_str());
+          static_cast<Relay*>(backend_.get())->setTargetHost(relayTargetHost.c_str());
+          static_cast<Relay*>(backend_.get())->setExportOption(relayExportOption.c_str());
+          static_cast<Relay*>(backend_.get())->setRequiredPass(relayRequiredPass.c_str());
+          static_cast<Relay*>(backend_.get())->setDisabledPass(relayDisabledPass.c_str());
+          static_cast<Relay*>(backend_.get())->setOptLevel(relayOptLevel);
+          static_cast<Relay*>(backend_.get())->setDebugMode(relayDebugMode.c_str());
+      }
 
-  if (configDeviceIDs.empty()) {
-    configs = runtime::generateDeviceConfigs(numDevices, ExecutionBackend);
-  } else {
-    for (size_t ID : configDeviceIDs) {
-      CHECK(ID < numDevices) << "IDs must be less than the number of devices";
-      auto config = glow::make_unique<runtime::DeviceConfig>(ExecutionBackend);
-      config->deviceID = ID;
-      configs.push_back(std::move(config));
-    }
-  }
+      PartitionerCompileOptions compileOptions;
 
-  hostManager_ = glow::make_unique<runtime::HostManager>(std::move(configs));
-  backend_ = std::unique_ptr<Backend>(createBackend(ExecutionBackend));
-  if(backend_->getBackendName()=="VTA"){
-    static_cast<VTA*>(backend_.get())->setIdxMultiEVTA(idxMultiEVTA);
-  }
+      compileOptions.idxMultiEVTA_= idxMultiEVTA;
+      compileOptions.relayTargetHost_ = relayTargetHost;
+      compileOptions.relayTarget_ = relayTarget;
+      compileOptions.relayExportOption_ = relayExportOption;
+      compileOptions.relayRequiredPass_ = relayRequiredPass;
+      compileOptions.relayDisabledPass_ = relayDisabledPass;
+      compileOptions.relayOptLevel_ = relayOptLevel;
 
-  if(backend_->getBackendName()=="Relay"){
-    static_cast<Relay*>(backend_.get())->setTarget(relayTarget.c_str());
-    static_cast<Relay*>(backend_.get())->setTargetHost(relayTargetHost.c_str());
-    static_cast<Relay*>(backend_.get())->setExportOption(relayExportOption.c_str());
-    static_cast<Relay*>(backend_.get())->setRequiredPass(relayRequiredPass.c_str());
-    static_cast<Relay*>(backend_.get())->setDisabledPass(relayDisabledPass.c_str());
-    static_cast<Relay*>(backend_.get())->setOptLevel(relayOptLevel);
-    static_cast<Relay*>(backend_.get())->setDebugMode(relayDebugMode.c_str());
-  }
+      hostManager_->setCompileOptions(&compileOptions);
 
-  PartitionerCompileOptions compileOptions;
-
-  compileOptions.idxMultiEVTA_= idxMultiEVTA;
-  compileOptions.relayTargetHost_ = relayTargetHost;
-  compileOptions.relayTarget_ = relayTarget;
-  compileOptions.relayExportOption_ = relayExportOption;
-  compileOptions.relayRequiredPass_ = relayRequiredPass;
-  compileOptions.relayDisabledPass_ = relayDisabledPass;
-  compileOptions.relayOptLevel_ = relayOptLevel;
-
-  hostManager_->setCompileOptions(&compileOptions);
-
-  F_ = M_->createFunction(modelPathOpt[0]);
-  functionName_ = modelPathOpt[0];
+      F_ = M_->createFunction(modelPathOpt[0]);
+      functionName_ = modelPathOpt[0];
 }
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "RelayFunction.h"
+#include "glow/Backends/Relay/RelayFunction.h"
 
 #include "glow/IR/IR.h"
 #include "glow/IR/IRUtils.h"

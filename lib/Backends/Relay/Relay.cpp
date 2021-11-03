@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "Relay.h"
-#include "RelayFunction.h"
+#include "glow/Backends/Relay/Relay.h"
+#include "glow/Backends/Relay/RelayFunction.h"
 
 #include "glow/Backend/BackendUtils.h"
 #include "glow/CodeGen/MemoryAllocator.h"

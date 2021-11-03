@@ -109,7 +109,7 @@ class NestPartitioner final : public PartitionerBase {
     std::set<std::string> fuseOperatorSet_;
     std::set<std::string> profileKeySet_;
     std::string outputDir_;
-
+    std::map<std::string, int>* puIdxMap_;
 
   /// Initialization. Called in class constructor.
     void init();
@@ -160,7 +160,7 @@ public:
   Expected<DAGListTy> setupPrepartitionedModule(CompilationContext &cctx);
 
   Expected<DAGListTy> partition(CompilationContext &cctx) override;
-  Expected<DAGListTy> partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
+  Expected<DAGListTy> partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe, std::map<std::string, int>* puIdxMap);
 
 
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
@@ -198,7 +198,7 @@ void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
 
   void generateDAGStatistics(Function *function);
   Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
-
+  void loadPartitionPlan(runtime::PartitionConfig* partitionConfig, std::string filename);
 
     DAGListTy doPartitioning(llvm::StringRef funcName,
                            std::vector<Function *> funcs, Module *module,

@@ -1,5 +1,5 @@
-#include "VTA.h"
-#include "VTAFunction.h"
+#include "glow/Backends/VTA/VTA.h"
+#include "glow/Backends/VTA/VTAFunction.h"
 
 #include "glow/Backend/BackendUtils.h"
 #include "glow/CodeGen/MemoryAllocator.h"

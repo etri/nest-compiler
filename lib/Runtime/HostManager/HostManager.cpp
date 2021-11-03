@@ -725,7 +725,9 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
   //auto result = partitioner.partition(cctx);
   std::cout << "bundle dir = " << bundleDir << std::endl;
   partitioner.setOutputDir(bundleDir);
-  auto result = partitioner.partition(cctx, exeType, profilePath, partitionPlanFile, profileMode, partitionExe);
+
+  std::map<std::string, int> puIdxMap;
+  auto result = partitioner.partition(cctx, exeType, profilePath, partitionPlanFile, profileMode, partitionExe, &puIdxMap);
   if (result) {
     nodeList = std::move(result.get());
   } else {
@@ -883,7 +885,7 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
   cleanupConstantFolding(*module, record);
 
   //auto err = provisioner_->provision(nodeList, *module, cctx);
-  auto err = provisioner_->provisionForNestPartition(nodeList, *module, cctx, bundleDir);
+  auto err = provisioner_->provisionForNestPartition(nodeList, *module, cctx, bundleDir, &puIdxMap);
   if (err) {
     {
       std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);

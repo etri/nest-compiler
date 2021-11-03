@@ -30,7 +30,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include <future>
-#include "VTA.h"
+#include "glow/Backends/VTA/VTA.h"
 #include "VTAInterpreter.h"
 
 namespace glow {
