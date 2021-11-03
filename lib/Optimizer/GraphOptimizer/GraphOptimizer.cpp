@@ -5135,7 +5135,7 @@ void glow::transformForPrecisionMode(const Backend &B, Function *F,
   case QuantizationMode::Quantize: {
     LOG_SCOPE(F->getLogContext(), "quantization::quantizeFunction")
 
-    if(B.getBackendName().compare("CPU")) {
+    if(B.getBackendName().compare("CPU")&&B.getBackendName().compare("Relay")) {
       quantization::quantizeFunction(F, precConfig.quantConfig, B,
                                      *cctx.loweredInfoMap,
                                      precConfig.precisionModeKindSet);
