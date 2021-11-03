@@ -1,3 +1,4 @@
+INCLUDE_DIRECTORIES(Relay public ${NESTC_ROOT_DIR}/include/Backends/Relay)
 add_library(Relay
         Relay.cpp
         RelayFunction.cpp

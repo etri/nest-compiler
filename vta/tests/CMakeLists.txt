@@ -1,4 +1,4 @@
-INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/glow/tests/googletest/googletest/include)
+INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/glow/tests/googletest/googletest/include ${NESTC_ROOT_DIR}/include/Backends/VTA)
 add_executable(NESTVTABackendTest NESTVTABackendTest.cpp ../../lib/Backends/VTA/tests/VTABackendTestUtils.cpp)
 target_include_directories(NESTVTABackendTest
         PUBLIC

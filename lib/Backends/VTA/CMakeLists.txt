@@ -4,6 +4,8 @@ INCLUDE_DIRECTORIES(include simulator/3rdparty/dlpack/include)
 INCLUDE_DIRECTORIES(simulator/3rdparty/dmlc-core/include)
 INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/glow/tests/googletest/googletest/include)
 INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/vta/vtalib/include/Bundle)
+INCLUDE_DIRECTORIES(VTA public ${NESTC_ROOT_DIR}/include/Backends/VTA)
+
 add_library(VTA
         VTA.cpp
         VTAFunction.cpp

@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "glow/Backends/Relay/RelayDeviceManager.h"
-#include "glow/Backends/Relay/Relay.h"
+#include "RelayDeviceManager.h"
+#include "Relay.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FormatVariadic.h"

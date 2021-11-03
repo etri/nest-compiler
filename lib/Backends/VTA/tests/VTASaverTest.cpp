@@ -11,7 +11,7 @@
 
 #include "llvm/ADT/StringMap.h"
 
-#include "glow/Backends/VTA/VTA.h"
+#include "VTA.h"
 
 using namespace glow;
 static Placeholder *createQuantizedPlaceholder(Module &mod,

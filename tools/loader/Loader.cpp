@@ -37,8 +37,8 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "glow/Backends/VTA/VTA.h"
-#include "glow/Backends/Relay/Relay.h"
+#include "Backends/VTA/VTA.h"
+#include "Backends/Relay/Relay.h"
 #include <algorithm>
 #include <future>
 #include <sstream>

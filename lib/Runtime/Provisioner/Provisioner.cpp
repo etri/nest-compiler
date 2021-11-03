@@ -22,10 +22,10 @@
 
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
-#include "glow/Backends/Relay/Relay.h"
+#include "Backends/Relay/Relay.h"
 
 #ifdef GLOW_WITH_VTA
-#include "glow/Backends/VTA/VTA.h"
+#include "Backends/VTA/VTA.h"
 #endif
 
 #include <future>
