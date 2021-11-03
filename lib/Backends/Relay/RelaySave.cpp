@@ -744,7 +744,11 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
         
         if(debug_mode == "txt") {
           cpp.append(cc("   sprintf(filename, \"" + module_rel_path + "/%d__%s.txt\", k, debug_node_info[k].name);"));
-          cpp.append(cc("   FILE *fp = fopen(filename ,\"w\");"));
+          cpp.append(cc("   FILE *fp = fopen(filename ,\"w+\");"));
+          cpp.append(cc("   if(fp==0) { // partition mode"));
+          cpp.append(cc("     sprintf(filename, \"Relay/" + module_rel_path + "/%d__%s.txt\", k, debug_node_info[k].name);"));
+          cpp.append(cc("     fp = fopen(filename ,\"w+\");"));
+          cpp.append(cc("   }"));          
           cpp.append(cc("   for(int m=0;m<debug_node_info[k].size;m+=(debug_node_info[k].type.bits/8)) {"));
           cpp.append(cc("     if(debug_node_info[k].type.code == kDLInt && debug_node_info[k].type.bits==8) {"));
           cpp.append(cc("       fprintf(fp,\"%d \", *(char*)(dbg_buf+m));"));
@@ -764,7 +768,11 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
         } else if(debug_mode == "bin") {
           cpp.append(cc("   debug_get_output(debug_node_info[k].name,&dbg_out);"));
           cpp.append(cc("   sprintf(filename, \"" + module_rel_path + "/%d__%s.bin\", k, debug_node_info[k].name);"));
-          cpp.append(cc("   FILE *fp = fopen(filename ,\"wb\");"));
+          cpp.append(cc("   FILE *fp = fopen(filename ,\"wb+\");"));
+          cpp.append(cc("   if(fp==0) { // partition mode"));
+          cpp.append(cc("     sprintf(filename, \"Relay/" + module_rel_path + "/%d__%s.bin\", k, debug_node_info[k].name);"));
+          cpp.append(cc("     fp = fopen(filename ,\"wb+\");"));
+          cpp.append(cc("   }"));          
           cpp.append(cc("   int r = fwrite( dbg_buf, 1, debug_node_info[k].size, fp);"));
           cpp.append(cc("   if (r < debug_node_info[k].size) { "));
           cpp.append(cc("      printf(\"dump error: %s, write %d / %ld \\n\", filename, r, debug_node_info[k].size); "));
