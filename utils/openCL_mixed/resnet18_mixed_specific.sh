@@ -9,29 +9,14 @@ declare -a executors=("image-classifier" "image-classifier_googlenet_mixed_1")
 declare -a clips=("none" "KL")
 declare -a profiles=("goldfish_mxnet_resnet18_bin1000" "1000_mxnet_resnet18_bin1000" "10000_mxnet_resnet18_bin1000")
 
-# -enable-channelwise
-# -quantization-calibration=KL
 
-##  --validation-images-dir=/home/jemin/development/dataset/imagenet2012_processed \
-# for small testing: /ssd/dataset/small_imagenet
-# for exhaustive test: /ssd/dataset/imagenet2012_processed
-# image-classifier: image-classifier-vtainterpreter-fusion, image-classifier-vtainterpreter-nonfusion
-
-#--ignore-exist-file-check
-
-# mixed precision test
-declare -i i=0
-#printf "" > /home/user/development/nest-compiler/cmake-build-release/glow/bin/VTASkipQuantizeNodes.txt
-printf "" > /home/user/development/nest-compiler/utils/openCL_mixed/VTASkipQuantizeNodes.txt
-while read node; do
-  #printf "%s\n"$node > /home/user/development/nest-compiler/utils/openCL_mixed/VTASkipQuantizeNodes.txt
-  echo $node >> ./VTASkipQuantizeNodes.txt
-  cat VTASkipQuantizeNodes.txt
-  echo "data: " $i
+if [ $input -eq 1 ]
+then
+  # mixed precision test
   python /home/user/development/nest-compiler/utils/imagenet_val_script/imagenet_topk_accuracy_driver_py3.py --verbose \
   --validation-images-dir=/ssd/dataset/imagenet2012_processed \
   --ignore-exist-file-check \
-  --filename=$node \
+  --filename=flatten_175__1 \
   --image-classifier-cmd="/home/user/development/nest-compiler/cmake-build-release/glow/bin/${executors[0]}
   -m=/ssd/dataset/glow_models/mxnet_exported_resnet18.onnx
   -model-input-name=data
@@ -40,12 +25,35 @@ while read node; do
   -image-channel-order=RGB
   -compute-softmax
   -backend=OpenCL
-  -dump-graph-DAG=./opts/$i.dot
+  -dump-graph-DAG=./opts/48.dot
   -topk=5
   -quantization-schema=symmetric_with_power2_scale
   -quantization-calibration=none
   -load-profile=/home/user/development/nest-compiler/cmake-build-release/glow/bin/test.yaml
   -keep-original-precision-for-nodes=Div,Sub
   -minibatch=0 -"
-  ((i++))
-done < resnet18_sensitivity.txt
+fi
+
+if [ $input -eq 2 ]
+then
+  # mixed precision test
+  python /home/user/development/nest-compiler/utils/imagenet_val_script/imagenet_topk_accuracy_driver_py3.py --verbose \
+  --validation-images-dir=/ssd/dataset/imagenet2012_processed \
+  --ignore-exist-file-check \
+  --filename=resnetv10_dense0_fwd__2_bias \
+  --image-classifier-cmd="/home/user/development/nest-compiler/cmake-build-release/glow/bin/${executors[0]}
+  -m=/ssd/dataset/glow_models/mxnet_exported_resnet18.onnx
+  -model-input-name=data
+  -image-mode=0to255
+  -image-layout=NHWC
+  -image-channel-order=RGB
+  -compute-softmax
+  -backend=OpenCL
+  -dump-graph-DAG=./opts/49.dot
+  -topk=5
+  -quantization-schema=symmetric_with_power2_scale
+  -quantization-calibration=none
+  -load-profile=/home/user/development/nest-compiler/cmake-build-release/glow/bin/test.yaml
+  -keep-original-precision-for-nodes=Div,Sub
+  -minibatch=0 -"
+fi

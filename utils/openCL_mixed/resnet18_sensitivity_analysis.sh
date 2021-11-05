@@ -25,8 +25,8 @@ declare -i i=0
 printf "" > /home/user/development/nest-compiler/utils/openCL_mixed/VTASkipQuantizeNodes.txt
 while read node; do
   #printf "%s\n"$node > /home/user/development/nest-compiler/utils/openCL_mixed/VTASkipQuantizeNodes.txt
-  echo $node >> ./VTASkipQuantizeNodes.txt
-  cat VTASkipQuantizeNodes.txt
+  grep -v $node ./resnet18_graph.txt > ./VTASkipQuantizeNodes.txt
+  diff resnet18_graph.txt VTASkipQuantizeNodes.txt
   echo "data: " $i
   python /home/user/development/nest-compiler/utils/imagenet_val_script/imagenet_topk_accuracy_driver_py3.py --verbose \
   --validation-images-dir=/ssd/dataset/imagenet2012_processed \
@@ -48,4 +48,4 @@ while read node; do
   -keep-original-precision-for-nodes=Div,Sub
   -minibatch=0 -"
   ((i++))
-done < resnet18_sensitivity.txt
+done < resnet18_graph.txt
