@@ -30,7 +30,7 @@ if(NESTC_TARGET_AARCH64)
                 -exe-type=0
                 -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                 -bundle-api=dynamic
-                -load-vta-profile=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+                -load-profile=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
                 DEPENDS
                 model-partition-tuner VTA vtaMxnetResnet18PartitionBundleONNX MxnetResnet18ONNXDownload)
         add_custom_target(vtaMxnetResnet18PartitionBundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/p0.o ${CMAKE_CURRENT_BINARY_DIR}/p1.cpp ${CMAKE_CURRENT_BINARY_DIR}/p2.o ${CMAKE_CURRENT_BINARY_DIR}/p3.cpp ${CMAKE_CURRENT_BINARY_DIR}/p4.o ${CMAKE_CURRENT_BINARY_DIR}/p5.o ${CMAKE_CURRENT_BINARY_DIR}/p6.cpp ${CMAKE_CURRENT_BINARY_DIR}/p7.o ${CMAKE_CURRENT_BINARY_DIR}/p8.cpp ${CMAKE_CURRENT_BINARY_DIR}/p9.o ${CMAKE_CURRENT_BINARY_DIR}/p10.cpp ${CMAKE_CURRENT_BINARY_DIR}/p11.o ${CMAKE_CURRENT_BINARY_DIR}/p12.cpp ${CMAKE_CURRENT_BINARY_DIR}/p13.o ${CMAKE_CURRENT_BINARY_DIR}/p14.cpp ${CMAKE_CURRENT_BINARY_DIR}/p15.o ${CMAKE_CURRENT_BINARY_DIR}/p16.cpp ${CMAKE_CURRENT_BINARY_DIR}/p17.o)
@@ -50,7 +50,7 @@ else()
                         -exe-type=0
                         -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
                         -bundle-api=dynamic
-                        -load-vta-profile=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+                        -load-profile=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
                         DEPENDS
                         model-partition-tuner VTA vtaMxnetResnet18PartitionBundleONNX MxnetResnet18ONNXDownload)
                 add_custom_target(vtaMxnetResnet18PartitionBundleNet DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/p0.o ${CMAKE_CURRENT_BINARY_DIR}/p1.cpp ${CMAKE_CURRENT_BINARY_DIR}/p2.o ${CMAKE_CURRENT_BINARY_DIR}/p3.cpp ${CMAKE_CURRENT_BINARY_DIR}/p4.o ${CMAKE_CURRENT_BINARY_DIR}/p5.o ${CMAKE_CURRENT_BINARY_DIR}/p6.cpp ${CMAKE_CURRENT_BINARY_DIR}/p7.o ${CMAKE_CURRENT_BINARY_DIR}/p8.cpp ${CMAKE_CURRENT_BINARY_DIR}/p9.o ${CMAKE_CURRENT_BINARY_DIR}/p10.cpp ${CMAKE_CURRENT_BINARY_DIR}/p11.o ${CMAKE_CURRENT_BINARY_DIR}/p12.cpp ${CMAKE_CURRENT_BINARY_DIR}/p13.o ${CMAKE_CURRENT_BINARY_DIR}/p14.cpp ${CMAKE_CURRENT_BINARY_DIR}/p15.o ${CMAKE_CURRENT_BINARY_DIR}/p16.cpp ${CMAKE_CURRENT_BINARY_DIR}/p17.o)

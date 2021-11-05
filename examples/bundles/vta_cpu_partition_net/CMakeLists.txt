@@ -62,7 +62,7 @@ add_custom_command(
         -bundle-api=dynamic
 #        -target=aarch64
 #        -mcpu=cortex-a53
-#        -load-vta-profile=${GLOW_SOURCE_DIR}/tests/models/nestModels/mxnet_exported_resnet18/mxnet_exported_resnet18_calib_1.yaml
+#        -load-profile=${GLOW_SOURCE_DIR}/tests/models/nestModels/mxnet_exported_resnet18/mxnet_exported_resnet18_calib_1.yaml
         DEPENDS
         model-partition-tuner ResNet18VTAPartitionBundleDir MxnetResnet18ONNXDownload
 )

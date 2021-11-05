@@ -179,18 +179,6 @@ llvm::cl::opt<std::string> loadProfileFileOpt(
     llvm::cl::value_desc("profile.yaml"), llvm::cl::Optional,
     llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<std::string> loadVTAProfileFileOpt(
-    "load-vta-profile",
-    llvm::cl::desc("Load quantization profile file for VTA and quantize the graph"),
-    llvm::cl::value_desc("profile.yaml"), llvm::cl::Optional,
-    llvm::cl::cat(loaderCat));
-
-//llvm::cl::opt<std::string> loadNestProfileFileOpt(
-//    "load-nest-profile",
-//    llvm::cl::desc("Load quantization profile file and quantize the graph"),
-//    llvm::cl::value_desc("profile.yaml"), llvm::cl::Optional,
-//    llvm::cl::cat(loaderCat));
-
 llvm::cl::list<std::string> keepOriginalPrecisionForNodesOpt(
     "keep-original-precision-for-nodes",
     llvm::cl::desc(
@@ -815,8 +803,10 @@ void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, s
 //  std::cout << "bundle dir = " << emitBundle << std::endl;
   // Emit IR for the graph and compile it.
   cctx.saturateHost = !runAllInputsOnAllDevices;
+
   auto error = hostManager_->addNetworkForNestPartition(std::move(M_), cctx, exeType, profilePath, partitionPlanFile,
-                                                        emitBundle.c_str(), loadVTAProfileFileOpt, profileMode, partitionExe);
+                                                          emitBundle.c_str(), loadProfileFileOpt, profileMode, partitionExe);
+
   EXIT_ON_ERR(std::move(error));
   // After partitioning, the original function may be removed. Need to update
   // F_.

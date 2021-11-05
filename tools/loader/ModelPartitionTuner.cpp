@@ -64,27 +64,6 @@ llvm::cl::opt<int> partitionExe(
 //size_t exeType = 3;
 int main(int argc, char **argv) {
   std::cout << "= model-partition-tuner = " << std::endl;
-
-  //-------Profiler-----
-  // Generate the execution time of each node on available PEs
-  // Generate the execution time of fused nodes on available PEs
-  //------------
-
-  //---------Tuner-------
-  //------------
-  // Load a PE description file (config file 1)
-  // Load a configuration file specifying fusalbe operations per all PEs (config file 2)
-  //------------
-
-  //------------
-  // Load profile into the partitionProfileInfo (config file 3)
-  //------------
-
-  //------------
-  // Find optimal allocation
-  // - We consider that all the execution time of an operation and fused operation is previously examined on all available PEs
-  //------------
-
   // Parse command line parameters. All the options will be available as part of
   // the loader object.
   parseCommandLine(argc, argv);
