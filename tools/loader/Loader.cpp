@@ -325,11 +325,6 @@ llvm::cl::opt<bool>
                            "takes for the program to execute"),
             llvm::cl::Optional, llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<bool>
-    quantOpt("quant",
-        llvm::cl::desc("Enable Quantization  on CPU and Relay backends."),
-                       llvm::cl::init(false), llvm::cl::cat(loaderCat));
-
 llvm::cl::opt<unsigned> iterationsOpt(
     "iterations", llvm::cl::desc("Number of iterations to perform"),
     llvm::cl::Optional, llvm::cl::init(0), llvm::cl::cat(loaderCat));
@@ -657,7 +652,6 @@ CompilationContext Loader::getCompilationContext(QuantizationMode mode) {
   // Common configurations.
   CompilationContext cctx;
   cctx.loweredInfoMap = &loweredMap_;
-  cctx.QuantOpt = quantOpt;
   PrecisionConfiguration &precConfig = cctx.precisionConfig;
   precConfig.convertToFP16 = convertToFP16;
   precConfig.float16Format = fp16Format;

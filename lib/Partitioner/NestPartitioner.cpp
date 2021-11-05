@@ -472,7 +472,7 @@ NestPartitioner::partitionFromConfig(const PartitionConfig &partitionConfig,
         Backend* B = backendMap_[partitionConfig.backendNames[i]].backend;
 
         if (!optimized_) {
-            if(B->getBackendName().compare("CPU")) {
+            if(B->getBackendName().compare("CPU") && B->getBackendName().compare("Relay")) {
                 // Specific configurations.
                 cctx.precisionConfig.quantMode = QuantizationMode::Quantize;
                 cctx.precisionConfig.quantConfig.schema = quantization::Schema::SymmetricWithPower2Scale;
@@ -482,7 +482,9 @@ NestPartitioner::partitionFromConfig(const PartitionConfig &partitionConfig,
                         filename, cctx.precisionConfig.quantConfig.graphPreLowerHash, cctx.precisionConfig.quantConfig.infos);
                 cctx.precisionConfig.quantConfig.checkGraphPreLowerHash = false;
             }
-
+            else{
+                cctx.precisionConfig.quantMode = QuantizationMode::None;
+            }
             RETURN_IF_ERR(::glow::optimizeFunction(func, *B, cctx));
         }
 

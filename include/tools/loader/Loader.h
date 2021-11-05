@@ -36,8 +36,6 @@ extern llvm::cl::opt<bool> runAllInputsOnAllDevices;
 
 /// Timer option used to indicate if inferences should be timed -time.
 extern llvm::cl::opt<bool> timeOpt;
-
-extern llvm::cl::opt<bool> quantOpt;
 /// Iterations used to indicate the number of iterations to run an inferece
 /// -iterations.
 extern llvm::cl::opt<unsigned> iterationsOpt;
