@@ -1,4 +1,4 @@
-#include "Base/Tensor.h"
+#include "Tensor.h"
 #include <glow/Optimizer/GraphOptimizer/GraphOptimizer.h>
 #include "glow/Backend/Backend.h"
 #include "glow/Graph/Graph.h"

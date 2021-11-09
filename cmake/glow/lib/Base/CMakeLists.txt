@@ -5,6 +5,8 @@ add_library(Base
               IO.cpp
               TaggedList.cpp)
 
+target_include_directories(Base PUBLIC BEFORE ${NESTC_ROOT_DIR}/include/glow/Base/)
+
 target_link_libraries(Base
                       PUBLIC
                         Support
