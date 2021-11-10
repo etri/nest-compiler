@@ -76,10 +76,9 @@ void NestPartitionerSchedule::generateDeclaration(string& wfilec, int partitionN
   }
   wfilec.append("\n");
 
-  wfilec.append("#include <time.h>\n\n");
+  wfilec.append("#include <sys/time.h>\n\n");
   if(profileMode_ == 1) {
-    //wfilec.append("#include <sys/timeb.h>\n\n");
-    //wfilec.append("#include <time.h>\n\n");
+    wfilec.append("#include <time.h>\n\n");
 
     wfilec.append("#define ARRAY_LENGTH " + std::to_string(partitionNum) + "\n");
     wfilec.append("unsigned long delay_time[ARRAY_LENGTH];\n\n");
@@ -571,8 +570,12 @@ void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum
         if(i == 0) {
           //wfilec.append("\t// Perform the computation.\n");
 
-            wfilec.append("\tclock_t start_total = 0;\n");
-            wfilec.append("\tstart_total = clock();\n");
+//            wfilec.append("\tclock_t start_total = 0;\n");
+//            wfilec.append("\tstart_total = clock();\n");
+
+            wfilec.append("\ttimeval t1, t2;\n");
+            wfilec.append("\tgettimeofday(&t1, NULL);\n\n");
+
 
             if(profileMode_ == 1) {
                 wfilec.append("\tif(REPEAT > 0){\n");
@@ -712,10 +715,15 @@ void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum
             }
 
             if (i == partitionNum - 2) {
-                wfilec.append("\tclock_t now_total;\n");
-                wfilec.append("\tnow_total = clock();\n");
-                wfilec.append("\tunsigned long inftime_total = (unsigned long)(now_total - start_total);\n");
-                wfilec.append("\tprintf(\"\\n====> [Total inference time] %lu microsec.\\n\", inftime_total);\n\n");
+//                wfilec.append("\tclock_t now_total;\n");
+//                wfilec.append("\tnow_total = clock();\n");
+//                wfilec.append("\tunsigned long inftime_total = (unsigned long)(now_total - start_total);\n");
+//                wfilec.append("\tprintf(\"\\n====> [Total inference time] %lu microsec.\\n\", inftime_total);\n\n");
+
+                wfilec.append("\tgettimeofday(&t2, NULL);\n");
+                wfilec.append("\tdouble inftime_total = (t2.tv_sec - t1.tv_sec)*1000.0 + (t2.tv_usec - t1.tv_usec)/1000.0;\n");
+                wfilec.append("\tprintf(\"\\n====> [Total inference time] %.4f msec.\\n\", inftime_total);\n\n");
+
 
                 wfilec.append("\t// Report the results.\n");
                 wfilec.append("\tprintf(\"====== final result of this neural net ========\\n\");\n");
@@ -943,7 +951,7 @@ void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t
 
         std::string pExeStrVTATemplate = std::string("add_executable(" + demoExeFileName + "-p# p#_main.cpp ${CMAKE_CURRENT_BINARY_DIR}/p#.cpp)\n") +
                                          "add_dependencies(" +demoExeFileName + "-p# " +demoExeFileName + "Net)\n" +
-                                         "target_link_libraries(" + demoExeFileName +"-p# VTABundle vta_runtime arm_compute arm_compute_core arm_compute_graph LLVMSupport cma gomp png)\n" +
+                                         "target_link_libraries(" + demoExeFileName +"-p# VTABundle png)\n" +
                                          "set_target_properties("+ demoExeFileName + "-p#\n" +
                                          "\tPROPERTIES\n" +
                                          "\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n";

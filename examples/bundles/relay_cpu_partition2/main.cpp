@@ -4,7 +4,7 @@
 #include "p1.h"
 #include "p2.h"
 
-#include <time.h>
+#include <sys/time.h>
 
 #include <dlpack/dlpack.h>
 #include <tvm/runtime/module.h>
@@ -38,8 +38,9 @@ int main(int argc, char **argv) {
     p0_load_module(0);
     p1_load_module(0);
 
-    clock_t start_total = 0;
-    start_total = clock();
+    timeval t1, t2;
+    gettimeofday(&t1, NULL);
+
     p0(constantWeightVarsAddr0, mutableWeightVarsAddr0, activationsAddr0);
 
     float* resultVar0 = getInferenceResultVar(p0_config, mutableWeightVarsAddr0, "resnetv10_pool0_fwd__1");
@@ -53,10 +54,10 @@ int main(int argc, char **argv) {
 
     p2(constantWeightVarsAddr2, mutableWeightVarsAddr2, activationsAddr2);
 
-    clock_t now_total;
-    now_total = clock();
-    unsigned long inftime_total = (unsigned long)(now_total - start_total);
-    printf("\n====> [Total inference time] %lu microsec.\n", inftime_total);
+    gettimeofday(&t2, NULL);
+    double inftime_total = (t2.tv_sec - t1.tv_sec)*1000.0 + (t2.tv_usec - t1.tv_usec)/1000.0;
+    printf("\n====> [Total inference time] %.4f microsec.\n", inftime_total);
+
 
     // Report the results.
     printf("====== final result of this neural net ========\n");
