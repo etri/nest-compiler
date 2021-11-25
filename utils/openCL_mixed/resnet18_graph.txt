@@ -46,4 +46,5 @@ resnetv10_stage4__plus1__1
 resnetv10_stage4_activation1__1
 resnetv10_pool1_fwd__1
 flatten_175__1
+resnetv10_dense0_fwd__2_dot
 resnetv10_dense0_fwd__2_bias
