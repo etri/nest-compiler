@@ -547,6 +547,92 @@ TEST(VTASaverTest, convTest5) {
     EXPECT_TRUE(out1.isEqual(out2, 0.0));
 }
 
+void conv_test_template(dim_t N, dim_t H, dim_t W, dim_t C, float input_scale,
+                        dim_t KN, dim_t KH, dim_t KW, dim_t KC, float filter_scale,
+                        //dim_t ON, dim_t OH, dim_t OW, dim_t OC, float output_scale,
+                        float bias_scale, int stride, int pad, int group,
+                        int input_low, int input_high, int filter_low, int filter_high,
+                        int bias_low, int bias_high,
+                        std::string test_name, Tensor& out1, Tensor& out2){
+  assert(KH==KW);
+  PseudoRNG PRNG;
+  Tensor inputs(ElemKind::Int8QTy, {N, H, W, C}, input_scale, 0);
+  Tensor filter(ElemKind::Int8QTy, {KN, KH, KW, KC}, filter_scale, 0);
+  Tensor bias(ElemKind::Int32QTy, {KN}, bias_scale, 0);
+
+  inputs.getHandle<int8_t>().randomize(input_low, input_high, PRNG);
+  filter.getHandle<int8_t>().randomize(filter_low, filter_high, PRNG);
+  std::string input_bin_str = test_name + "Input";
+  inputs.toBin(input_bin_str.c_str());
+  bias.getHandle<int32_t>().randomize(bias_low, bias_high, PRNG);
+
+  PlaceholderBindings bindings;
+  Module M;
+  Function *F = M.createFunction("main");
+  Placeholder *inputP;
+  Constant *filterP;
+  Constant *biasP;
+  Placeholder *outP;
+  TypeRef OT1;
+
+  auto &outType1 = out1.getType();
+  auto &inType = inputs.getType();
+  auto &filterType = filter.getType();
+  auto &biasType = bias.getType();
+
+  inputP = createQuantizedPlaceholder(
+      M, bindings, &inputs, inType.getScale(), inType.getOffset(), "inputP");
+
+  filterP = createQuantizedConstant(M, bindings, &filter, filterType.getScale(),
+                                    filterType.getOffset(), "filterP");
+  biasP = createQuantizedConstant(M, bindings, &bias, biasType.getScale(),
+                                  biasType.getOffset(), "biasP");
+  outP = createQuantizedPlaceholder(M, bindings, &out2, outType1.getScale(),
+                                    outType1.getOffset(), "outP");
+  OT1 = F->getParent()->uniqueType(out1.getElementType(), out1.dims(),
+                                   outType1.getScale(), outType1.getOffset());
+  auto *conv = F->createConv("conv", inputP, filterP, biasP, OT1, KH, stride, pad, group);
+
+  F->createSave("ret", conv, outP);
+
+  //Optimize & Lowering
+  std::unique_ptr<Backend> backend(createBackend("VTA"));
+  CompilationContext cctx;
+  auto error = ::glow::optimizeFunction(F, *backend, cctx);
+
+  EXIT_ON_ERR(std::move(error));
+  // Save bundle.
+  llvm::StringRef outputDir = ".";
+  std::string sbundleName = test_name + "Bundle"; //file name
+  llvm::StringRef bundleName = sbundleName; //file name
+  std::string smainEntryName = test_name + "MainEntry";
+  llvm::StringRef mainEntryName = smainEntryName;
+
+  backend->save(F, outputDir, bundleName, mainEntryName);
+  inferVTAConvNet(&inputs, &filter, &bias, &out1, KH, stride, pad, "VTA");
+  inferVTAConvNet(&inputs, &filter, &bias, &out2, KH, stride, pad, "VTAInterpreter");
+  std::string output_bin_str = test_name + "Golden";
+  out1.toBin(output_bin_str.c_str());
+}
+
+TEST(VTASaverTest, Conv_inception_5b_5x5_1__1) {
+
+  std::array<dim_t, 4> S{{1, 7, 7, 128}};
+  llvm::ArrayRef<dim_t> shape(S);
+  Tensor out1(ElemKind::Int8QTy, shape, 512, 0);
+  Tensor out2(ElemKind::Int8QTy, shape, 512, 0);
+
+  conv_test_template(1, 7, 7, 48, 1,
+                     128, 5, 5, 48, 1,
+                     1,
+                     1, 2, 1, 0, 10, -10, 10, 0, 32768, "Conv_inception_5b_5x5_1__1", out1, out2
+  );
+
+  EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+
+
 TEST(VTASaverTest, conv_gpu_0_conv1) {
   PseudoRNG PRNG;
   Tensor inputs(ElemKind::FloatTy, {1, 224, 224, 3});
