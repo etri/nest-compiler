@@ -1,3 +1,8 @@
+option(NESTC_EVTA_PROFILE_AUTOTUNE "Generate code for auto-tuning" OFF)
+
+if(NESTC_EVTA_PROFILE_AUTOTUNE)
+    add_definitions(-DNESTC_EVTA_PROFILE_AUTOTUNE=1)
+endif()
 add_subdirectory(ClassGen)
 
 INCLUDE_DIRECTORIES(include simulator/3rdparty/dlpack/include)

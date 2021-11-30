@@ -1113,6 +1113,10 @@ void generateVTAConvolutionCall(const glow::ConvolutionInst *Inst, std::string *
   if(idxMultiEVTA){
     bundle->append(std::to_string(idxMultiEVTA));
   }
+#ifdef NESTC_EVTA_PROFILE_AUTOTUNE
+    bundle->append(", input1, input2, input3, ");
+    bundle->append(std::to_string(ctx->getIdxMultiEVTA()));
+#else
 #include "VTASchedules.h"
   bool isTuned = 0;
   for(auto elem : convTune.ConvolutionTune_){
@@ -1135,7 +1139,7 @@ void generateVTAConvolutionCall(const glow::ConvolutionInst *Inst, std::string *
     bundle->append(", 1, 14, 14, ");
     bundle->append(std::to_string(ctx->getIdxMultiEVTA()));
   }
-
+#endif
   bundle->append(");\n");
 
 }
@@ -3014,7 +3018,11 @@ void initBundleSave(struct BundleSaveCtx &bundleCtx,
   bundle = "";
   bundle.append("int ");
   bundle.append(mainEntryName);
+#ifdef NESTC_EVTA_PROFILE_AUTOTUNE
+  bundle.append("(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations, int input1, int input2, int input3){\n");
+#else
   bundle.append("(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations){\n");
+#endif
 #ifdef VTA_ALLINONE_FUNCTION
   bundle.append("  ");
   bundle.append(bundleName);
@@ -3253,7 +3261,11 @@ void exportBundleHeader(llvm::StringRef outputDir,
   bundleHeader.append("_destroy_module();\n");
   bundleHeader.append("int ");
   bundleHeader.append(mainEntryName);
+#ifdef NESTC_EVTA_PROFILE_AUTOTUNE
+  bundleHeader.append("(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations, int input1, int input2, int input3);\n");
+#else
   bundleHeader.append("(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations);\n");
+#endif
   std::string bundleHeaderPHInfo = R"~(
 // ---------------------------------------------------------------
 //                          Bundle API
