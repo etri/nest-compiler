@@ -25,7 +25,7 @@
 #include <string.h>
 #include <string>
 #include <vector>
-
+#include <unistd.h>
 #include "mxnet_exported_resnet18.h"
 #include "vta/runtime.h"
 
@@ -36,7 +36,7 @@
 
 #define DEFAULT_HEIGHT 224
 #define DEFAULT_WIDTH 224
-
+#define REPEAT_NUM 1
 //===----------------------------------------------------------------------===//
 //                   Image processing helpers
 //===----------------------------------------------------------------------===//
@@ -447,22 +447,34 @@ int main(int argc, char **argv) {
   parseCommandLineOptions(argc, argv);
   initVTARuntime();
   // Allocate and initialize constant and mutable weights.
-  uint8_t *constantWeightVarsAddr = (uint8_t *)initConstantWeights(
+  uint8_t *constantWeightVarsAddr = (uint8_t *) initConstantWeights(
       "mxnet_exported_resnet18.weights.bin", mxnet_exported_resnet18_config);
 
   uint8_t *mutableWeightVarsAddr =
-      (uint8_t *)initMutableWeightVars(mxnet_exported_resnet18_config, "data");
+      (uint8_t *) initMutableWeightVars(mxnet_exported_resnet18_config, "data");
   uint8_t *activationsAddr =
-      (uint8_t *)initActivations(mxnet_exported_resnet18_config);
+      (uint8_t *) initActivations(mxnet_exported_resnet18_config);
 
   double result;
   timeval t1, t2;
-  gettimeofday(&t1, NULL);
   mxnet_exported_resnet18_load_module(constantWeightVarsAddr);
 
-  // Perform the computation.
   mxnet_exported_resnet18(constantWeightVarsAddr, mutableWeightVarsAddr,
-                            activationsAddr);
+                          activationsAddr);
+
+
+  if(REPEAT_NUM>1) {
+    usleep(1000000);
+    for (int i = 0; i < REPEAT_NUM; i++) {
+      mxnet_exported_resnet18(constantWeightVarsAddr, mutableWeightVarsAddr,
+                              activationsAddr);
+      std::cout<<"RUN #"<<i<<std::endl;
+    }
+    usleep(1000000);
+  }
+  gettimeofday(&t1, NULL);
+  mxnet_exported_resnet18(constantWeightVarsAddr, mutableWeightVarsAddr,
+      activationsAddr);
   gettimeofday(&t2, NULL);
 
   mxnet_exported_resnet18_destroy_module();
