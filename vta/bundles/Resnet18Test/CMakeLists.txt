@@ -1,18 +1,26 @@
 option(VTA_RESNET18_WITH_SKIPQUANT0 "Build the LLVM-based JIT CPU backend" OFF)
 option(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS "Download bundles from AWS S3" OFF)
-add_custom_command(
-        OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-        COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-)
 
-add_custom_target(vtaMxnetResnet18BundleONNX
-        DEPENDS
-        ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
-)
 
 if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
+    add_custom_command(
+            OUTPUT
+            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+            COMMAND
+            image-classifier ${NESTC_ROOT_DIR}/glow/tests/images/imagenet/cat_285.png
+            -m=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
+            -model-input-name=data
+            -backend=VTAInterpreter
+            -dump-graph-DAG="opt.dot"
+            -image-layout=NHWC
+            -compute-softmax
+            -topk=5
+            -image-mode=0to255
+            -dump-profile=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+            -quantization-schema="symmetric_with_power2_scale"
+            DEPENDS image-classifier
+    )
+
     if(NOT VTA_RESNET18_WITH_SKIPQUANT0)
         add_custom_command(
                 OUTPUT
@@ -36,7 +44,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 #-instrument-debug
                 #-instrument-debug-format=rawbin
                 DEPENDS
-                model-compiler VTA vtaMxnetResnet18BundleONNX MxnetResnet18ONNXDownload
+                model-compiler VTA MxnetResnet18ONNXDownload ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
 
         )
     else()
@@ -66,10 +74,21 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 #-instrument-debug
                 #-instrument-debug-format=rawbin
                 DEPENDS
-                model-compiler VTA vtaMxnetResnet18BundleONNX
+                model-compiler VTA MxnetResnet18ONNXDownload ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
         )
     endif()
 else()
+    add_custom_command(
+            OUTPUT
+            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+            COMMAND
+            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+    )
+
+    add_custom_target(vtaMxnetResnet18BundleONNX
+            DEPENDS
+            ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+            )
     if(NOT NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS)
         if(NOT VTA_RESNET18_WITH_SKIPQUANT0)
             add_custom_command(
