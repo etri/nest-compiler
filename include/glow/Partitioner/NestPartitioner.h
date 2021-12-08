@@ -37,18 +37,16 @@ public:
 
 class NodeGroup {
 public:
-  int ID_ = -1;
-  std::string backendName_;
-  std::set<CostNode*> outNodeSet_;
-  std::vector<CostNode*> nodeList_;
-  bool isParallelCPU_ = false;
-  bool isParallelBranch_ = false;
-  bool isParallelPartition_ = false;
+    int ID_ = -1;
+    std::string backendName_;
+    std::set<CostNode*> outNodeSet_;
+    std::vector<CostNode*> nodeList_;
+    bool isParallelBranch_ = false;
 
-  int branchID_ = -1;
-  bool partOfBranch_ = false;
-  unsigned int level_ = 0;
-  std::vector<NodeGroup*> inBranchList_;
+    int branchID_ = -1;
+    bool partOfBranch_ = false;
+    unsigned int level_ = 0;
+    std::vector<NodeGroup*> inBranchList_;
 };
 
 /// Given a module, partitions each of the its functions into multiple ones
@@ -164,9 +162,8 @@ public:
 
 
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
-void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
+  void partitionBranchesForMultiVTA(std::vector<NodeGroup*>* branchList);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
-  void partitionBranchesReplaceCPU(std::vector<NodeGroup*>* branchList, bool isParallel);
   void loadPerformProfileInfo(std::string pdir);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends);
   void getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCNode);
@@ -182,9 +179,7 @@ void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void loadFuseOperatorsConfig(std::string fname);
   void allocateOptimalPUSingleNode(std::vector<NodeGroup*>* branchList);
   void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
-  void findParallelBranchesForMultiVTA(std::vector<NodeGroup*>* branchList, int vtaNum);
-
-  bool findParallelBranches(std::vector<NodeGroup*>* branchList);
+  void findParallelBranchesForMultiVTA(std::vector<NodeGroup*>* branchList, int cpuNum, int vtaNum);
   void allocateVTAOps(std::vector<NodeGroup*>* branchList);
   bool isVTAConv(ConvolutionNode* convNode);
 
@@ -194,7 +189,7 @@ void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForFusedNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int vtaNum);
+  void generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
 
   void generateDAGStatistics(Function *function);
   Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
@@ -213,8 +208,9 @@ void outPartitionPlanReplaceCPU(std::string funcName, std::string filename);
   void backtrack(std::vector<std::vector<CostNode>>* cnodebfs, BFSLevel dag, Node* lastNode, NodeGroup* branch,
                  unsigned int level, unsigned int branchID, std::vector<NodeGroup*>* branchList);
   void analyzeDAG(std::vector<std::vector<CostNode>>* cnodebfs, BFSLevel dag, std::vector<NodeGroup*>* branchList);
+  bool setBranchPU(NodeGroup *branch);
 
-  void setOutputDir(std::string path) {
+        void setOutputDir(std::string path) {
     outputDir_ = path;
     appGen_.setOutputDir(path);
   }

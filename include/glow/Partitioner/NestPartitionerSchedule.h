@@ -35,6 +35,8 @@ class NestPartitionerSchedule {
   std::set<std::string> *fuseOperatorSet_;
   std::set<std::string> *profileKeySet_;
 
+  std::map<std::string, int> partitionOutList_;
+  std::map<std::string, std::string> partitionOutVarList_;
 
 public:
   void setProfilePath(std::string path){profilePath_ = path;};
@@ -60,14 +62,18 @@ public:
 
   void generateDeclaration(std::string& writeFileC, int partitionNum, const PartitionConfig &partitionConfig);
   void generateMainforEachPartition(int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
+  void generatePartitionCall(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateMain(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateFree(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateCodeFromModels(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
   void generateYamlFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
   void generateCMakeListsFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   std::string getPartitionProfileKey(Function* function);
-  void setPartitionInputOutputList(Function* function, std::string inputList[maxInOut], std::string outputList[maxInOut], int* inputCount, int* outputCount);
-};
+  void setPartitionInputOutputList(Function* function, std::vector<std::string>* inputList, std::vector<std::string>* outputList, int pi);
+  void generateNonThreadCall(std::string &wfilec, int pi, bool profileMode, std::vector<std::string>* inputList);
+  void generateThreadCall(std::string &wfilec, int pi, std::set<std::string>* pGroup, bool profileMode, std::vector<std::string>* inputList);
+
+    };
 
 } // namespace glow
 #endif // GLOW_NESTPARTITIONERSCHEDULE_H

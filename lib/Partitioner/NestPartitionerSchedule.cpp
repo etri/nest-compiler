@@ -189,6 +189,9 @@ void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std
     if(vtaFlag) {
         wfilec.append("#ifdef VTAMAIN\n");
         wfilec.append("\tdestroyVTARuntime();\n");
+        wfilec.append("\tdestroyVTARuntime1();\n");
+        wfilec.append("\tdestroyVTARuntime2();\n");
+        wfilec.append("\tdestroyVTARuntime3();\n");
         wfilec.append("#endif\n");
     }
     wfilec.append("\n");
@@ -286,7 +289,7 @@ bool isMyNode(BFSLevel bfs, string name) {
     return false;
 }
 
-void NestPartitionerSchedule::setPartitionInputOutputList(Function* function, string inputList[maxInOut], string outputList[maxInOut], int* inputCount, int* outputCount)
+void NestPartitionerSchedule::setPartitionInputOutputList(Function* function, std::vector<std::string>* inputList, std::vector<std::string>* outputList, int pi)
 {
     BFSLevel bfs = getBFSLevel(function);
     size_t level = bfs.size();
@@ -294,13 +297,17 @@ void NestPartitionerSchedule::setPartitionInputOutputList(Function* function, st
     for (int bi = 0; bi < level; bi++) {
         for (int bii = 0; bii < bfs[bi].size(); bii++) {
             Node *node = bfs[bi][bii];
+//            cout << "name = " << node->getName().str() << endl;
 
             if(!string(node->getKindName()).compare("Save")) {
-                outputList[*outputCount] = node->getName().substr(0, node->getName().size() - 5);
+//                outputList[*outputCount] = node->getName().substr(0, node->getName().size() - 5);
+                std::string name = node->getName().substr(0, node->getName().size() - 5);
+                outputList->push_back(name);
+                partitionOutList_[name] = pi;
 //                cout << "output = " << node->getName().str() << endl;
 //                cout << "outputList[inputCount] = " << outputList[*outputCount] << std::endl;
 //                cout << "outputCount = " << *outputCount << std::endl;
-                (*outputCount)++;
+//                (*outputCount)++;
             } else {
 
                 for(int count = 0; count < node->getNumInputs(); count++) {
@@ -313,15 +320,15 @@ void NestPartitionerSchedule::setPartitionInputOutputList(Function* function, st
                             continue;
                         }
 
-                        inputList[*inputCount] = inNode->getName();
+//                        inputList[*inputCount] = inNode->getName();
+                        inputList->push_back(inNode->getName());
 
 //                        cout << "input = " << inNode->getKindName() << endl;
 //                        cout << "input = " << inNode->getName().str() << endl;
 //                        cout << "inputList[inputCount] = " << inputList[*inputCount] << std::endl;
 //                        cout << "inputCount = " << *inputCount << std::endl;
 
-                        (*inputCount)++;
-
+//                        (*inputCount)++;
                     }
                 }
             }
@@ -330,123 +337,164 @@ void NestPartitionerSchedule::setPartitionInputOutputList(Function* function, st
     }
 
 }
-void generateNonThreadCode(std::string &wfilec, int i, bool profileMode) {
-    if(profileMode == 1)
-    {
-        wfilec.append("\ttimeval start_" + std::to_string(i) + ";\n");
-        wfilec.append("\tgettimeofday(&start_"+std::to_string(i)+", NULL);\n");
-    }
-    wfilec.append("\tp" +
-                  std::to_string(i) + "(constantWeightVarsAddr" +
-                  std::to_string(i) + ", mutableWeightVarsAddr" +
-                  std::to_string(i) + ", activationsAddr" +
-                  std::to_string(i) + ");\n\n");
-    if(profileMode == 1)
-    {
-        wfilec.append("\ttimeval now_" + std::to_string(i) + ";\n");
-        wfilec.append("\tgettimeofday(&now_"+std::to_string(i)+", NULL);\n");
-        wfilec.append("\tdouble inftime_" +  std::to_string(i) + " = (now_" + std::to_string(i) + ".tv_sec - start_"+ std::to_string(i) +
-                      ".tv_sec)*1000000.0 + (now_"  + std::to_string(i) + ".tv_usec - start_" + std::to_string(i) + ".tv_usec);\n");
+void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi, bool profileMode, std::vector<std::string>* inputList) {
 
-        wfilec.append("\tdelay_time[" + std::to_string(i) + "] = inftime_" + std::to_string(i) + ";\n");
-        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(i) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(i) + "]);\n\n");
-    }
-}
+//    std::map<std::string, std::string> nodeToVarMap;
+//    std::map<std::string, std::string> nodeToPiMap;
 
-void generateThreadCode(std::string &wfilec, int i, bool profileMode) {
-    wfilec.append("#ifdef THREAD\n");
-    if(profileMode == 1) {
-        wfilec.append("\ttimeval start_" + std::to_string(i) + ";\n");
-        wfilec.append("\tgettimeofday(&start_"+std::to_string(i)+", NULL);\n");
-    }
-    wfilec.append("\tstd::thread t" + std::to_string(i - 1) + "(p" + std::to_string(i - 1) + ", constantWeightVarsAddr" + std::to_string(i - 1) + ", mutableWeightVarsAddr" + std::to_string(i - 1) + ", activationsAddr" + std::to_string(i - 1) + ");\n");
-    wfilec.append("\tstd::thread t" + std::to_string(i) + "(p" + std::to_string(i) + ", constantWeightVarsAddr" + std::to_string(i) + ", mutableWeightVarsAddr" + std::to_string(i) + ", activationsAddr" + std::to_string(i) + ");\n");
-    wfilec.append("\tt" + std::to_string(i - 1) + ".join();\n");
-    wfilec.append("\tt" + std::to_string(i) + ".join();\n");
-    if(profileMode == 1) {
-        wfilec.append("\ttimeval now_" + std::to_string(i) + ";\n");
-        wfilec.append("\tgettimeofday(&now_"+std::to_string(i)+", NULL);\n");
-        wfilec.append("\tdouble inftime_" +  std::to_string(i-1) + " = (now_" + std::to_string(i) + ".tv_sec - start_"+ std::to_string(i-1)
-                      + ".tv_sec)*1000000.0 + (now_" + std::to_string(i) + ".tv_usec - start_" + std::to_string(i-1)  + ".tv_usec);\n");
+    for(int cnt = 0; cnt < inputList->size(); cnt++) {
+        std::string varStr = "";
+        std::string varPi = "";
+        std::string nodeName = inputList->at(cnt);
 
-        wfilec.append("\tdelay_time[" + std::to_string(i - 1) + "] = inftime_" + std::to_string(i-1) + ";\n");
-        wfilec.append("\tdelay_time[" + std::to_string(i) + "] = inftime_" + std::to_string(i-1) + ";\n");
-        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(i) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(i-1) + "]);\n\n");
-    }
-    wfilec.append("#else\n");
-    if(profileMode == 1) {
-        wfilec.append("\ttimeval start_" + std::to_string(i-1) + ";\n");
-        wfilec.append("\tgettimeofday(&start_"+std::to_string(i-1)+", NULL);\n");
-    }
-    wfilec.append("\tp" + std::to_string(i - 1) + "(constantWeightVarsAddr" + std::to_string(i - 1) + ", mutableWeightVarsAddr" + std::to_string(i - 1) + ", activationsAddr" + std::to_string(i - 1) + ");\n");
-    if(profileMode == 1) {
-        wfilec.append("\ttimeval now_" + std::to_string(i-1) + ";\n");
-        wfilec.append("\tgettimeofday(&now_"+std::to_string(i-1)+", NULL);\n");
-        wfilec.append("\tdouble inftime_" +  std::to_string(i-1) + " = (now_" + std::to_string(i) + ".tv_sec - start_"+ std::to_string(i-1)
-                      + ".tv_sec)*1000000.0 + (now_" + std::to_string(i) + ".tv_usec - start_" + std::to_string(i-1)  + ".tv_usec);\n");
+        auto iter = partitionOutList_.find(nodeName);
+        if(iter != partitionOutList_.end()) {
+            varPi = std::to_string(iter->second);
+            auto varIter = partitionOutVarList_.find(nodeName);
+            if( varIter != partitionOutVarList_.end()) {
+                varStr = partitionOutVarList_[nodeName];
+            } else {
+                if (inputList->size() == 1) {
+                    varStr = "inputVar" + std::to_string(pi);
+                } else {
+                    varStr = "inputVar" + std::to_string(pi) + "_" + std::to_string(cnt);
+                }
+                partitionOutVarList_[nodeName] = varStr;
+                if(pi > 0) {
+                    std::string rVarName =
+                            wfilec.append("\tfloat* " + varStr +
+                                          " = getInferenceResultVar(p" + varPi +
+                                          "_config, mutableWeightVarsAddr" + varPi +
+                                          ", \"" + inputList->at(cnt) + "\");\n");
+                }
+            }
+        } else {
+            std::cout << "No output: " << nodeName << std::endl;
+        }
 
-        wfilec.append("\tdelay_time[" + std::to_string(i - 1) + "] = inftime_" + std::to_string(i-1) + ";\n");
-        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(i-1) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(i-1) + "]);\n\n");
-    }
-    if(profileMode == 1) {
-        wfilec.append("\ttimeval start_" + std::to_string(i) + ";\n");
-        wfilec.append("\tgettimeofday(&start_"+std::to_string(i)+", NULL);\n");
-    }
-    wfilec.append("\tp" + std::to_string(i) + "(constantWeightVarsAddr" + std::to_string(i) + ", mutableWeightVarsAddr" + std::to_string(i) + ", activationsAddr" + std::to_string(i) + ");\n");
-    if(profileMode == 1) {
-        wfilec.append("\ttimeval now_" + std::to_string(i) + ";\n");
-        wfilec.append("\tgettimeofday(&now_"+std::to_string(i)+", NULL);\n");
-        wfilec.append("\tdouble inftime_" +  std::to_string(i) + " = (now_" + std::to_string(i) + ".tv_sec - start_"+
-                      std::to_string(i-1) + ".tv_sec)*1000000.0 + (now_" + std::to_string(i) + ".tv_usec - start_" + std::to_string(i-1) + ".tv_usec);\n");
-
-        wfilec.append("\t\tdelay_time[" + std::to_string(i) + "] = inftime_" + std::to_string(i) + ";\n");
-        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(i) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(i) + "]);\n\n");
-    }
-    wfilec.append("#endif\n\n");
-}
-
-void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
-//  cout << "generateMain: " << wfilec << endl;
-
-    std::cout << "Partition plan fileName : " << getPartitionPlanFile() << std::endl;
-    std::vector<std::string> parallelPartitions;
-    std::map<std::string, std::string> pmap = deserializeStrStrMapFromYaml(getPartitionPlanFile());
-    if(pmap.find("parallelPartitions") != pmap.end()) {
-        boost::split(parallelPartitions, pmap.find("parallelPartitions")->second, [](char c){return c == ':';});
-        for(int i = 0; i < parallelPartitions.size(); i++){
-            parallelPartitions[i] = replaceAll(parallelPartitions[i], "(", "");
-            parallelPartitions[i] = replaceAll(parallelPartitions[i], ")", "");
-            parallelPartitions[i] = parallelPartitions[i].substr(0, parallelPartitions[i].find("||"));
+        if(pi > 0) {
+            wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(pi) +
+                          "_config, mutableWeightVarsAddr" + std::to_string(pi) + ", \"" + inputList->at(cnt) + "\", " +
+                          varStr + ");\n");
         }
     }
 
-    if(parallelPartitions.size() > 0) {
-        wfilec.append("#define THREAD 1\n\n");
-        wfilec.append("#include <thread>\n\n");
+    if(profileMode == 1)
+    {
+        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+", NULL);\n");
     }
 
-    wfilec.append("int main(int argc, char **argv) {\n");
-    wfilec.append("\tparseCommandLineOptions(argc, argv);\n\n");
+    wfilec.append("\tp" +
+                  std::to_string(pi) + "(constantWeightVarsAddr" +
+                  std::to_string(pi) + ", mutableWeightVarsAddr" +
+                  std::to_string(pi) + ", activationsAddr" +
+                  std::to_string(pi) + ");\n\n");
 
-    bool vtaFlag = false;
-    for(int i = 0; i < partitionNum - 1; i++) {
-        if(!partitionConfig.backendNames[i].compare("VTA"))
-            vtaFlag = true;
+    if(profileMode == 1)
+    {
+        wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tgettimeofday(&now_"+std::to_string(pi)+", NULL);\n");
+        wfilec.append("\tdouble inftime_" +  std::to_string(pi) + " = (now_" + std::to_string(pi) + ".tv_sec - start_"+ std::to_string(pi) +
+                      ".tv_sec)*1000000.0 + (now_"  + std::to_string(pi) + ".tv_usec - start_" + std::to_string(pi) + ".tv_usec);\n");
+
+        wfilec.append("\tdelay_time[" + std::to_string(pi) + "] = inftime_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(pi) + "]);\n\n");
+    }
+}
+
+void NestPartitionerSchedule::generateThreadCall(std::string &wfilec, int pi, std::set<std::string>* pGroup, bool profileMode, std::vector<std::string>* inputList) {
+
+
+//    std::string pname = *(pGroup->begin());
+    for (int cnt = 0; cnt < inputList->size(); cnt++) {
+        std::string varStr = "";
+        std::string varPi = "";
+        std::string nodeName = inputList->at(cnt);
+
+        auto iter = partitionOutList_.find(nodeName);
+        if(iter != partitionOutList_.end()) {
+            varPi = std::to_string(iter->second);
+            auto varIter = partitionOutVarList_.find(nodeName);
+            if( varIter != partitionOutVarList_.end()) {
+                varStr = partitionOutVarList_[nodeName];
+            } else {
+                if (inputList->size() == 1) {
+                    varStr = "inputVar" + std::to_string(pi);
+                } else {
+                    varStr = "inputVar" + std::to_string(pi) + "_" + std::to_string(cnt);
+                }
+                partitionOutVarList_[nodeName] = varStr;
+                std::string rVarName =
+                        wfilec.append("\tfloat* " + varStr +
+                                      " = getInferenceResultVar(p" + varPi +
+                                      "_config, mutableWeightVarsAddr" + varPi +
+                                      ", \"" + inputList->at(cnt) + "\");\n");
+            }
+        } else {
+            std::cout << "No output: " << nodeName << std::endl;
+        }
+
+//        std::string rVarName =
+//                wfilec.append("\tfloat* " + varStr +
+//                              " = getInferenceResultVar(p" + varPi +
+//                              "_config, mutableWeightVarsAddr" + varPi +
+//                              ", \"" + inputList->at(cnt) + "\");\n");
+
+        for(auto gpname:*pGroup) {
+            std::string gpid = gpname.substr(1, gpname.length());
+            wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + gpid +
+                          "_config, mutableWeightVarsAddr" + gpid + ", \"" + inputList->at(cnt) + "\", " +
+                          varStr + ");\n");
+        }
     }
 
-    if(vtaFlag) {
-        wfilec.append("#ifdef VTAMAIN\n");
-        wfilec.append("\tinitVTARuntime();\n");
-        wfilec.append("#endif\n");
+    if (profileMode == 1) {
+        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tgettimeofday(&start_" + std::to_string(pi) + ", NULL);\n");
     }
 
-    wfilec.append("\t//======== initialize variables =======//\n\n");
+    wfilec.append("#ifdef THREAD\n");
+    for(auto gpname:*pGroup) {
+        std::string gpid = gpname.substr(1, gpname.length());
+        wfilec.append("\tstd::thread thread_p" + gpid + "(p" + gpid +", constantWeightVarsAddr" + gpid + ", mutableWeightVarsAddr" + gpid + ", activationsAddr" + gpid + ");\n");
+    }
+
+    for(auto gpname:*pGroup) {
+        std::string gpid = gpname.substr(1, gpname.length());
+        wfilec.append("\tthread_p" + gpid + ".join();\n");
+    }
+
+    wfilec.append("#else\n");
+    for(auto gpname:*pGroup) {
+        std::string gpid = gpname.substr(1, gpname.length());
+        wfilec.append("\t" + gpname + "(constantWeightVarsAddr" +gpid +
+        ", mutableWeightVarsAddr" + gpid + ", activationsAddr" + gpid + ");\n");
+    }
+    wfilec.append("#endif\n");
+
+    if (profileMode == 1) {
+        wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tgettimeofday(&now_" + std::to_string(pi) + ", NULL);\n");
+        wfilec.append(
+                "\tdouble inftime_" + std::to_string(pi) + " = (now_" + std::to_string(pi) + ".tv_sec - start_" +
+                std::to_string(pi) +
+                ".tv_sec)*1000000.0 + (now_" + std::to_string(pi) + ".tv_usec - start_" + std::to_string(pi) +
+                ".tv_usec);\n");
+
+        wfilec.append("\tdelay_time[" + std::to_string(pi) + "] = inftime_" + std::to_string(pi) + ";\n");
+        wfilec.append(
+                "\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " time] %lu microsec.\\n\", delay_time[" +
+                std::to_string(pi) + "]);\n\n");
+    }
+}
+
+void generateWeightVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs) {
+    wfilec.append("\t//======== Declaration & initialization of weight variables =======//\n\n");
 //  cout << "//======== initialize variables start =======//" << endl;
     std::string inputName;
-
-    BFSLevel bfs = getBFSLevel(funcList[0]);
+//    BFSLevel bfs = getBFSLevel(funcList[0]);
     size_t level = bfs.size();
-
     std::string kindName_check;
     for (int i2 = level - 1; i2 >= 0; i2--) {
         Node *node = bfs[i2][0];
@@ -471,15 +519,127 @@ void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum
         wfilec.append("\tuint8_t *activationsAddr" + std::to_string(i) +
                       " = initActivations(p" + std::to_string(i) + "_config);\n\n");
     }
+}
+
+void getParallelGroup(std::vector<std::set<std::string>> parallelPartitions, int pid, std::set<std::string>* pGroup) {
+
+   std::string pidStr = "p"+std::to_string(pid);
+    for(auto idSet:parallelPartitions) {
+        if(idSet.find(pidStr) != idSet.end()) {
+            pGroup->insert(idSet.begin(), idSet.end());
+            return;
+        }
+    }
+}
+
+void NestPartitionerSchedule::generatePartitionCall(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
+
+
+    std::vector<std::string> processedPP;
+    for(int pi = 0; pi < partitionNum - 1; pi++) {
+
+        auto func = funcList[pi];
+        //int isParallel = false;
+
+        std::vector<std::string> inputList;
+        std::vector<std::string> outputList;
+
+        setPartitionInputOutputList(func, &inputList, &outputList, pi);
+
+//        partitionInList_[pi] = inputList;
+
+//        std::cout << "in = " << inputList.size() << std::endl;
+//        std::cout << "out = " << outputList.size() << std::endl;
+
+        std::set<std::string> pGroup;
+        getParallelGroup(partitionConfig.parallelPartitions, pi, &pGroup);
+        if(std::find(processedPP.begin(), processedPP.end(), "p"+std::to_string(pi)) != processedPP.end())
+            continue;
+
+        //first partition
+        if(pi == 0) { //first partition, input: image data
+            wfilec.append("\ttimeval t1, t2;\n");
+            wfilec.append("\tgettimeofday(&t1, NULL);\n\n");
+        }
+
+        //partition call
+        if(pGroup.size() == 0) {
+            generateNonThreadCall(wfilec, pi, profileMode_, &inputList);
+        } else {
+            //same input
+            generateThreadCall(wfilec, pi, &pGroup, profileMode_, &inputList);
+            processedPP.insert(processedPP.end(), pGroup.begin(), pGroup.end());
+        }
+
+
+        if(profileMode_ == 1) {
+            wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
+            wfilec.append("\tgettimeofday(&now_"+std::to_string(pi)+", NULL);\n");
+            wfilec.append("\tdouble inftime_" +  std::to_string(pi) + " = (now_" + std::to_string(pi) + ".tv_sec - start_"+
+                          std::to_string(pi) + ".tv_sec)*1000000.0 + (now_" + std::to_string(pi) + ".tv_usec - start_" + std::to_string(pi) + ".tv_usec);\n");
+            wfilec.append("\tdelay_time[" + std::to_string(pi) + "] = inftime_" + std::to_string(pi) + ";\n");
+            wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(pi) + "]);\n\n");
+        }
+
+        //last partition
+        if (pi == partitionNum - 2) { //last partition
+            wfilec.append("\tgettimeofday(&t2, NULL);\n");
+            wfilec.append("\tdouble inftime_total = (t2.tv_sec - t1.tv_sec)*1000000.0 + (t2.tv_usec - t1.tv_usec);\n");
+            wfilec.append("\tprintf(\"\\n====> [Total inference time] %.4f msec.\\n\", inftime_total);\n\n");
+
+
+            wfilec.append("\t// Report the results.\n");
+            wfilec.append("\tprintf(\"====== final result of this neural net ========\\n\");\n");
+            wfilec.append("\tdumpInferenceResults(p" + std::to_string(pi) +
+                          "_config, mutableWeightVarsAddr" + std::to_string(pi) +
+                          ", \"" + outputList.at(0) + "\");\n\n");
+            break;
+        }
+    }
+
+}
+
+
+void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
+//  cout << "generateMain: " << wfilec << endl;
+
+    std::cout << "Partition plan fileName : " << getPartitionPlanFile() << std::endl;
+    std::map<std::string, std::string> pmap = deserializeStrStrMapFromYaml(getPartitionPlanFile());
+
+    if(partitionConfig.parallelPartitions.size() > 0) {
+        wfilec.append("#define THREAD 1\n\n");
+        wfilec.append("#include <thread>\n\n");
+    }
+
+    wfilec.append("int main(int argc, char **argv) {\n");
+    wfilec.append("\tparseCommandLineOptions(argc, argv);\n\n");
+
+    bool vtaFlag = false;
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if(!partitionConfig.backendNames[i].compare("VTA"))
+            vtaFlag = true;
+    }
+
+    if(vtaFlag) {
+        wfilec.append("#ifdef VTAMAIN\n");
+        wfilec.append("\tinitVTARuntime();\n");
+        wfilec.append("\tinitVTARuntime1();\n");
+        wfilec.append("\tinitVTARuntime2();\n");
+        wfilec.append("\tinitVTARuntime3();\n");
+        wfilec.append("#endif\n");
+    }
+
+    generateWeightVarInit(wfilec, partitionNum, getBFSLevel(funcList[0]));
 
     //  cout << "//======== initialize mutableWeightVarsAddr start =======//" << endl;
-    wfilec.append("\t//======== initialize mutableWeightVarsAddr =======//\n\n");
+    wfilec.append("\t//======== Declaration and initialization of mutable variables =======//\n\n");
     for(int i = 1; i < partitionNum - 1; i++) {
         wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) + " =  allocateMutableWeightVars(p" +
                       std::to_string(i) + "_config);\n");
     }
     wfilec.append("\n");
 
+    //  cout << "//======== call xx_load_module() =======//" << endl;
     for(int i = 0; i < partitionNum - 1; i++) {
         if(!partitionConfig.backendNames[i].compare("VTA")){
             wfilec.append("\tp" + std::to_string(i) + "_load_module(constantWeightVarsAddr" + std::to_string(i) + ");\n");
@@ -487,207 +647,8 @@ void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum
     }
     wfilec.append("\n");
 
-    // cout << "//======== multiple partitions start =======//" << endl;
-    wfilec.append("\t//======== multiple partitions =======//\n\n");
-    if(profileMode_ == 1) {
-        wfilec.append("\tunsigned long totalInftime;\n\n");
-    }
+    generatePartitionCall(wfilec, partitionNum, funcList, partitionConfig);
 
-    int resultNum = 0;
-    int resultVarNum = 0;
-    string resultList[partitionNum*2];
-    string resultCheckList[partitionNum*2];
-
-    for(int i = 0; i < partitionNum - 1; i++) {
-        auto func = funcList[i];
-        int inputCount = 0;
-        int outputCount = 0;
-        int checkResultNum = 0;
-        bool flag = false;
-
-        string inputList[maxInOut];
-        string outputList[maxInOut];
-
-        setPartitionInputOutputList(func, inputList, outputList, &inputCount, &outputCount);
-        std::string outputName = func->getNodes().back().getName().trim("_save");
-
-        if(i == 0) {
-            wfilec.append("\ttimeval t1, t2;\n");
-            wfilec.append("\tgettimeofday(&t1, NULL);\n\n");
-
-            if(profileMode_ == 1) {
-                wfilec.append("\ttimeval start_" + std::to_string(i) + ";\n");
-                wfilec.append("\tgettimeofday(&start_"+std::to_string(i)+", NULL);\n");
-            }
-
-            wfilec.append("\tp" +
-                          std::to_string(i) + "(constantWeightVarsAddr" +
-                          std::to_string(i) + ", mutableWeightVarsAddr" +
-                          std::to_string(i) + ", activationsAddr" +
-                          std::to_string(i) + ");\n\n");
-
-            if(profileMode_ == 1) {
-                wfilec.append("\ttimeval now_" + std::to_string(i) + ";\n");
-                wfilec.append("\tgettimeofday(&now_"+std::to_string(i)+", NULL);\n");
-                wfilec.append("\tdouble inftime_" +  std::to_string(i) + " = (now_" + std::to_string(i) + ".tv_sec - start_"+
-                              std::to_string(i) + ".tv_sec)*1000000.0 + (now_" + std::to_string(i) + ".tv_usec - start_" + std::to_string(i) + ".tv_usec);\n");
-                wfilec.append("\tdelay_time[" + std::to_string(i) + "] = inftime_" + std::to_string(i) + ";\n");
-                wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(i) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(i) + "]);\n\n");
-            }
-
-            if(outputCount == 1) {
-                std::string rVarName = "resultVar" + std::to_string(resultVarNum);
-                wfilec.append("\tfloat* " + rVarName +
-                              " = getInferenceResultVar(p" + std::to_string(i) +
-                              "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                              ", \"" + outputList[0] + "\");\n");
-
-                resultCheckList[resultNum] = std::to_string(resultVarNum);
-                resultList[resultNum] = outputList[0];
-                resultNum++;
-            } else {
-                for(int outputNum = 0; outputNum < outputCount; outputNum++) {
-                    std::string rVarName = "resultVar" + std::to_string(resultVarNum)  + "_" + std::to_string(outputNum + 1);
-                    wfilec.append("\tfloat* " + rVarName +
-                                  " = getInferenceResultVar(p" + std::to_string(i) +
-                                  "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                                  ", \"" + outputList[outputNum] + "\");\n");
-
-                    resultCheckList[resultNum] = std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
-                    resultList[resultNum] = outputList[outputNum];
-                    resultNum++;
-                }
-            }
-            resultVarNum++;
-        } else {
-
-            for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-                if(!resultList[checkCount].compare(inputList[0])) {
-                    flag = true;
-                    checkResultNum = checkCount;
-                }
-            }
-
-            // 기존 선언된 resultVar 중 중복된 inputName이 없다면, 해당 로직 필요 여부 체크
-            if(!flag)  {
-                if(resultNum != 0)
-                    checkResultNum = resultNum - 1; // 앞에서 선언한 resultVar 호출, inputName 중복이면 checkCount resultVar 호출
-            }
-            wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(i) +
-                          "_config, mutableWeightVarsAddr" + std::to_string(i) + ", \"" + inputList[0] + "\", resultVar" + resultCheckList[checkResultNum] + ");\n");
-        }
-
-        if(i != 0 && inputList->size() > 1) {
-            for(int count = 1; count < inputList->size(); count++) {
-                if(!inputList[count].compare("")) {
-                    break;
-                    //continue;
-                }
-
-                for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-                    if(!resultList[checkCount].compare(inputList[count])) {
-                        flag = true;
-                        checkResultNum = checkCount;
-                    }
-                }
-
-                if(!flag) { // 기존 선언된 resultVar 중 중복된 inputName이 없다면, 해당 로직 필요 여부 체크
-                    if(resultNum != 0)
-                        checkResultNum = resultNum - 1; // 앞에서 선언한 resultVar 호출, inputName 중복이면 checkCount resultVar 호출
-                }
-
-                flag = true;
-                for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-                    if((checkCount != count) && (!inputList[checkCount].compare(inputList[count]))) {
-                        flag = false;
-                    }
-                }
-                if(flag) {
-                    wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(i) + "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                                  ", \"" + inputList[count] + "\", resultVar" + resultCheckList[checkResultNum] + ");\n");
-                }
-                flag = false;
-
-            }
-            wfilec.append("\n");
-        }
-
-        if(parallelPartitions.size() > 0) {
-            for(int partitionCount = 0; partitionCount < parallelPartitions.size(); partitionCount++) {
-                if(!parallelPartitions[partitionCount].compare("p" + std::to_string(i - 1))) {
-                    generateThreadCode(wfilec, i, profileMode_);
-                }
-            }
-        }
-
-        if(i != 0) {
-            bool notParallelPartition = true;
-            if(parallelPartitions.size() > 0){
-                for(int partitionCount = 0; partitionCount < parallelPartitions.size(); partitionCount++) {
-                    if (!parallelPartitions[partitionCount].compare("p" + std::to_string(i - 1))){
-                        notParallelPartition = false;
-                    }
-                    if (!parallelPartitions[partitionCount].compare("p" + std::to_string(i))){
-                        notParallelPartition = false;
-                    }
-                }
-            }
-
-            if(notParallelPartition) {
-                generateNonThreadCode(wfilec, i, profileMode_);
-            }
-
-            if (i == partitionNum - 2) {
-                wfilec.append("\tgettimeofday(&t2, NULL);\n");
-                wfilec.append("\tdouble inftime_total = (t2.tv_sec - t1.tv_sec)*1000000.0 + (t2.tv_usec - t1.tv_usec);\n");
-                wfilec.append("\tprintf(\"\\n====> [Total inference time] %.4f msec.\\n\", inftime_total);\n\n");
-
-
-                wfilec.append("\t// Report the results.\n");
-                wfilec.append("\tprintf(\"====== final result of this neural net ========\\n\");\n");
-                wfilec.append("\tdumpInferenceResults(p" + std::to_string(i) +
-                              "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                              ", \"" + outputName + "\");\n\n");
-            } else {
-                bool flag = true;
-                for(int checkCount = 0; checkCount < resultNum; checkCount++) {
-                    // outputName 중복 여부 체크
-                    if(!resultList[checkCount].compare(outputName))
-                        flag = false;
-                }
-
-                // output 개수에 따른 resultVar값 선언 부분 수정 필요
-                // 중복된 inputName이 없다면(전 파티션 outputName들 비교)
-                if(flag) {
-                    if(outputCount == 1) {
-                        std::string rVarName = "resultVar" + std::to_string(resultVarNum);
-                        wfilec.append("\tfloat* " + rVarName +
-                                      " = getInferenceResultVar(p" + std::to_string(i) +
-                                      "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                                      ", \"" + outputList[0] + "\");\n");
-
-                        resultCheckList[resultNum] = std::to_string(resultVarNum);
-                        resultList[resultNum] = outputList[0];
-                        resultNum++;
-                    } else {
-
-                        for(int outputNum = 0; outputNum < outputCount; outputNum++) {
-                            std::string rVarName = "resultVar" + std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
-                            wfilec.append("\tfloat* " + rVarName +
-                                          " = getInferenceResultVar(p" + std::to_string(i) +
-                                          "_config, mutableWeightVarsAddr" + std::to_string(i) +
-                                          ", \"" + outputList[outputNum] + "\");\n");
-
-                            resultCheckList[resultNum] = std::to_string(resultVarNum) + "_" + std::to_string(outputNum + 1);
-                            resultList[resultNum] = outputList[outputNum];
-                            resultNum++;
-                        }
-                    }
-                    resultVarNum++;
-                }
-            }
-        }
-    }
 }
 
 void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName) {
@@ -722,8 +683,7 @@ void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, s
         writeFileC << inference_main;
         writeFileC << memfree;
 
-        if(profileMode_ == 1)
-        {
+        if(profileMode_ == 1) {
             generateYamlFile(yamlFile, partitionNum, funcList, partitionConfig, inputPartitionName);
             writeFileC << yamlFile;
         }
@@ -734,7 +694,6 @@ void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, s
     if(partitionExeMode_ == 1) {
         generateMainforEachPartition(partitionNum, funcList, partitionConfig);
     }
-
 
     //CMakeLists.txt
     ofstream writeMakeFileC;
@@ -759,14 +718,10 @@ void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t
     wfilec.append("\tOUTPUT\n");
 
     wfilec.append("\t");
-    for(int i = 0; i < partitionNum - 1; i++)
-    {
-        if(!partitionConfig.backendNames[i].compare("CPU"))
-        {
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if(!partitionConfig.backendNames[i].compare("CPU")) {
             wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
-        }
-        else if(!partitionConfig.backendNames[i].compare("VTA"))
-        {
+        } else if(!partitionConfig.backendNames[i].compare("VTA")) {
             wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
         }
     }
@@ -775,13 +730,10 @@ void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t
     for(int i = 0; i < partitionNum - 1; i++) {
         wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
 
-        if(!partitionConfig.backendNames[i].compare("CPU"))
-        {
+        if(!partitionConfig.backendNames[i].compare("CPU")) {
             wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".o\n");
             wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o\n");
-        }
-        else if(!partitionConfig.backendNames[i].compare("VTA"))
-        {
+        } else if(!partitionConfig.backendNames[i].compare("VTA")) {
             wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".cpp\n");
             wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp\n");
         }
@@ -804,14 +756,12 @@ void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t
     wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_template.h\n\n");
 
     bool vtaFlag = false;
-    for(int i = 0; i < partitionNum - 1; i++)
-    {
+    for(int i = 0; i < partitionNum - 1; i++) {
         if(!partitionConfig.backendNames[i].compare("VTA"))
             vtaFlag = true;
     }
 
-    if(vtaFlag)
-    {
+    if(vtaFlag) {
         wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
         wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/VTARuntime.h\n");
         wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h\n\n");
@@ -974,8 +924,7 @@ string NestPartitionerSchedule::replaceAll(std::string &str, std::string pattern
     string result = str;
     string::size_type pos = 0;
     string::size_type offset = 0;
-    while ((pos = result.find(pattern, offset)) != std::string::npos)
-    {
+    while ((pos = result.find(pattern, offset)) != std::string::npos) {
         result.replace(result.begin() + pos, result.begin() + pos + pattern.size(), replace);
         offset = pos + replace.size();
     }

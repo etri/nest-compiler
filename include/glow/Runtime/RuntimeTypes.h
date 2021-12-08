@@ -302,6 +302,8 @@ struct PartitionConfig {
   /// count is not specified for a partition the default will be one copy of the
   /// partition loaded [PartitionID, replicationCount].
   std::map<unsigned, unsigned> replicationCount;
+  //parallel partitions
+  std::vector<std::set<std::string>> parallelPartitions;
 
   PartitionConfig() : numOfPartitions(0) {}
   bool enabled() { return numOfPartitions > 0; }

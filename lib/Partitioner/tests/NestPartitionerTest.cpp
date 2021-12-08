@@ -31,12 +31,11 @@ TEST(NestPartitionerTest, ParallelBranchInputTest) {
     NestPartitionerSchedule appGen;
     Function* function = M.getFunctions().front();
 
-    std::string inputList[maxInOut];
-    std::string outputList[maxInOut];
-    int inputCount = 0;
-    int outputCount = 0;
+    std::vector<std::string> inputList;
+    std::vector<std::string> outputList;
 
-    appGen.setPartitionInputOutputList(function, inputList, outputList, &inputCount, &outputCount);
+    appGen.setPartitionInputOutputList(function, &inputList, &outputList, 0);
 
-    EXPECT_TRUE(inputCount == 2);
+    EXPECT_TRUE(inputList.size() == 2);
+
 }
