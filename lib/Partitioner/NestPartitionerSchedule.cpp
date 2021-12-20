@@ -48,25 +48,19 @@ void NestPartitionerSchedule::generateDeclaration(string& wfilec, int partitionN
         wfilec.append("#define REPEAT 1\n\n");
     }
 
-    bool vtaFlag = false;
-    for(int i = 0; i < partitionNum - 1; i++)
-    {
+    bool vtaFlag = false, relayFlag = false;
+    for(int i = 0; i < partitionNum - 1; i++) {
         if(!partitionConfig.backendNames[i].compare("VTA"))
             vtaFlag = true;
+
+        if(!partitionConfig.backendNames[i].compare("Relay"))
+            relayFlag = true;
     }
 
-    if(vtaFlag)
-    {
-        wfilec.append("#define VTAMAIN\n\n");
-    }
+    wfilec.append("#include \"main_template.h\"\n");
 
-    wfilec.append("#include \"main_template.h\"\n\n");
-
-    if(vtaFlag)
-    {
-        wfilec.append("#ifdef VTAMAIN\n");
+    if(vtaFlag) {
         wfilec.append("#include \"VTARuntime.h\"\n");
-        wfilec.append("#endif\n\n");
     }
 
     for(int i = 0; i < partitionNum - 1; i++)
@@ -77,9 +71,15 @@ void NestPartitionerSchedule::generateDeclaration(string& wfilec, int partitionN
     wfilec.append("\n");
 
     wfilec.append("#include <sys/time.h>\n\n");
-    if(profileMode_ == 1) {
-        //wfilec.append("#include <time.h>\n\n");
 
+    if(relayFlag) {
+        wfilec.append("#include <dlpack/dlpack.h>\n"
+                      "#include <tvm/runtime/module.h>\n"
+                      "#include <tvm/runtime/packed_func.h>\n"
+                      "#include <tvm/runtime/registry.h>\n\n");
+    }
+
+    if(profileMode_ == 1) {
         wfilec.append("#define ARRAY_LENGTH " + std::to_string(partitionNum) + "\n");
         wfilec.append("unsigned long delay_time[ARRAY_LENGTH];\n\n");
     }
@@ -174,7 +174,7 @@ void NestPartitionerSchedule::generateYamlFile(string& wfilec, std::size_t parti
 void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
 
     for(int i = 0; i < partitionNum - 1; i++) {
-        if(!partitionConfig.backendNames[i].compare("VTA")) {
+        if(!partitionConfig.backendNames[i].compare("VTA") || !partitionConfig.backendNames[i].compare("Relay")) {
             wfilec.append("\tp" + std::to_string(i) + "_destroy_module();\n");
         }
     }
@@ -187,19 +187,22 @@ void NestPartitionerSchedule::generateFree(string& wfilec, int partitionNum, std
     }
 
     if(vtaFlag) {
-        wfilec.append("#ifdef VTAMAIN\n");
+//        wfilec.append("#ifdef VTAMAIN\n");
         wfilec.append("\tdestroyVTARuntime();\n");
         wfilec.append("\tdestroyVTARuntime1();\n");
         wfilec.append("\tdestroyVTARuntime2();\n");
         wfilec.append("\tdestroyVTARuntime3();\n");
-        wfilec.append("#endif\n");
+//        wfilec.append("#endif\n");
     }
     wfilec.append("\n");
 
     wfilec.append("\t// Free all resources.\n");
 
     for(int i = 0; i < partitionNum - 1; i++) {
-        wfilec.append("\tfree(activationsAddr" + std::to_string(i) + ");\n");
+
+        if (!partitionConfig.backendNames[i].compare("VTA") || !partitionConfig.backendNames[i].compare("CPU")) {
+            wfilec.append("\tfree(activationsAddr" + std::to_string(i) + ");\n");
+        }
         wfilec.append("\tfree(constantWeightVarsAddr" + std::to_string(i) + ");\n");
         wfilec.append("\tfree(mutableWeightVarsAddr" + std::to_string(i) + ");\n\n");
     }
@@ -245,13 +248,13 @@ void NestPartitionerSchedule::generateMainforEachPartition(int partitionNum, std
         //std::cout << "partition key = " << key << std::endl;
         std::string partitionMainStr(partitionMainTemplate.c_str());
         std::string pid = std::to_string(i);
-        std::string outfile_c = outputDir_ + "/p" + pid + "_main.cpp";
+        std::string mainSubFileName = outputDir_ + "/p" + pid + "_main.cpp";
         if (!llvm::sys::fs::is_directory(outputDir_)) {
             llvm::sys::fs::create_directory(outputDir_);
         }
 
         ofstream writeFileC;
-        writeFileC.open(outfile_c.data());
+        writeFileC.open(mainSubFileName.data());
         if(writeFileC.is_open()) {
             if(!partitionConfig.backendNames[i].compare("VTA")) {
                 boost::replace_all(partitionMainStr, "$0", "#include \"VTARuntime.h\"\n");
@@ -391,8 +394,7 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
                   std::to_string(pi) + ", activationsAddr" +
                   std::to_string(pi) + ");\n\n");
 
-    if(profileMode == 1)
-    {
+    if(profileMode == 1) {
         wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
         wfilec.append("\tgettimeofday(&now_"+std::to_string(pi)+", NULL);\n");
         wfilec.append("\tdouble inftime_" +  std::to_string(pi) + " = (now_" + std::to_string(pi) + ".tv_sec - start_"+ std::to_string(pi) +
@@ -489,8 +491,8 @@ void NestPartitionerSchedule::generateThreadCall(std::string &wfilec, int pi, st
     }
 }
 
-void generateWeightVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs) {
-    wfilec.append("\t//======== Declaration & initialization of weight variables =======//\n\n");
+void generateVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs, const PartitionConfig &partitionConfig) {
+    wfilec.append("\n\t//======== Declaration & initialization of weight variables =======//\n\n");
 //  cout << "//======== initialize variables start =======//" << endl;
     std::string inputName;
 //    BFSLevel bfs = getBFSLevel(funcList[0]);
@@ -506,10 +508,14 @@ void generateWeightVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs) 
     }
 
     for(int i = 0; i < partitionNum - 1; i++) {
-        wfilec.append("\tuint8_t *constantWeightVarsAddr" + std::to_string(i) +
-                      " = \n\t\tinitConstantWeights(\"p" + std::to_string(i) +
-                      ".weights.bin\", p" + std::to_string(i) + "_config);\n");
-
+        if(!partitionConfig.backendNames[i].compare("Relay")) {
+            wfilec.append("\tuint8_t *constantWeightVarsAddr" + std::to_string(i) +
+                          " = NULL;\n");
+        } else {
+                wfilec.append("\tuint8_t *constantWeightVarsAddr" + std::to_string(i) +
+                              " = \n\t\tinitConstantWeights(\"p" + std::to_string(i) +
+                              ".weights.bin\", p" + std::to_string(i) + "_config);\n");
+        }
         if (i == 0) {
             wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) +
                           " = initMutableWeightVars(p" + std::to_string(i) +
@@ -519,6 +525,26 @@ void generateWeightVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs) 
         wfilec.append("\tuint8_t *activationsAddr" + std::to_string(i) +
                       " = initActivations(p" + std::to_string(i) + "_config);\n\n");
     }
+
+
+    //  cout << "//======== initialize mutableWeightVarsAddr start =======//" << endl;
+    wfilec.append("\t//======== Declaration and initialization of mutable variables =======//\n\n");
+    for(int i = 1; i < partitionNum - 1; i++) {
+        wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) + " =  allocateMutableWeightVars(p" +
+                      std::to_string(i) + "_config);\n");
+    }
+    wfilec.append("\n");
+
+    //  cout << "//======== call xx_load_module() =======//" << endl;
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if (!partitionConfig.backendNames[i].compare("Relay")){
+            wfilec.append("\tp" + std::to_string(i) + "_load_module(0);\n");
+        } else if(!partitionConfig.backendNames[i].compare("VTA")){
+                wfilec.append("\tp" + std::to_string(i) + "_load_module(constantWeightVarsAddr" + std::to_string(i) + ");\n");
+        }
+    }
+    wfilec.append("\n");
+
 }
 
 void getParallelGroup(std::vector<std::set<std::string>> parallelPartitions, int pid, std::set<std::string>* pGroup) {
@@ -571,16 +597,6 @@ void NestPartitionerSchedule::generatePartitionCall(std::string &wfilec, int par
             processedPP.insert(processedPP.end(), pGroup.begin(), pGroup.end());
         }
 
-
-        if(profileMode_ == 1) {
-            wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
-            wfilec.append("\tgettimeofday(&now_"+std::to_string(pi)+", NULL);\n");
-            wfilec.append("\tdouble inftime_" +  std::to_string(pi) + " = (now_" + std::to_string(pi) + ".tv_sec - start_"+
-                          std::to_string(pi) + ".tv_sec)*1000000.0 + (now_" + std::to_string(pi) + ".tv_usec - start_" + std::to_string(pi) + ".tv_usec);\n");
-            wfilec.append("\tdelay_time[" + std::to_string(pi) + "] = inftime_" + std::to_string(pi) + ";\n");
-            wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(pi) + "]);\n\n");
-        }
-
         //last partition
         if (pi == partitionNum - 2) { //last partition
             wfilec.append("\tgettimeofday(&t2, NULL);\n");
@@ -621,51 +637,94 @@ void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum
     }
 
     if(vtaFlag) {
-        wfilec.append("#ifdef VTAMAIN\n");
+//        wfilec.append("#ifdef VTAMAIN\n");
         wfilec.append("\tinitVTARuntime();\n");
         wfilec.append("\tinitVTARuntime1();\n");
         wfilec.append("\tinitVTARuntime2();\n");
         wfilec.append("\tinitVTARuntime3();\n");
-        wfilec.append("#endif\n");
+//        wfilec.append("#endif\n");
     }
 
-    generateWeightVarInit(wfilec, partitionNum, getBFSLevel(funcList[0]));
-
-    //  cout << "//======== initialize mutableWeightVarsAddr start =======//" << endl;
-    wfilec.append("\t//======== Declaration and initialization of mutable variables =======//\n\n");
-    for(int i = 1; i < partitionNum - 1; i++) {
-        wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) + " =  allocateMutableWeightVars(p" +
-                      std::to_string(i) + "_config);\n");
-    }
-    wfilec.append("\n");
-
-    //  cout << "//======== call xx_load_module() =======//" << endl;
-    for(int i = 0; i < partitionNum - 1; i++) {
-        if(!partitionConfig.backendNames[i].compare("VTA")){
-            wfilec.append("\tp" + std::to_string(i) + "_load_module(constantWeightVarsAddr" + std::to_string(i) + ");\n");
-        }
-    }
-    wfilec.append("\n");
-
+    generateVarInit(wfilec, partitionNum, getBFSLevel(funcList[0]), partitionConfig);
     generatePartitionCall(wfilec, partitionNum, funcList, partitionConfig);
 
 }
 
 void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName) {
-    std::cout << "getnerateCodeFromModels Start" << std::endl;
+    std::cout << "generateCodeFromModels Start" << std::endl;
 
-//  std::cout << "out dir = " << outputDir_ << std::endl;
+    generateMainFile(partitionNum, funcList, partitionConfig, inputPartitionName);
+    generateCMakeListsFile(partitionNum, partitionConfig);
+    generateRelayFile(partitionNum, partitionConfig);
+}
 
-    string outfile_c = outputDir_ + "/main.cpp";
-    string make_outfile_c = outputDir_ + "/CMakeLists.txt";
+#include <stdlib.h>
+void NestPartitionerSchedule::generateRelayFile(std::size_t partitionNum, const PartitionConfig &partitionConfig) {
+    string genRelayFileName = outputDir_ + "/genRelay.sh";
+    bool isRelay = false;
+
+    for(int i = 0; i < partitionNum - 1; i++) {
+        if(!partitionConfig.backendNames[i].compare("Relay")) {
+            isRelay = true;
+            break;
+        }
+    }
+
+    if(!isRelay)
+        return;
+
+    ofstream writeRelaySHFile;
+    writeRelaySHFile.open(genRelayFileName.data());
+    if(writeRelaySHFile.is_open()) {
+        string relaySH;
+
+        for(int i = 0; i < partitionNum - 1; i++) {
+            if(!partitionConfig.backendNames[i].compare("Relay")) {
+                relaySH.append("python3 relay__p" + std::to_string(i) + "/genCode.py\n");
+            }
+        }
+        writeRelaySHFile << relaySH;
+        writeRelaySHFile.close();
+
+        string cmd = "chmod 755 " + genRelayFileName;
+        system(cmd.data());
+
+    }
+
+    string genBundleFileName = outputDir_ + "/genBundleObj.sh";
+    ofstream writeBundleSHFile;
+    writeBundleSHFile.open(genBundleFileName.data());
+    if(writeBundleSHFile.is_open()) {
+        string bundleSH;
+
+        for(int i = 0; i < partitionNum - 1; i++) {
+            if(!partitionConfig.backendNames[i].compare("Relay")) {
+                bundleSH.append("cd module__p" + std::to_string(i) + ";make;cd ..\n");
+            }
+        }
+
+        writeBundleSHFile << bundleSH;
+        writeBundleSHFile.close();
+
+        string cmd = "chmod 755 " + genBundleFileName;
+        system(cmd.data());
+    }
+
+    string cmd = "chmod 755 " + genBundleFileName;
+    system(cmd.data());
+}
+
+void NestPartitionerSchedule::generateMainFile(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName) {
+
+    string mainFileName = outputDir_ + "/main.cpp";
 
     if (!llvm::sys::fs::is_directory(outputDir_)) {
         llvm::sys::fs::create_directory(outputDir_);
     }
-    ofstream writeFileC;
-    writeFileC.open(outfile_c.data());
+    ofstream writeMainFile;
+    writeMainFile.open(mainFileName.data());
 
-    if(writeFileC.is_open()) {
+    if(writeMainFile.is_open()) {
         string declare;
         string initialize;
         string inference_main;
@@ -673,205 +732,233 @@ void NestPartitionerSchedule::generateCodeFromModels(std::size_t partitionNum, s
         string yamlFile;
         std::vector<std::string> resultVarList;
 
-        generateDeclaration(declare, partitionNum, partitionConfig); // 헤더 선언
+        generateDeclaration(declare, partitionNum, partitionConfig);
         generateMain(inference_main, partitionNum, funcList, partitionConfig);
         generateFree(memfree, partitionNum, funcList, partitionConfig);
 
-        writeFileC << declare;
-        writeFileC << initialize;
+        writeMainFile << declare;
+        writeMainFile << initialize;
         //writeFileC << inference;
-        writeFileC << inference_main;
-        writeFileC << memfree;
+        writeMainFile << inference_main;
+        writeMainFile << memfree;
 
         if(profileMode_ == 1) {
             generateYamlFile(yamlFile, partitionNum, funcList, partitionConfig, inputPartitionName);
-            writeFileC << yamlFile;
+            writeMainFile << yamlFile;
         }
-
-        writeFileC.close();
+        writeMainFile.close();
     }
 
     if(partitionExeMode_ == 1) {
         generateMainforEachPartition(partitionNum, funcList, partitionConfig);
     }
 
-    //CMakeLists.txt
-    ofstream writeMakeFileC;
-    writeMakeFileC.open(make_outfile_c.data());
-    if(writeMakeFileC.is_open()) {
-        string cmakeFile;
-
-        generateCMakeListsFile(cmakeFile, partitionNum, funcList, partitionConfig);
-        writeMakeFileC << cmakeFile;
-        writeMakeFileC.close();
-    }
-
-    std::cout << "main outfile position : " << outfile_c << std::endl;
-    std::cout << "CMakeLists outfile position : " << make_outfile_c << std::endl;
+    std::cout << "main outfile position : " << mainFileName << std::endl;
 }
 
+
 #include <random>
-void NestPartitionerSchedule::generateCMakeListsFile(string& wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
+void NestPartitionerSchedule::generateCMakeListsFile(std::size_t partitionNum, const PartitionConfig &partitionConfig) {
 //  std::cout << "== [Start] generateCMakeListsFile == " << std::endl;
 
-    wfilec.append("add_custom_command(\n");
-    wfilec.append("\tOUTPUT\n");
+    string makeFileName = outputDir_ + "/CMakeLists.txt";
+    ofstream writeMakeFile;
+    writeMakeFile.open(makeFileName.data());
+    if(writeMakeFile.is_open()) {
+        string cmakeFile;
 
-    wfilec.append("\t");
-    for(int i = 0; i < partitionNum - 1; i++) {
-        if(!partitionConfig.backendNames[i].compare("CPU")) {
-            wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
-        } else if(!partitionConfig.backendNames[i].compare("VTA")) {
-            wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
-        }
-    }
-    wfilec.append("\n\n");
+        cmakeFile.append("add_custom_command(\n");
+        cmakeFile.append("\tOUTPUT\n");
 
-    for(int i = 0; i < partitionNum - 1; i++) {
-        wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-
-        if(!partitionConfig.backendNames[i].compare("CPU")) {
-            wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".o\n");
-            wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o\n");
-        } else if(!partitionConfig.backendNames[i].compare("VTA")) {
-            wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".cpp\n");
-            wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp\n");
-        }
-    }
-    wfilec.append("\n");
-
-    for(int i = 0; i < partitionNum - 1; i++) {
-        wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-        wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".h\n");
-        wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".h\n");
-    }
-    wfilec.append("\n");
-
-    wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-    wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/main_header_test.h\n");
-    wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_header_test.h\n\n");
-
-    wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-    wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/main_template.h\n");
-    wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_template.h\n\n");
-
-    bool vtaFlag = false;
-    for(int i = 0; i < partitionNum - 1; i++) {
-        if(!partitionConfig.backendNames[i].compare("VTA"))
-            vtaFlag = true;
-    }
-
-    if(vtaFlag) {
-        wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-        wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/VTARuntime.h\n");
-        wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h\n\n");
-    }
-
-    for(int i = 0; i < partitionNum - 1; i++) {
-        wfilec.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-        wfilec.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".weights.bin\n");
-        wfilec.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".weights.bin\n");
-    }
-    wfilec.append("\t)\n");
-
-    srand((int)time(0));
-    std::string demoExeFileName = "demoExeFileName" + std::to_string(rand()%10000);
-
-    //std::cout << demoExeFileName << std::endl;
-
-    wfilec.append("add_custom_target("+demoExeFileName+"Net DEPENDS\n");
-    wfilec.append("\t");
-
-    bool isExistVTA = false;
-    for(int i = 0; i < partitionNum - 1; i++) {
-        if(!partitionConfig.backendNames[i].compare("CPU")) {
-            wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
-        }
-        else if(!partitionConfig.backendNames[i].compare("VTA")) {
-            wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
-            isExistVTA = true;
-        }
-    }
-    wfilec.append("\t)\n\n");
-
-    wfilec.append("INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})\n");
-    wfilec.append("add_executable(" + demoExeFileName + " main.cpp\n");
-    wfilec.append("\t");
-    for(int i = 0; i < partitionNum - 1; i++) {
-        if(!partitionConfig.backendNames[i].compare("CPU")) {
-            wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
-        }
-        else if(!partitionConfig.backendNames[i].compare("VTA")) {
-            wfilec.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
-        }
-    }
-
-    wfilec.append(")\n");
-
-    //make an exe file for a partition
-    if(partitionExeMode_ == 1) {
-        std::string pExeStrCPUTemplate = std::string("add_executable(" + demoExeFileName + "-p# p#_main.cpp ${CMAKE_CURRENT_BINARY_DIR}/p#.o)\n") +
-                                         "add_dependencies(" +demoExeFileName + "-p# " + demoExeFileName + "Net)\n" +
-                                         "target_link_libraries(" + demoExeFileName + "-p# png)\n" +
-                                         "set_target_properties(" + demoExeFileName + "-p#\n" +
-                                         "\tPROPERTIES\n" +
-                                         "\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n";
-
-        std::string pExeStrVTATemplate = std::string("add_executable(" + demoExeFileName + "-p# p#_main.cpp ${CMAKE_CURRENT_BINARY_DIR}/p#.cpp)\n") +
-                                         "add_dependencies(" +demoExeFileName + "-p# " +demoExeFileName + "Net)\n" +
-                                         "target_link_libraries(" + demoExeFileName +"-p# VTABundle png)\n" +
-                                         "set_target_properties("+ demoExeFileName + "-p#\n" +
-                                         "\tPROPERTIES\n" +
-                                         "\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n";
-        std::string pid;
+        cmakeFile.append("\t");
         for(int i = 0; i < partitionNum - 1; i++) {
-            std::string pExeStr = "";
             if(!partitionConfig.backendNames[i].compare("CPU")) {
-                pExeStr = pExeStrCPUTemplate;
-            } else {
-                pExeStr = pExeStrVTATemplate;
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
+            } else if(!partitionConfig.backendNames[i].compare("VTA")) {
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
+            } else if(!partitionConfig.backendNames[i].compare("Relay")) {
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + "_tvm.so ");
             }
-
-            pid = std::to_string(i);
-            boost::replace_all(pExeStr, "#", pid);
-            wfilec.append(pExeStr);
         }
+        cmakeFile.append("\n\n");
+
+        for(int i = 0; i < partitionNum - 1; i++) {
+            cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
+
+            if(!partitionConfig.backendNames[i].compare("CPU")) {
+                cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".o\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o\n");
+            } else if(!partitionConfig.backendNames[i].compare("VTA")) {
+                cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".cpp\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp\n");
+            } else if(!partitionConfig.backendNames[i].compare("Relay")) {
+                cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__p" + std::to_string(i) + "/p" + std::to_string(i) + ".o\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o\n");
+
+                cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__p" + std::to_string(i) + "/p" + std::to_string(i) + "_tvm.so\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + "_tvm.so\n");
+
+            }
+        }
+        cmakeFile.append("\n");
+
+        for(int i = 0; i < partitionNum - 1; i++) {
+            cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
+
+            if (!partitionConfig.backendNames[i].compare("Relay")) {
+                cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__p" + std::to_string(i) + "/p" + std::to_string(i) + ".h\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".h\n");
+            } else {
+                cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".h\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".h\n");
+            }
+        }
+        cmakeFile.append("\n");
+
+        cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
+        cmakeFile.append("\t${CMAKE_SOURCE_DIR}/tests/partition_codegen/main_header_test.h\n");
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_header_test.h\n\n");
+
+        cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
+        cmakeFile.append("\t${CMAKE_SOURCE_DIR}/tests/partition_codegen/main_template.h\n");
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_template.h\n\n");
+
+        bool vtaFlag = false, relayFlag = false;
+        for(int i = 0; i < partitionNum - 1; i++) {
+            if(!partitionConfig.backendNames[i].compare("VTA"))
+                vtaFlag = true;
+
+            if(!partitionConfig.backendNames[i].compare("Relay"))
+                relayFlag = true;
+        }
+
+        if(vtaFlag) {
+            cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
+            cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/VTARuntime.h\n");
+            cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h\n\n");
+        }
+
+        for(int i = 0; i < partitionNum - 1; i++) {
+            if(partitionConfig.backendNames[i].compare("Relay")) {
+                cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) + ".weights.bin\n");
+                cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".weights.bin\n");
+            }
+        }
+        cmakeFile.append("\t)\n");
+
+        srand((int)time(0));
+        std::string demoExeFileName = "demoExeFileName" + std::to_string(rand()%100000);
+
+        //std::cout << demoExeFileName << std::endl;
+
+        cmakeFile.append("add_custom_target("+demoExeFileName+"Net DEPENDS\n");
+        cmakeFile.append("\t");
+
+        bool isExistVTA = false;
+        for(int i = 0; i < partitionNum - 1; i++) {
+            if(!partitionConfig.backendNames[i].compare("CPU") || !partitionConfig.backendNames[i].compare("Relay")) {
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
+            } else if(!partitionConfig.backendNames[i].compare("VTA")) {
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
+                isExistVTA = true;
+            }
+        }
+        cmakeFile.append("\n)\n\n");
+
+        cmakeFile.append("INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})\n");
+        cmakeFile.append("add_executable(" + demoExeFileName + " main.cpp\n");
+        cmakeFile.append("\t");
+        for(int i = 0; i < partitionNum - 1; i++) {
+            if(!partitionConfig.backendNames[i].compare("VTA")) {
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".cpp ");
+            } else {
+                cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) + ".o ");
+            }
+        }
+
+        cmakeFile.append("\t\n)\n");
+
+        if(relayFlag) {
+            cmakeFile.append("link_directories(${CMAKE_BINARY_DIR}/tvm)\n");
+            cmakeFile.append("include_directories(${CMAKE_CURRENT_BINARY_DIR})\n");
+            cmakeFile.append("include_directories(BEFORE\n"
+                          "\t${NESTC_ROOT_DIR}/tvm/include\n"
+                          "\t${NESTC_ROOT_DIR}/tvm/3rdparty/dlpack/include\n"
+                          "\t${NESTC_ROOT_DIR}/tvm/3rdparty/dmlc-core/include\n"
+                          "\t)\n");
+        }
+
+        //make an exe file for a partition
+        if(partitionExeMode_ == 1) {
+            std::string pExeStrCPUTemplate = std::string("add_executable(" + demoExeFileName + "-p# p#_main.cpp ${CMAKE_CURRENT_BINARY_DIR}/p#.o)\n") +
+                                             "add_dependencies(" +demoExeFileName + "-p# " + demoExeFileName + "Net)\n" +
+                                             "target_link_libraries(" + demoExeFileName + "-p# png)\n" +
+                                             "set_target_properties(" + demoExeFileName + "-p#\n" +
+                                             "\tPROPERTIES\n" +
+                                             "\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n";
+
+            std::string pExeStrVTATemplate = std::string("add_executable(" + demoExeFileName + "-p# p#_main.cpp ${CMAKE_CURRENT_BINARY_DIR}/p#.cpp)\n") +
+                                             "add_dependencies(" +demoExeFileName + "-p# " +demoExeFileName + "Net)\n" +
+                                             "target_link_libraries(" + demoExeFileName +"-p# VTABundle png)\n" +
+                                             "set_target_properties("+ demoExeFileName + "-p#\n" +
+                                             "\tPROPERTIES\n" +
+                                             "\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n";
+
+            std::string pExeStrRelayTemplate = std::string("add_executable(" + demoExeFileName + "-p# p#_main.cpp ${CMAKE_CURRENT_BINARY_DIR}/p#.o)\n") +
+                                             "add_dependencies(" +demoExeFileName + "-p# " +demoExeFileName + "Net)\n" +
+                                             "target_link_libraries(" + demoExeFileName +"-p# -fPIC -I. -fopenmp -pthread tvm_runtime png)\n" +
+                                             "set_target_properties("+ demoExeFileName + "-p#\n" +
+                                             "\tPROPERTIES\n" +
+                                             "\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n";
+
+            std::string pid;
+            for(int i = 0; i < partitionNum - 1; i++) {
+                std::string pExeStr = "";
+                if(!partitionConfig.backendNames[i].compare("CPU")) {
+                    pExeStr = pExeStrCPUTemplate;
+                } else if(!partitionConfig.backendNames[i].compare("VTA")){
+                    pExeStr = pExeStrVTATemplate;
+                } else if(!partitionConfig.backendNames[i].compare("Relay")){
+                    pExeStr = pExeStrRelayTemplate;
+                }
+
+                pid = std::to_string(i);
+                boost::replace_all(pExeStr, "#", pid);
+                cmakeFile.append(pExeStr);
+            }
+        }
+
+        cmakeFile.append("INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})\n");
+        cmakeFile.append("add_dependencies(" + demoExeFileName + " " + demoExeFileName + "Net)\n");
+
+        if(relayFlag) {
+            cmakeFile.append("target_link_libraries(" + demoExeFileName +
+                             " VTABundle -fPIC -I. -fopenmp -pthread tvm_runtime png)\n");
+        } else {
+            cmakeFile.append("target_link_libraries(" + demoExeFileName +
+                             " VTABundle -fPIC -I. -fopenmp -pthread png)\n");
+        }
+        cmakeFile.append("set_target_properties(" + demoExeFileName + "\n");
+        cmakeFile.append("\tPROPERTIES\n");
+        cmakeFile.append("\tIMPORTED_LOCATION ${CMAKE_SOURCE_DIR}/build_release/tvm/libtvm_runtime.so\n");
+        cmakeFile.append("\tRUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}\n");
+        cmakeFile.append("\t)\n\n");
+
+        cmakeFile.append("add_custom_command(\n"
+                         "        TARGET " +demoExeFileName + " POST_BUILD\n"
+                      "        COMMAND ${CMAKE_COMMAND} -E copy\n"
+                      "        ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png\n"
+                      "        ${CMAKE_CURRENT_BINARY_DIR}/cat_285.png\n"
+                      "\t)\n");
+
+        writeMakeFile << cmakeFile;
+        writeMakeFile.close();
     }
+    std::cout << "CMakeLists outfile position : " << makeFileName << std::endl;
 
-    wfilec.append("INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})\n");
-    wfilec.append("add_dependencies(" + demoExeFileName + " " + demoExeFileName + "Net)\n");
-
-    if(isExistVTA)
-        wfilec.append("target_link_libraries(" + demoExeFileName + " VTABundle vta_runtime arm_compute arm_compute_core arm_compute_graph LLVMSupport cma gomp png)\n");
-    else
-        wfilec.append("target_link_libraries(" + demoExeFileName + " LLVMSupport gomp png)\n");
-
-    wfilec.append("set_target_properties(" + demoExeFileName + "\n");
-    wfilec.append("\tPROPERTIES\n");
-    wfilec.append("\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\"\n");
-    wfilec.append("\t)\n\n");
-
-    wfilec.append("#if(GLOW_WITH_VTA_BUNDLE_TEST)\n");
-    wfilec.append("\tadd_custom_command(\n");
-    wfilec.append("\t\tTARGET " + demoExeFileName + " POST_BUILD\n");
-    wfilec.append("\t\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-    wfilec.append("\t\t${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png\n");
-    wfilec.append("\t\t${CMAKE_CURRENT_BINARY_DIR}/cat_285.png)\n");
-
-    wfilec.append("#\n");
-    wfilec.append("#\tadd_custom_command(\n");
-    wfilec.append("#\t\tTARGET demo8Mobilenet POST_BUILD\n");
-    wfilec.append("#\t\tCOMMAND\n");
-    wfilec.append("#\t\tmkdir -p debug)\n");
-    wfilec.append("#\tadd_custom_command(\n");
-    wfilec.append("#\t\tTARGET demo8Mobilenet POST_BUILD\n");
-    wfilec.append("#\t\tCOMMAND\n");
-    wfilec.append("#\t\tdemo8Mobilenet cat_285.png)\n");
-    wfilec.append("#\tadd_custom_command(\n");
-    wfilec.append("#\t\tTARGET demo8Mobilenet POST_BUILD\n");
-    wfilec.append("#\t\tCOMMAND\n");
-    wfilec.append("#\t\techo \"demo8Mobilenet Test Succeed\")\n");
-    wfilec.append("#endif()\n");
 }
 
 

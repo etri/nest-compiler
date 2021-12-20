@@ -65,9 +65,13 @@ public:
   void generatePartitionCall(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateMain(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   void generateFree(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
+
   void generateCodeFromModels(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
+  void generateMainFile(std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
+  void generateRelayFile(std::size_t partitionNum, const PartitionConfig &partitionConfig);
+  void generateCMakeListsFile(std::size_t partitionNum, const PartitionConfig &partitionConfig);
+
   void generateYamlFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig, std::string inputPartitionName);
-  void generateCMakeListsFile(std::string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig);
   std::string getPartitionProfileKey(Function* function);
   void setPartitionInputOutputList(Function* function, std::vector<std::string>* inputList, std::vector<std::string>* outputList, int pi);
   void generateNonThreadCall(std::string &wfilec, int pi, bool profileMode, std::vector<std::string>* inputList);

@@ -796,14 +796,9 @@ void NestPartitioner::outPerformProfileForFusedNode(std::vector<NodeGroup*>* bra
     std::ofstream profileFile(filename);
     if (profileFile.is_open()) {
 
-//        BFSLevel bfs = getBFSLevel(function);
-//        size_t level = bfs.size();
-
         profileFile << "---" << std::endl;
         profileFile << "backendName: " << device.backendName << std::endl;
 
-//        for (int i = level - 1; i >= 0; i--) {
-//            for (size_t j = 0; j < bfs[i].size(); j++) {
         for (auto partition : *branchList) {
             for (auto cnode : partition->nodeList_) {
                 Node *node = cnode->node_;
@@ -868,15 +863,8 @@ void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vec
         std::string nodeToPartitionStr;
         std::string logicalIDStr;
 
-        ///
-//      BFSLevel bfs = getBFSLevel(function);
-//      size_t level = bfs.size();
         size_t idx = 0;
 //
-//      for (int i = level - 1; i >= 0; i--) {
-//        for (size_t j = 0; j < bfs[i].size(); j++) {
-//
-//          Node *node = bfs[i][j];
         for (auto partition : *branchList) {
             for (auto cnode : partition->nodeList_) {
                 Node *node = cnode->node_;
@@ -891,8 +879,10 @@ void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vec
                     backendNameStr += (deviceInfo.backendName);
                     logicalIDStr += std::to_string(deviceInfo.deviceID);
                 } else {
-                    backendNameStr += "CPU";
-                    logicalIDStr += "0";
+                    //backendNameStr += "CPU";
+                    backendNameStr += deviceInfo.backendName;
+                    //logicalIDStr += "0";
+                    logicalIDStr += std::to_string(deviceInfo.deviceID);
                 }
 
                 nodeToPartitionStr +=
@@ -928,15 +918,6 @@ void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vec
 int NestPartitioner::getFusedPartitionCount(std::vector<NodeGroup*>* branchList)
 {
     int cnt = 1;
-//  BFSLevel bfs = getBFSLevel(function);
-//  size_t level = bfs.size();
-//
-//  for (int i = level - 1; i >= 0; i--) {
-//    for (size_t j = 0; j < bfs[i].size(); j++) {
-//
-//      Node *node = bfs[i][j];
-    //    for (auto& node : function->getNodes()) {
-
     for (auto partition : *branchList) {
         for (auto cnode : partition->nodeList_) {
             Node *node = cnode->node_;
@@ -957,6 +938,10 @@ void NestPartitioner::outPartitionPlanForFusion(std::string funcName, std::vecto
 {
 //  std::cout << "== outPartitionPlanForFusedNode : " << filename << " == " << std::endl;
 
+    if(!deviceInfo.backendName.compare("VTA")) {
+        std::cout << "== VTA == " << std::endl;
+    }
+
     std::ofstream planFile(filename);
     if (planFile.is_open()) {
 
@@ -974,15 +959,7 @@ void NestPartitioner::outPartitionPlanForFusion(std::string funcName, std::vecto
         ///
         //std::cout << "partitionSize = " << partitionSize << std::endl;
 
-//    BFSLevel bfs = getBFSLevel(function);
-//    size_t level = bfs.size();
         size_t idx = 0;
-        //size_t pcnt = 0;
-
-//    for (int i = level - 1; i >= 0; i--) {
-//      for (size_t j = 0; j < bfs[i].size(); j++) {
-//
-//        Node *node = bfs[i][j];
         for (auto partition : *branchList) {
             for (auto cnode : partition->nodeList_) {
                 Node *node = cnode->node_;
@@ -997,18 +974,17 @@ void NestPartitioner::outPartitionPlanForFusion(std::string funcName, std::vecto
                     nodeToPartitionStr +=
                             (node->getName().str() + "-" + std::to_string(idx));
                     nodeToPartitionStr += "\n  :";
-
                     partitionNameStr += ("p" + std::to_string(idx) + ":");
 
-                    if (backendMap_[deviceInfo.backendName].supportedNodesKinds.size() > 0 &&
+                    if ((backendMap_[deviceInfo.backendName].supportedNodesKinds.size() > 0 &&
                         (backendMap_[deviceInfo.backendName].supportedNodesKinds.find(node->getKind()) !=
-                         backendMap_[deviceInfo.backendName].supportedNodesKinds.end())) {
+                         backendMap_[deviceInfo.backendName].supportedNodesKinds.end())) || backendMap_[deviceInfo.backendName].supportedNodesKinds.size() == 0) {
                         backendNameStr += (deviceInfo.backendName + ":");
                         logicalIDStr += (std::to_string(deviceInfo.deviceID) + ":");
 
                     } else {
-                        backendNameStr += "CPU:";
-                        logicalIDStr += "0:";
+                        backendNameStr += "Relay:";
+                        logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID) + ":";
                     }
                     idx++;
                 } else {
@@ -2216,30 +2192,6 @@ void NestPartitioner::generatePlanForVTAOps(Function *function, std::string prof
     nodeGroups_.clear();
 
 }
-
-
-//void NestPartitioner::changeBackendAndGeneratePlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode) {
-//
-//    std::vector<std::vector<CostNode>> cnodeBfs;
-//    BFSLevel bfs = getBFSLevel(function);
-//    std::vector<NodeGroup*> branchList;
-//
-//    loadFuseOperatorsConfig(profilePath + "/profileConfigs.yaml");
-//    makeCostNode(function, &cnodeBfs);
-//    loadPerformProfileInfo(profilePath+"/test");
-//
-//    analyzeDAG(&cnodeBfs, bfs, &branchList);
-//    allocOptimalPUFusedNodes(&branchList);
-//    allocateCPUToParallelBranch(&branchList);
-//
-//    partitionBranchesReplaceCPU(&branchList, true);
-//    outPartitionPlanReplaceCPU(function->getName().str(), profilePath + "/NESTOptimalPlan-branch.yaml");
-//
-//    for(auto branch: nodeGroups_)
-//        delete branch;
-//
-//    nodeGroups_.clear();
-//}
 
 void NestPartitioner::generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode) {
 
