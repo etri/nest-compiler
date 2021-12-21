@@ -511,7 +511,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
   inc.append(hh("int " + (std::string) mainEntryName + "_load_module(uint8_t *constantWeight);"));
   inc.append(hh("int " + (std::string) mainEntryName
                     + "(uint8_t *constantWeight, uint8_t *mutableWeight, uint8_t *activations);"));
-  inc.append(hh("int " + (std::string) mainEntryName + "_destory_module();"));
+  inc.append(hh("int " + (std::string) mainEntryName + "_destroy_module();"));
   inc.append(hh("#ifdef __cplusplus"));
   inc.append(hh("}"));
   inc.append(hh("#endif"));
@@ -789,7 +789,7 @@ void finalizeCtx(struct SaveCtx &Ctx,  llvm::StringRef outputDir, llvm::StringRe
     cpp.append(cc("}"));
 
     //function destory_module
-    cpp.append(cc("int " + (std::string)bundleName + "_destory_module() {" ));
+    cpp.append(cc("int " + (std::string)bundleName + "_destroy_module() {" ));
     cpp.append(cc("  return 0;"));
     cpp.append(cc("}"));
 
