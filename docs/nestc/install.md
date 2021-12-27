@@ -21,7 +21,8 @@ for FP16 conversions.
 To get them, from the NEST-C directory, run:
 
   ```bash
-  git submodule update --init --recursive
+  git submodule update --init --recursive glow
+  git submodule update --init --recursive tvm
   ```
 
 #### Source dependencies

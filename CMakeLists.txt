@@ -11,8 +11,9 @@ project(NESTC C CXX)
 
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
 option(NESTC_USE_VTASIM "Build the VTASIM" ON)
-option(NESTC_VTA_RUN_ON_AARCH64 "Run VTA on AArch64" OFF)
+option(NESTC_EVTA_RUN_ON_ZCU102 "Run on ZCU102 board" OFF)
 option(NESTC_EVTA_MULTI "use Multi-EVTA" OFF)
+option(NESTC_USE_PRECOMPILED_EVTA_LIBRARY "use pre-compiled EVTA library" OFF)
 option(NESTC_USE_PRECOMPILED_BUNDLE "use pre-compiled bundle code from nestc-data" OFF)
 option(NESTC_OPENCL_TEST "Enable OpenCL TEST" OFF)
 option(NESTC_CUDA_TEST "Enable CUDA TEST" OFF)
@@ -76,6 +77,56 @@ if(NESTC_CUDA_TEST)
     SET(USE_CUDA ON)
 endif()
 add_subdirectory(tvm)
+
+if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
+    include(FetchContent)
+    if(NESTC_EVTA_RUN_ON_ZCU102)
+        FetchContent_Populate(
+                VTALIB
+                URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/zcu102/21.12/vta.tar.gz
+        )
+        FetchContent_Populate(
+                ACL
+                URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/acl/acl.tar.gz
+        )
+        if(NESTC_EVTA_MULTI)
+            if(NESTC_EVTA_RUN_WITH_GENERIC_BUNDLE)
+                set(vtalib_location ${vtalib_SOURCE_DIR}/multi/generic)
+            else()
+                set(vtalib_location ${vtalib_SOURCE_DIR}/multi/acl)
+            endif()
+        else()
+            if(NESTC_EVTA_RUN_WITH_GENERIC_BUNDLE)
+                set(vtalib_location ${vtalib_SOURCE_DIR}/single/generic)
+            else()
+                set(vtalib_location ${vtalib_SOURCE_DIR}/single/acl)
+            endif()
+        endif()
+        link_directories(${acl_SOURCE_DIR})
+    else()
+        if(NESTC_EVTA_MULTI)
+            FetchContent_Populate(
+                    VTALIB
+                    URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/x86_sim/21.12/multi/vta.tar.gz
+            )
+        else()
+            FetchContent_Populate(
+                    VTALIB
+                    URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/x86_sim/21.12/single/vta.tar.gz
+            )
+        endif()
+        set(vtalib_location ${vtalib_SOURCE_DIR} )
+    endif()
+    link_directories(${vtalib_SOURCE_DIR})
+    add_library(VTABundle STATIC IMPORTED)
+    set_property(TARGET VTABundle PROPERTY IMPORTED_LOCATION
+            ${vtalib_location}/libVTABundle.a )
+    add_library(vta_runtime STATIC IMPORTED)
+    set_target_properties( vta_runtime PROPERTIES IMPORTED_LOCATION
+            ${vtalib_location}/libvta_runtime.a )
+    INCLUDE_DIRECTORIES(${vtalib_SOURCE_DIR}/include/Bundle/ ${vtalib_SOURCE_DIR}/include/simulator ${vtalib_SOURCE_DIR}/include/simulator/vta)
+endif()
+
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)
 

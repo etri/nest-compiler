@@ -1,7 +1,7 @@
 
 
 #include "vta/runtime.h"
-#include "vta/vtalib/include/Bundle/VTABundle.h"
+#include "VTABundle.h"
 
 #include "vtaDequantizeTestBundle.h"
 SymbolTableEntry symbolTableEntry[2]={{"inputP",0,1000,'1'},{"outP",1000,4000,'1'}};

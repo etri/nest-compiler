@@ -1,7 +1,13 @@
 INCLUDE_DIRECTORIES(../)
-add_subdirectory(vtalib)
+if(NOT NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
+    add_subdirectory(vtalib)
+endif()
+
 add_subdirectory(tests)
-add_nestc_test(name VTABackendSimulatorTest ${NESTC_BINARY_DIR}/tests/VTABackendSimulatorTest --gtest_output=xml:VTABackendSimulatorTest.xml)
+if(NOT NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
+    add_nestc_test(name VTABackendSimulatorTest ${NESTC_BINARY_DIR}/tests/VTABackendSimulatorTest --gtest_output=xml:VTABackendSimulatorTest.xml)
+endif()
+
 add_subdirectory(bundles)
 if(NESTC_EVTA_MULTI)
     add_subdirectory(multievta_bundles)
