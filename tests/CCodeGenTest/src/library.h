@@ -15,7 +15,7 @@
 
 //#define _CONV_ORIGINAL
 //#define _CONV_GROUP_ORIGINAL
-//#define _USE_LLVM 1
+#define _USE_LLVM 1
 
 #ifdef __MACH__
 #include <stdlib.h>

@@ -938,10 +938,6 @@ void NestPartitioner::outPartitionPlanForFusion(std::string funcName, std::vecto
 {
 //  std::cout << "== outPartitionPlanForFusedNode : " << filename << " == " << std::endl;
 
-    if(!deviceInfo.backendName.compare("VTA")) {
-        std::cout << "== VTA == " << std::endl;
-    }
-
     std::ofstream planFile(filename);
     if (planFile.is_open()) {
 

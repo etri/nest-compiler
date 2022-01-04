@@ -345,6 +345,11 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
 //    std::map<std::string, std::string> nodeToVarMap;
 //    std::map<std::string, std::string> nodeToPiMap;
 
+    if(profileMode == 1) {
+        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+", NULL);\n\n");
+    }
+
     for(int cnt = 0; cnt < inputList->size(); cnt++) {
         std::string varStr = "";
         std::string varPi = "";
@@ -382,11 +387,10 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
         }
     }
 
-    if(profileMode == 1)
-    {
-        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
-        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+", NULL);\n");
-    }
+//    if(profileMode == 1) {
+//        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
+//        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+", NULL);\n");
+//    }
 
     wfilec.append("\tp" +
                   std::to_string(pi) + "(constantWeightVarsAddr" +
@@ -407,6 +411,10 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
 
 void NestPartitionerSchedule::generateThreadCall(std::string &wfilec, int pi, std::set<std::string>* pGroup, bool profileMode, std::vector<std::string>* inputList) {
 
+    if (profileMode == 1) {
+        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tgettimeofday(&start_" + std::to_string(pi) + ", NULL);\n");
+    }
 
 //    std::string pname = *(pGroup->begin());
     for (int cnt = 0; cnt < inputList->size(); cnt++) {
@@ -437,12 +445,6 @@ void NestPartitionerSchedule::generateThreadCall(std::string &wfilec, int pi, st
             std::cout << "No output: " << nodeName << std::endl;
         }
 
-//        std::string rVarName =
-//                wfilec.append("\tfloat* " + varStr +
-//                              " = getInferenceResultVar(p" + varPi +
-//                              "_config, mutableWeightVarsAddr" + varPi +
-//                              ", \"" + inputList->at(cnt) + "\");\n");
-
         for(auto gpname:*pGroup) {
             std::string gpid = gpname.substr(1, gpname.length());
             wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + gpid +
@@ -451,10 +453,10 @@ void NestPartitionerSchedule::generateThreadCall(std::string &wfilec, int pi, st
         }
     }
 
-    if (profileMode == 1) {
-        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
-        wfilec.append("\tgettimeofday(&start_" + std::to_string(pi) + ", NULL);\n");
-    }
+//    if (profileMode == 1) {
+//        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
+//        wfilec.append("\tgettimeofday(&start_" + std::to_string(pi) + ", NULL);\n");
+//    }
 
     wfilec.append("#ifdef THREAD\n");
     for(auto gpname:*pGroup) {
