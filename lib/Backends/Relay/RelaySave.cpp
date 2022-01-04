@@ -1574,10 +1574,13 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       }
         break;
 
-      case Kinded::Kind::CopyInstKind:
-             pyss<< "CopyInstKind  " << I.toString() << " = " << std::endl;
-        break;        
-
+      case Kinded::Kind::CopyInstKind: {
+          auto II = static_cast<CopyInst *>(&I);
+          auto src = II->getSrc();
+          auto dest = II->getDest();
+          pyss << (std::string) dest->getName() << " = " << (std::string) src->getName() << std::endl;
+          break;
+      }
       case Kinded::Kind::WeightVarKind:
           pyss<< "WeightVarKind " << I.toString() << " = " << std::endl;
         break;
