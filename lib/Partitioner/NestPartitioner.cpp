@@ -880,8 +880,14 @@ void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vec
         }
 
         partitionNameStr += ("p" + std::to_string(idx));
-        backendNameStr += "CPU";
-        logicalIDStr += "0";
+
+        if(backendMap_.find("Relay") == backendMap_.end()) {
+            backendNameStr += "CPU";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("CPU").deviceID);
+        } else {
+            backendNameStr += "Relay";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID);
+        }
 
         planFile << "backendNames: " << backendNameStr << std::endl;
         planFile << "partitionNames: " << partitionNameStr << std::endl;
@@ -991,8 +997,13 @@ void NestPartitioner::outPartitionPlanForFusion(std::string funcName, std::vecto
 
         partitionNameStr += ("p" + std::to_string(partitionSize-1));
 
-        backendNameStr += "CPU";
-        logicalIDStr += "0";
+        if(backendMap_.find("Relay") == backendMap_.end()) {
+            backendNameStr += "CPU";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("CPU").deviceID);
+        } else {
+            backendNameStr += "Relay";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID);
+        }
 
         planFile << "backendNames: " << backendNameStr << std::endl;
         planFile << "partitionNames: " << partitionNameStr << std::endl;
@@ -1101,8 +1112,14 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
         nodeToPartitionStr = nodeToPartitionStr.substr(0, nodeToPartitionStr.length() - 4);
 
         partitionNameStr += ("p" + std::to_string(nodeGroups_.back()->ID_+1));
-        backendNameStr += "CPU";
-        logicalIDStr += "0";
+
+        if(backendMap_.find("Relay") == backendMap_.end()) {
+            backendNameStr += "CPU";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("CPU").deviceID);
+        } else {
+            backendNameStr += "Relay";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID);
+        }
 
         info.append("numOfPartitions: " + std::to_string(nodeGroups_.size() + 1) + "\n");
 
@@ -1213,7 +1230,7 @@ void NestPartitioner::partitionBranches(std::vector<NodeGroup*>* branchList, boo
 //            std::cout << "(*i)->isParallelBranch_: " << ", " << (*i)->isParallelBranch_ << std::endl;
             if((*i)->isParallelBranch_) {
                 for(auto pb: parallelBranches) {
-                    std::cout << "partitionID " << partitionID  << std::endl;
+                    //std::cout << "partitionID " << partitionID  << std::endl;
                     lastPartition = partitionSingleBranch(&nodeGroups_, pb, &partitionID, nullptr);
                     lastPartition = nullptr;
                 }
@@ -1283,6 +1300,17 @@ void NestPartitioner::loadPerformProfileInfo(std::string pdir)
             backendProfileMap_[backendName].insert(puvalues.begin(), puvalues.end());
         }
     }
+
+    if(preventFragmentation_) {
+        if (backendProfileMap_.find("CPU") != backendProfileMap_.end()  &&
+        backendProfileMap_.find("Relay") != backendProfileMap_.end()) {
+            std::map<std::string, float> puvalues = backendProfileMap_["CPU"];
+            for(auto ele: puvalues) {
+                backendProfileMap_["CPU"][ele.first] = INFINITY;
+            }
+        }
+    }
+
     closedir(dir);
 }
 
@@ -1317,7 +1345,7 @@ void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backen
 //    std::cout << "compCost = " << compCost << std::endl;
 
         float cost = compCost;
-        if(cost < cnode->cost_) {
+        if(cost <= cnode->cost_) {
             cnode->cost_ = cost;
             cnode->backendName_ = backendName;
         }
@@ -1433,7 +1461,7 @@ void NestPartitioner::getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode*
         if(backendProfileMap_[backendName].find(compKey) == backendProfileMap_[backendName].end())
             continue;
         float cost = backendProfileMap_[backendName][compKey];
-        if(cost < originalCost && cost < prevCost) {
+        if(cost <= originalCost && cost <= prevCost) {
 //          std::cout << "[Original cost] = " << secondPrevCNode->cost_ + firstPrevCNode->cost_ + curCNode->cost_ << std::endl;
 
             prevCost = cost;
@@ -1743,7 +1771,7 @@ bool NestPartitioner::setBranchPU(NodeGroup *branch) {
 void NestPartitioner::findParallelBranchesForMultiVTA(std::vector<NodeGroup *> *branchList, int cpuNum, int vtaNum) {
     std::cout << "--------- [findParallelBranches] -----------" << std::endl;
     float originalTotalCost = getCostWithConstraint(branchList, nullptr);
-    std::cout << "Original total cost =  " << originalTotalCost << std::endl;
+    //std::cout << "Original total cost =  " << originalTotalCost << std::endl;
 
     for (auto i = branchList->begin(); i != branchList->end(); i++) {
         NodeGroup* branch = (*i);
@@ -1769,7 +1797,7 @@ void NestPartitioner::findParallelBranchesForMultiVTA(std::vector<NodeGroup *> *
 
 //                std::cout << "cpuCnt = " << cpuCnt << ", " << "vtaCnt = " << vtaCnt << std::endl;
                 if(cpuCnt > cpuNum || vtaCnt > vtaNum) {
-                    std::cout << "Too many parallel branches!!" << std::endl;
+//                    std::cout << "Too many parallel branches!!" << std::endl;
                     continue;
                 }
 
@@ -2182,7 +2210,7 @@ void NestPartitioner::generateOptimalPlanForMultiVTA(Function *function, std::st
     analyzeDAG(&cnodeBfs, bfs, &branchList);
     allocOptimalPUFusedNodes(&branchList);
 
-    findParallelBranchesForMultiVTA(&branchList, 1, 4);
+    findParallelBranchesForMultiVTA(&branchList, 0, 4);
 
     partitionBranches(&branchList, true);
     outPartitionPlan(function->getName().str(), profilePath + "/NESTOptimalPlan-multivta.yaml", true);

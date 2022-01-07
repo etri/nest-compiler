@@ -109,6 +109,8 @@ class NestPartitioner final : public PartitionerBase {
     std::string outputDir_;
     std::map<std::string, int>* puIdxMap_;
 
+    bool preventFragmentation_ = true;
+
   /// Initialization. Called in class constructor.
     void init();
 
