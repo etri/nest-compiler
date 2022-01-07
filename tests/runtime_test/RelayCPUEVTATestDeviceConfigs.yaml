@@ -13,6 +13,7 @@
 - name:    PU3
   backendName: Relay
   parameters: |
+    "nonSupportedNodes":"SoftMax,Splat"
     "deviceID" : "2"
   dramMemory: 200000000
 ...

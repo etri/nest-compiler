@@ -162,7 +162,6 @@ public:
 
 
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
-  void partitionBranchesForMultiVTA(std::vector<NodeGroup*>* branchList);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
   void loadPerformProfileInfo(std::string pdir);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends);
@@ -173,7 +172,6 @@ public:
   void outPartitionPlanForFusion(std::string funcName, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
   bool isUserDefinedFusable(Node *node);
   void outPartitionPlanForSingleNode(Function *function, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
-  void outPerformProfileForEachNode(std::vector<NodeGroup*>* branchList, std::string filename, DeviceInfo device);
   void outPerformProfileForFusedNode(std::vector<NodeGroup*>* branchList, std::string filename, DeviceInfo device);
   void allocOptimalPUFusedNodes(std::vector<NodeGroup*>* branchList);
   void loadFuseOperatorsConfig(std::string fname);
@@ -184,10 +182,8 @@ public:
   bool isVTAConv(ConvolutionNode* convNode);
 
   void generatePlanForVTAOps(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  float getCostOfSingleNode(CostNode *cnode, std::string backendName);
   void generateTestProfile(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void generateOptimalPlanForFusedNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
 
@@ -200,8 +196,6 @@ public:
                            NodeToFunctionMap &mapping, bool saveDAG,
                            BackendSpecificNodeInfo &nodeInfo,
                            bool skipCloning = false);
-
-  float getCPUCost(NodeGroup* branch);
 
   void getBranch(std::vector<std::vector<CostNode>>* cnodebfs, BFSLevel dag, std::vector<Node *> parallelNodes, Node* lastNode,
                  NodeGroup* prevBranch, unsigned int level, unsigned int branchID, std::vector<NodeGroup*>* branchList);
