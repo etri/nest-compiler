@@ -272,6 +272,7 @@ else()
         endif()
 endif()
 
+if(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS OR NESTC_USE_VTASIM)
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o
@@ -1067,6 +1068,7 @@ set_target_properties(vtaMxnetResnet18RelayEVTAPartitionBundleTestAll
 
 
 
+
 add_nestc_test(ZCU102 NAME vtaMxnetResnet18RelayEVTAPartitionBundleTestNone COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTestNone USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
 add_nestc_test(ZCU102 NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest0 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest0 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
 add_nestc_test(ZCU102 NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest2 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest2 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
@@ -1079,7 +1081,7 @@ add_nestc_test(ZCU102 NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest13 COMMAN
 add_nestc_test(ZCU102 NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest15 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest15 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
 add_nestc_test(ZCU102 NAME vtaMxnetResnet18RelayEVTAPartitionBundleTest17 COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTest17 USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
 add_nestc_test(ZCU102 NAME vtaMxnetResnet18RelayEVTAPartitionBundleTestAll COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaMxnetResnet18RelayEVTAPartitionBundleTestAll USE_SH 1 PARAMS ${GLOW_SOURCE_DIR}/tests/images/imagenet/cat_285.png)
-
+endif()
 
 
 

@@ -244,7 +244,7 @@ if (GLOW_WITH_BUNDLES AND NOT GLOW_WITH_CPU)
   message(FATAL_ERROR "Cannot create bundles without CPU backend. Configure with -DGLOW_WITH_BUNDLES and -DGLOW_WITH_CPU to build bundles.")
 endif()
 
-if (GLOW_BUILD_TESTS)
+if (GLOW_BUILD_TESTS AND NOT NESTC_EVTA_RUN_ON_ZCU102)
   set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable tests for Google benchmark" FORCE)
   add_subdirectory(tests/googlebenchmark EXCLUDE_FROM_ALL)
   add_subdirectory(tests/googletest EXCLUDE_FROM_ALL)
