@@ -5,7 +5,7 @@ if(NESTC_USE_VTASIM)
     INCLUDE_DIRECTORIES(include ../vtalib/include/simulator)
     set(BUNDLE_LINK_LIB png)
     if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
-        set(BUNDLE_LINK_LIB vta_runtime png Miniz LLVMSupport pthread glog gflags
+        set(BUNDLE_LINK_LIB vta_runtime png LLVMSupport pthread glog gflags
                 Base
                 CodeGen
                 Graph

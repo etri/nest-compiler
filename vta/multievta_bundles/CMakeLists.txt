@@ -4,7 +4,7 @@ INCLUDE_DIRECTORIES(../vtalib/3rdparty/dmlc-core/include ${vtalib_SOURCE_DIR}/3r
 if(NESTC_USE_VTASIM)
     INCLUDE_DIRECTORIES(include ../vtalib/include/simulator)
     if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
-        set(BUNDLE_LINK_LIB vta_runtime png Miniz LLVMSupport pthread glog gflags
+        set(BUNDLE_LINK_LIB vta_runtime png LLVMSupport pthread glog gflags
                 Base
                 CodeGen
                 Graph
