@@ -14,13 +14,16 @@ RUN apt-get update && \
         opencl-headers libgoogle-glog-dev libboost-all-dev \
         libdouble-conversion-dev libevent-dev libssl-dev libgflags-dev \
         libjemalloc-dev libpthread-stubs0-dev \
-        ocl-icd-opencl-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu\
+        ocl-icd-opencl-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu curl unzip\
         # Additional dependencies
         git python python-numpy python3-pip && \
     # Delete outdated llvm to avoid conflicts
     apt-get autoremove -y llvm-6.0 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install
 
 # Point clang to llvm-8 version
 RUN update-alternatives --install /usr/bin/clang clang \

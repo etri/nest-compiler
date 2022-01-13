@@ -217,6 +217,15 @@ else()
         if(NOT NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS)
                 message(STATUS "TODO")
         else()
+                if(DEFINED $ENV{S3_BUCKET})
+                        set(AWS_LOC $ENV{S3_BUCKET})
+                else()
+                        set(AWS_LOC "nestc-pub")
+                endif()
+                if(${AWS_LOC} STREQUAL "nestc-pub")
+                        set(AWS_PARAM "--no-sign-request")
+                endif()
+
                 add_custom_command(
                         OUTPUT
                         ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.cpp
@@ -263,16 +272,19 @@ else()
                         COMMAND
                         mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/Relay
                         COMMAND
-                        aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18RelayEVTAPartitionTest/CPU ${CMAKE_CURRENT_BINARY_DIR}/CPU --recursive
+                        aws s3 cp s3://${AWS_LOC}/vta/bundles/Resnet18RelayEVTAPartitionTest/CPU ${CMAKE_CURRENT_BINARY_DIR}/CPU --recursive
+                        ARGS ${AWS_PARAM}
                         COMMAND
-                        aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18RelayEVTAPartitionTest/Relay ${CMAKE_CURRENT_BINARY_DIR}/Relay --recursive
+                        aws s3 cp s3://${AWS_LOC}/vta/bundles/Resnet18RelayEVTAPartitionTest/Relay ${CMAKE_CURRENT_BINARY_DIR}/Relay --recursive
+                        ARGS ${AWS_PARAM}
                         COMMAND
                         cp ${CMAKE_CURRENT_BINARY_DIR}/CPU/*.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/
                 )
         endif()
 endif()
 
-if(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS OR NESTC_USE_VTASIM)
+if((NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS AND NESTC_EVTA_RUN_ON_ZCU102) OR (NOT NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS AND NESTC_USE_VTASIM))
+
 add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/Relay/module__p0/p0.o

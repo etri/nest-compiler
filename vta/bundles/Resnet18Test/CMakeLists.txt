@@ -136,6 +136,14 @@ else()
             )
         endif()
     else()
+        if(DEFINED $ENV{S3_BUCKET})
+            set(AWS_LOC $ENV{S3_BUCKET})
+        else()
+            set(AWS_LOC "nestc-pub")
+        endif()
+        if(${AWS_LOC} STREQUAL "nestc-pub")
+            set(AWS_PARAM "--no-sign-request")
+        endif()
         add_custom_command(
         OUTPUT
             ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
@@ -143,13 +151,17 @@ else()
             ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
             ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
             COMMAND
-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+            aws s3 cp s3://${AWS_LOC}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+            ARGS ${AWS_PARAM}
             COMMAND
-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.h ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+            aws s3 cp s3://${AWS_LOC}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.h ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+            ARGS ${AWS_PARAM}
             COMMAND
-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+            aws s3 cp s3://${AWS_LOC}/vta/bundles/Resnet18Test/mxnet_exported_resnet18.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+            ARGS ${AWS_PARAM}
             COMMAND
-            aws s3 cp s3://$ENV{S3_BUCKET}/vta/bundles/Resnet18Test/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+            aws s3 cp s3://${AWS_LOC}/vta/bundles/Resnet18Test/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+            ARGS ${AWS_PARAM}
         )
     endif()
 

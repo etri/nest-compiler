@@ -61,7 +61,13 @@ elseif(NESTC_EVTA_RUN_ON_ZCU102)
                 -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
         )
     else()
-        if($ENV{S3_BUCKET} STREQUAL "nestc-pub")
+
+        if(DEFINED $ENV{S3_BUCKET})
+            set(AWS_LOC $ENV{S3_BUCKET})
+        else()
+            set(AWS_LOC "nestc-pub")
+        endif()
+        if(${AWS_LOC} STREQUAL "nestc-pub")
             set(AWS_PARAM "--no-sign-request")
         endif()
 
@@ -74,7 +80,7 @@ elseif(NESTC_EVTA_RUN_ON_ZCU102)
                 COMMAND
                 mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18
                 COMMAND
-                aws s3 cp s3://$ENV{S3_BUCKET}/examples/bundles/resnet18_relay_aarch64/module__mxnet_exported_resnet18 ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18 --recursive
+                aws s3 cp s3://${AWS_LOC}/examples/bundles/resnet18_relay_aarch64/module__mxnet_exported_resnet18 ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18 --recursive
                 ARGS ${AWS_PARAM}
                 COMMAND
                 cp ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18_tvm.so ${CMAKE_CURRENT_BINARY_DIR}/
