@@ -37,7 +37,7 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
 
     add_custom_target(resnet18RelayAarch64BundleCPPGen DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp)
 
-else()
+elseif(NESTC_EVTA_RUN_ON_ZCU102)
     if(NOT NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS)
         add_custom_command(
                 OUTPUT
@@ -61,6 +61,10 @@ else()
                 -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
         )
     else()
+        if($ENV{S3_BUCKET} STREQUAL "nestc-pub")
+            set(AWS_PARAM "--no-sign-request")
+        endif()
+
         add_custom_command(
                 OUTPUT
                 ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
@@ -71,8 +75,10 @@ else()
                 mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18
                 COMMAND
                 aws s3 cp s3://$ENV{S3_BUCKET}/examples/bundles/resnet18_relay_aarch64/module__mxnet_exported_resnet18 ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18 --recursive
+                ARGS ${AWS_PARAM}
                 COMMAND
                 cp ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18_tvm.so ${CMAKE_CURRENT_BINARY_DIR}/
+
         )
     endif()
     add_custom_target(resnet18RelayAarch64BundleCPPGen DEPENDS
