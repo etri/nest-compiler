@@ -615,6 +615,162 @@ void conv_test_template(dim_t N, dim_t H, dim_t W, dim_t C, float input_scale,
   out1.toBin(output_bin_str.c_str());
 }
 
+TEST(VTASaverTest, ResConv1Test) {
+    std::array<dim_t, 4> S{{1, 56, 56, 64}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 128, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 128, 0);
+
+    conv_test_template(1, 56, 56, 64, 1,
+                       64, 3, 3, 64, 1,
+                       1,
+                       1, 1, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv1Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv2Test) {
+
+    std::array<dim_t, 4> S{{1, 28, 28, 128}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 32, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 32, 0);
+
+    conv_test_template(1, 56, 56, 64, 1,
+                       128, 1, 1, 64, 1,
+                       1,
+                       2, 0, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv2Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv3Test) {
+
+    std::array<dim_t, 4> S{{1, 28, 28, 128}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 128, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 128, 0);
+
+    conv_test_template(1, 56, 56, 64, 1,
+                       128, 3, 3, 64, 1,
+                       1,
+                       2, 1, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv3Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv4Test) {
+
+    std::array<dim_t, 4> S{{1, 28, 28, 128}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 128, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 128, 0);
+
+    conv_test_template(1, 28, 28, 128, 1,
+                       128, 3, 3, 128, 1,
+                       1,
+                       1, 1, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv4Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv5Test) {
+
+    std::array<dim_t, 4> S{{1, 14, 14, 256}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 64, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 64, 0);
+
+    conv_test_template(1, 28, 28, 128, 1,
+                       256, 1, 1, 128, 1,
+                       1,
+                       2, 0, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv5Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv6Test) {
+
+    std::array<dim_t, 4> S{{1, 14, 14, 256}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 256, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 256, 0);
+
+    conv_test_template(1, 28, 28, 128, 1,
+                       256, 3, 3, 128, 1,
+                       1,
+                       2, 1, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv6Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv7Test) {
+
+    std::array<dim_t, 4> S{{1, 14, 14, 256}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 128, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 128, 0);
+
+    conv_test_template(1, 14, 14, 256, 1,
+                       256, 3, 3, 256, 1,
+                       1,
+                       1, 1, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv7Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv8Test) {
+    std::array<dim_t, 4> S{{1, 7, 7, 512}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 32, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 32, 0);
+
+    conv_test_template(1, 14, 14, 256, 1,
+                       512, 1, 1, 256, 1,
+                       1,
+                       2, 0, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv8Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv9Test) {
+    std::array<dim_t, 4> S{{1, 7, 7, 512}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 256, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 256, 0);
+
+    conv_test_template(1, 14, 14, 256, 1,
+                       512, 3, 3, 256, 1,
+                       1,
+                       2, 1, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv9Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
+TEST(VTASaverTest, ResConv10Test) {
+    std::array<dim_t, 4> S{{1, 7, 7, 512}};
+    llvm::ArrayRef<dim_t> shape(S);
+    Tensor out1(ElemKind::Int8QTy, shape, 128, 0);
+    Tensor out2(ElemKind::Int8QTy, shape, 128, 0);
+
+    conv_test_template(1, 7, 7, 512, 1,
+                       512, 3, 3, 512, 1,
+                       1,
+                       1, 1, 1, 0, 10, -10, 10, 0, 32768, "vtaResConv10Test", out1, out2
+    );
+
+    EXPECT_TRUE(out1.isEqual(out2, 0.0));
+}
+
 TEST(VTASaverTest, Conv_inception_5b_5x5_1__1) {
 
   std::array<dim_t, 4> S{{1, 7, 7, 128}};
