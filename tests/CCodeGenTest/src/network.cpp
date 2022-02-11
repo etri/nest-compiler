@@ -618,13 +618,19 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar0, sizeof(float));
 	readFileBin.read((char *)&pad0, sizeof(float));
 	varresnetv22_batchnorm0_fwd = (float(*)[1][3][224][224])malloc(sizeof(float[1][3][224][224]));
-	memset(varresnetv22_batchnorm0_fwd, 0x00, sizeof(float[1][3][224][224]));
-	varresnetv22_batchnorm0_fwd = (float(*)[1][3][224][224])malloc(sizeof(float[1][3][224][224]));
+	if(varresnetv22_batchnorm0_fwd != NULL)
+	{
+		memset(varresnetv22_batchnorm0_fwd, 0x00, sizeof(float[1][3][224][224]));
+	}
+	if(varresnetv22_batchnorm0_fwd != NULL)
+	{
+		varresnetv22_batchnorm0_fwd = (float(*)[1][3][224][224])malloc(sizeof(float[1][3][224][224]));
+	}
 
 	//Constant input
 	varresnetv22_conv0_weight = (float(*)[64][3][7][7])malloc(sizeof(float[64][3][7][7]));
 	readFileBin.read((char *)varresnetv22_conv0_weight,4*64*3*7*7);
-
+//
 	//Transpose
 	//0 2 3 1 
 	read_vector(&shuffle225081392, &readFileBin);
@@ -677,10 +683,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar1, sizeof(float));
 	readFileBin.read((char *)&pad1, sizeof(float));
 	varresnetv22_batchnorm1_fwd = (float(*)[1][64][112][112])malloc(sizeof(float[1][64][112][112]));
-	memset(varresnetv22_batchnorm1_fwd, 0x00, sizeof(float[1][64][112][112]));
-	varresnetv22_batchnorm1_fwd = (float(*)[1][64][112][112])malloc(sizeof(float[1][64][112][112]));
-
-	varresnetv22_relu0_fwd = (float(*)[1][64][112][112])malloc(sizeof(float[1][64][112][112]));
+	if(varresnetv22_batchnorm1_fwd != NULL)
+	{
+		memset(varresnetv22_batchnorm1_fwd, 0x00, sizeof(float[1][64][112][112]));
+	}
+	if(varresnetv22_batchnorm1_fwd != NULL)
+	{
+		varresnetv22_batchnorm1_fwd = (float(*)[1][64][112][112])malloc(sizeof(float[1][64][112][112]));
+	}
+	if(varresnetv22_relu0_fwd != NULL)
+	{
+		varresnetv22_relu0_fwd = (float(*)[1][64][112][112])malloc(sizeof(float[1][64][112][112]));
+	}
 
 	//Transpose
 	//0 2 3 1 
@@ -722,10 +736,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar2, sizeof(float));
 	readFileBin.read((char *)&pad2, sizeof(float));
 	varresnetv22_stage1_batchnorm0_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-	memset(varresnetv22_stage1_batchnorm0_fwd, 0x00, sizeof(float[1][64][56][56]));
-	varresnetv22_stage1_batchnorm0_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
-	varresnetv22_stage1_activation0 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	if(varresnetv22_stage1_batchnorm0_fwd != NULL)
+	{
+		memset(varresnetv22_stage1_batchnorm0_fwd, 0x00, sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage1_batchnorm0_fwd != NULL)
+	{
+		varresnetv22_stage1_batchnorm0_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage1_activation0 != NULL)
+	{
+		varresnetv22_stage1_activation0 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
 
 	//Constant input
 	varresnetv22_stage1_conv0_weight = (float(*)[64][64][3][3])malloc(sizeof(float[64][64][3][3]));
@@ -783,10 +805,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar3, sizeof(float));
 	readFileBin.read((char *)&pad3, sizeof(float));
 	varresnetv22_stage1_batchnorm1_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-	memset(varresnetv22_stage1_batchnorm1_fwd, 0x00, sizeof(float[1][64][56][56]));
-	varresnetv22_stage1_batchnorm1_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
-	varresnetv22_stage1_activation1 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	if(varresnetv22_stage1_batchnorm1_fwd != NULL)
+	{
+		memset(varresnetv22_stage1_batchnorm1_fwd, 0x00, sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage1_batchnorm1_fwd != NULL)
+	{
+		varresnetv22_stage1_batchnorm1_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage1_activation1 != NULL)
+	{
+		varresnetv22_stage1_activation1 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
 
 	//Constant input
 	varresnetv22_stage1_conv1_weight = (float(*)[64][64][3][3])malloc(sizeof(float[64][64][3][3]));
@@ -822,8 +852,10 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225096784, &readFileBin);
 	varresnetv22_stage1_conv1_fwd__3 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
-	varresnetv22_stage1__plus0 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	if(varresnetv22_stage1__plus0 != NULL)
+	{
+		varresnetv22_stage1__plus0 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
 
 	//Constant input
 	varresnetv22_stage1_batchnorm2_gamma = (float(*)[64])malloc(sizeof(float[64]));
@@ -846,11 +878,19 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar4, sizeof(float));
 	readFileBin.read((char *)&pad4, sizeof(float));
 	varresnetv22_stage1_batchnorm2_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-	memset(varresnetv22_stage1_batchnorm2_fwd, 0x00, sizeof(float[1][64][56][56]));
-	varresnetv22_stage1_batchnorm2_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
-	varresnetv22_stage1_activation2 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
+	if(varresnetv22_stage1_batchnorm2_fwd != NULL)
+	{
+		memset(varresnetv22_stage1_batchnorm2_fwd, 0x00, sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage1_batchnorm2_fwd != NULL)
+	{
+		varresnetv22_stage1_batchnorm2_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage1_activation2 != NULL)
+	{
+		varresnetv22_stage1_activation2 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
+	
 	//Constant input
 	varresnetv22_stage1_conv2_weight = (float(*)[64][64][3][3])malloc(sizeof(float[64][64][3][3]));
 	readFileBin.read((char *)varresnetv22_stage1_conv2_weight,4*64*64*3*3);
@@ -907,10 +947,19 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar5, sizeof(float));
 	readFileBin.read((char *)&pad5, sizeof(float));
 	varresnetv22_stage1_batchnorm3_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-	memset(varresnetv22_stage1_batchnorm3_fwd, 0x00, sizeof(float[1][64][56][56]));
-	varresnetv22_stage1_batchnorm3_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
-	varresnetv22_stage1_activation3 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	if(varresnetv22_stage1_batchnorm3_fwd != NULL)
+	{
+		memset(varresnetv22_stage1_batchnorm3_fwd, 0x00, sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage1_batchnorm3_fwd != NULL)
+	{
+		varresnetv22_stage1_batchnorm3_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
+	
+	if(varresnetv22_stage1_activation3 != NULL)
+	{
+		varresnetv22_stage1_activation3 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
 
 	//Constant input
 	varresnetv22_stage1_conv3_weight = (float(*)[64][64][3][3])malloc(sizeof(float[64][64][3][3]));
@@ -946,8 +995,10 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225107360, &readFileBin);
 	varresnetv22_stage1_conv3_fwd__3 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
-	varresnetv22_stage1__plus1 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	if(varresnetv22_stage1__plus1 != NULL)
+	{
+		varresnetv22_stage1__plus1 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
 
 	//Constant input
 	varresnetv22_stage2_batchnorm0_gamma = (float(*)[64])malloc(sizeof(float[64]));
@@ -970,10 +1021,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar6, sizeof(float));
 	readFileBin.read((char *)&pad6, sizeof(float));
 	varresnetv22_stage2_batchnorm0_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-	memset(varresnetv22_stage2_batchnorm0_fwd, 0x00, sizeof(float[1][64][56][56]));
-	varresnetv22_stage2_batchnorm0_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
-
-	varresnetv22_stage2_activation0 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	if(varresnetv22_stage2_batchnorm0_fwd != NULL)
+	{
+		memset(varresnetv22_stage2_batchnorm0_fwd, 0x00, sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage2_batchnorm0_fwd != NULL)
+	{
+		varresnetv22_stage2_batchnorm0_fwd = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
+	if(varresnetv22_stage2_activation0 != NULL)
+	{
+		varresnetv22_stage2_activation0 = (float(*)[1][64][56][56])malloc(sizeof(float[1][64][56][56]));
+	}
 
 	//Constant input
 	varresnetv22_stage2_conv0_weight = (float(*)[128][64][3][3])malloc(sizeof(float[128][64][3][3]));
@@ -1031,10 +1090,19 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar7, sizeof(float));
 	readFileBin.read((char *)&pad7, sizeof(float));
 	varresnetv22_stage2_batchnorm1_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-	memset(varresnetv22_stage2_batchnorm1_fwd, 0x00, sizeof(float[1][128][28][28]));
-	varresnetv22_stage2_batchnorm1_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-
-	varresnetv22_stage2_activation1 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	if(varresnetv22_stage2_batchnorm1_fwd != NULL)
+	{
+		memset(varresnetv22_stage2_batchnorm1_fwd, 0x00, sizeof(float[1][128][28][28]));
+	}
+	if(varresnetv22_stage2_batchnorm1_fwd != NULL)
+	{
+		varresnetv22_stage2_batchnorm1_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
+	
+	if(varresnetv22_stage2_activation1 != NULL)
+	{
+		varresnetv22_stage2_activation1 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
 
 	//Constant input
 	varresnetv22_stage2_conv1_weight = (float(*)[128][128][3][3])malloc(sizeof(float[128][128][3][3]));
@@ -1105,8 +1173,10 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225123472, &readFileBin);
 	varresnetv22_stage2_conv2_fwd__3 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-
-	varresnetv22_stage2__plus0 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	if(varresnetv22_stage2__plus0 != NULL)
+	{
+		varresnetv22_stage2__plus0 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
 
 	//Constant input
 	varresnetv22_stage2_batchnorm2_gamma = (float(*)[128])malloc(sizeof(float[128]));
@@ -1129,10 +1199,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar8, sizeof(float));
 	readFileBin.read((char *)&pad8, sizeof(float));
 	varresnetv22_stage2_batchnorm2_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-	memset(varresnetv22_stage2_batchnorm2_fwd, 0x00, sizeof(float[1][128][28][28]));
-	varresnetv22_stage2_batchnorm2_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-
-	varresnetv22_stage2_activation2 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	if(varresnetv22_stage2_batchnorm2_fwd != 0)
+	{
+		memset(varresnetv22_stage2_batchnorm2_fwd, 0x00, sizeof(float[1][128][28][28]));
+	}
+	if(varresnetv22_stage2_batchnorm2_fwd != NULL)
+	{
+		varresnetv22_stage2_batchnorm2_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
+	if(varresnetv22_stage2_activation2 != NULL)
+	{
+		varresnetv22_stage2_activation2 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
 
 	//Constant input
 	varresnetv22_stage2_conv3_weight = (float(*)[128][128][3][3])malloc(sizeof(float[128][128][3][3]));
@@ -1190,10 +1268,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar9, sizeof(float));
 	readFileBin.read((char *)&pad9, sizeof(float));
 	varresnetv22_stage2_batchnorm3_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-	memset(varresnetv22_stage2_batchnorm3_fwd, 0x00, sizeof(float[1][128][28][28]));
-	varresnetv22_stage2_batchnorm3_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-
-	varresnetv22_stage2_activation3 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	if(varresnetv22_stage2_batchnorm3_fwd != NULL)
+	{
+		memset(varresnetv22_stage2_batchnorm3_fwd, 0x00, sizeof(float[1][128][28][28]));
+	}
+	if(varresnetv22_stage2_batchnorm3_fwd != NULL)
+	{
+		varresnetv22_stage2_batchnorm3_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
+	if(varresnetv22_stage2_activation3 != NULL)
+	{
+		varresnetv22_stage2_activation3 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
 
 	//Constant input
 	varresnetv22_stage2_conv4_weight = (float(*)[128][128][3][3])malloc(sizeof(float[128][128][3][3]));
@@ -1229,8 +1315,10 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225133408, &readFileBin);
 	varresnetv22_stage2_conv4_fwd__3 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-
-	varresnetv22_stage2__plus1 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	if(varresnetv22_stage2__plus1 != NULL)
+	{
+		varresnetv22_stage2__plus1 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
 
 	//Constant input
 	varresnetv22_stage3_batchnorm0_gamma = (float(*)[128])malloc(sizeof(float[128]));
@@ -1253,10 +1341,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar10, sizeof(float));
 	readFileBin.read((char *)&pad10, sizeof(float));
 	varresnetv22_stage3_batchnorm0_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-	memset(varresnetv22_stage3_batchnorm0_fwd, 0x00, sizeof(float[1][128][28][28]));
-	varresnetv22_stage3_batchnorm0_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
-
-	varresnetv22_stage3_activation0 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	if(varresnetv22_stage3_batchnorm0_fwd != NULL)
+	{
+		memset(varresnetv22_stage3_batchnorm0_fwd, 0x00, sizeof(float[1][128][28][28]));
+	}
+	if(varresnetv22_stage3_batchnorm0_fwd != NULL)
+	{
+		varresnetv22_stage3_batchnorm0_fwd = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
+	if(varresnetv22_stage3_activation0 != NULL)
+	{
+		varresnetv22_stage3_activation0 = (float(*)[1][128][28][28])malloc(sizeof(float[1][128][28][28]));
+	}
 
 	//Constant input
 	varresnetv22_stage3_conv0_weight = (float(*)[256][128][3][3])malloc(sizeof(float[256][128][3][3]));
@@ -1314,10 +1410,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar11, sizeof(float));
 	readFileBin.read((char *)&pad11, sizeof(float));
 	varresnetv22_stage3_batchnorm1_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-	memset(varresnetv22_stage3_batchnorm1_fwd, 0x00, sizeof(float[1][256][14][14]));
-	varresnetv22_stage3_batchnorm1_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
-	varresnetv22_stage3_activation1 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	if(varresnetv22_stage3_batchnorm1_fwd != NULL)
+	{
+		memset(varresnetv22_stage3_batchnorm1_fwd, 0x00, sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage3_batchnorm1_fwd != NULL)
+	{
+		varresnetv22_stage3_batchnorm1_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage3_activation1 != NULL)
+	{
+		varresnetv22_stage3_activation1 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
 
 	//Constant input
 	varresnetv22_stage3_conv1_weight = (float(*)[256][256][3][3])malloc(sizeof(float[256][256][3][3]));
@@ -1388,9 +1492,11 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225149056, &readFileBin);
 	varresnetv22_stage3_conv2_fwd__3 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
-	varresnetv22_stage3__plus0 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
+	if(varresnetv22_stage3__plus0 != NULL)
+	{
+		varresnetv22_stage3__plus0 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
+	
 	//Constant input
 	varresnetv22_stage3_batchnorm2_gamma = (float(*)[256])malloc(sizeof(float[256]));
 	readFileBin.read((char *)varresnetv22_stage3_batchnorm2_gamma,4*256);
@@ -1412,10 +1518,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar12, sizeof(float));
 	readFileBin.read((char *)&pad12, sizeof(float));
 	varresnetv22_stage3_batchnorm2_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-	memset(varresnetv22_stage3_batchnorm2_fwd, 0x00, sizeof(float[1][256][14][14]));
-	varresnetv22_stage3_batchnorm2_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
-	varresnetv22_stage3_activation2 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	if(varresnetv22_stage3_batchnorm2_fwd != NULL)
+	{
+		memset(varresnetv22_stage3_batchnorm2_fwd, 0x00, sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage3_batchnorm2_fwd != NULL)
+	{
+		varresnetv22_stage3_batchnorm2_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage3_activation2 != NULL)
+	{
+		varresnetv22_stage3_activation2 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
 
 	//Constant input
 	varresnetv22_stage3_conv3_weight = (float(*)[256][256][3][3])malloc(sizeof(float[256][256][3][3]));
@@ -1473,11 +1587,19 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar13, sizeof(float));
 	readFileBin.read((char *)&pad13, sizeof(float));
 	varresnetv22_stage3_batchnorm3_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-	memset(varresnetv22_stage3_batchnorm3_fwd, 0x00, sizeof(float[1][256][14][14]));
-	varresnetv22_stage3_batchnorm3_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
-	varresnetv22_stage3_activation3 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
+	if(varresnetv22_stage3_batchnorm3_fwd != NULL)
+	{
+		memset(varresnetv22_stage3_batchnorm3_fwd, 0x00, sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage3_batchnorm3_fwd != NULL)
+	{
+		varresnetv22_stage3_batchnorm3_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage3_activation3 != NULL)
+	{
+		varresnetv22_stage3_activation3 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
+	
 	//Constant input
 	varresnetv22_stage3_conv4_weight = (float(*)[256][256][3][3])malloc(sizeof(float[256][256][3][3]));
 	readFileBin.read((char *)varresnetv22_stage3_conv4_weight,4*256*256*3*3);
@@ -1512,8 +1634,10 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225160128, &readFileBin);
 	varresnetv22_stage3_conv4_fwd__3 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
-	varresnetv22_stage3__plus1 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	if(varresnetv22_stage3__plus1 != NULL)
+	{
+		varresnetv22_stage3__plus1 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
 
 	//Constant input
 	varresnetv22_stage4_batchnorm0_gamma = (float(*)[256])malloc(sizeof(float[256]));
@@ -1536,10 +1660,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar14, sizeof(float));
 	readFileBin.read((char *)&pad14, sizeof(float));
 	varresnetv22_stage4_batchnorm0_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-	memset(varresnetv22_stage4_batchnorm0_fwd, 0x00, sizeof(float[1][256][14][14]));
-	varresnetv22_stage4_batchnorm0_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
-
-	varresnetv22_stage4_activation0 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	if(varresnetv22_stage4_batchnorm0_fwd != NULL)
+	{
+		memset(varresnetv22_stage4_batchnorm0_fwd, 0x00, sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage4_batchnorm0_fwd != NULL)
+	{
+		varresnetv22_stage4_batchnorm0_fwd = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
+	if(varresnetv22_stage4_activation0 != NULL)
+	{
+		varresnetv22_stage4_activation0 = (float(*)[1][256][14][14])malloc(sizeof(float[1][256][14][14]));
+	}
 
 	//Constant input
 	varresnetv22_stage4_conv0_weight = (float(*)[512][256][3][3])malloc(sizeof(float[512][256][3][3]));
@@ -1597,10 +1729,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar15, sizeof(float));
 	readFileBin.read((char *)&pad15, sizeof(float));
 	varresnetv22_stage4_batchnorm1_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-	memset(varresnetv22_stage4_batchnorm1_fwd, 0x00, sizeof(float[1][512][7][7]));
-	varresnetv22_stage4_batchnorm1_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-
-	varresnetv22_stage4_activation1 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	if(varresnetv22_stage4_batchnorm1_fwd != NULL)
+	{
+		memset(varresnetv22_stage4_batchnorm1_fwd, 0x00, sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_stage4_batchnorm1_fwd != NULL)
+	{
+		varresnetv22_stage4_batchnorm1_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_stage4_activation1 != NULL)
+	{
+		varresnetv22_stage4_activation1 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
 
 	//Constant input
 	varresnetv22_stage4_conv1_weight = (float(*)[512][512][3][3])malloc(sizeof(float[512][512][3][3]));
@@ -1671,8 +1811,10 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225182272, &readFileBin);
 	varresnetv22_stage4_conv2_fwd__3 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-
-	varresnetv22_stage4__plus0 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	if(varresnetv22_stage4__plus0 != NULL)
+	{
+		varresnetv22_stage4__plus0 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
 
 	//Constant input
 	varresnetv22_stage4_batchnorm2_gamma = (float(*)[512])malloc(sizeof(float[512]));
@@ -1695,11 +1837,19 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar16, sizeof(float));
 	readFileBin.read((char *)&pad16, sizeof(float));
 	varresnetv22_stage4_batchnorm2_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-	memset(varresnetv22_stage4_batchnorm2_fwd, 0x00, sizeof(float[1][512][7][7]));
-	varresnetv22_stage4_batchnorm2_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-
-	varresnetv22_stage4_activation2 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-
+	if(varresnetv22_stage4_batchnorm2_fwd != NULL)
+	{
+		memset(varresnetv22_stage4_batchnorm2_fwd, 0x00, sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_stage4_batchnorm2_fwd != NULL)
+	{
+		varresnetv22_stage4_batchnorm2_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_stage4_activation2 != NULL)
+	{
+		varresnetv22_stage4_activation2 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
+	
 	//Constant input
 	varresnetv22_stage4_conv3_weight = (float(*)[512][512][3][3])malloc(sizeof(float[512][512][3][3]));
 	readFileBin.read((char *)varresnetv22_stage4_conv3_weight,4*512*512*3*3);
@@ -1756,10 +1906,18 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar17, sizeof(float));
 	readFileBin.read((char *)&pad17, sizeof(float));
 	varresnetv22_stage4_batchnorm3_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-	memset(varresnetv22_stage4_batchnorm3_fwd, 0x00, sizeof(float[1][512][7][7]));
-	varresnetv22_stage4_batchnorm3_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-
-	varresnetv22_stage4_activation3 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	if(varresnetv22_stage4_batchnorm3_fwd != NULL)
+	{
+		memset(varresnetv22_stage4_batchnorm3_fwd, 0x00, sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_stage4_batchnorm3_fwd != NULL)
+	{
+		varresnetv22_stage4_batchnorm3_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_stage4_activation3 != NULL)
+	{
+		varresnetv22_stage4_activation3 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
 
 	//Constant input
 	varresnetv22_stage4_conv4_weight = (float(*)[512][512][3][3])malloc(sizeof(float[512][512][3][3]));
@@ -1795,8 +1953,10 @@ void initializeVariables(std::string dataFilePath)
 	//0 3 1 2 
 	read_vector(&shuffle225195392, &readFileBin);
 	varresnetv22_stage4_conv4_fwd__3 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-
-	varresnetv22_stage4__plus1 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	if(varresnetv22_stage4__plus1 != NULL)
+	{
+		varresnetv22_stage4__plus1 = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
 
 	//Constant input
 	varresnetv22_batchnorm2_gamma = (float(*)[512])malloc(sizeof(float[512]));
@@ -1819,10 +1979,19 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)&epsilonVar18, sizeof(float));
 	readFileBin.read((char *)&pad18, sizeof(float));
 	varresnetv22_batchnorm2_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-	memset(varresnetv22_batchnorm2_fwd, 0x00, sizeof(float[1][512][7][7]));
-	varresnetv22_batchnorm2_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
-
-	varresnetv22_relu1_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	if(varresnetv22_batchnorm2_fwd != NULL)
+	{
+		memset(varresnetv22_batchnorm2_fwd, 0x00, sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_batchnorm2_fwd != NULL)
+	{
+		varresnetv22_batchnorm2_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
+	if(varresnetv22_relu1_fwd != NULL)
+	{
+		varresnetv22_relu1_fwd = (float(*)[1][512][7][7])malloc(sizeof(float[1][512][7][7]));
+	}
+	
 
 	//Transpose
 	//0 2 3 1 
@@ -1844,9 +2013,14 @@ void initializeVariables(std::string dataFilePath)
 	varresnetv22_pool1_fwd__2 = (float(*)[1][512][1][1])malloc(sizeof(float[1][512][1][1]));
 
 	//Reshape
-	varresnetv22_flatten0_reshape0 = (float(*)[1][512])malloc(sizeof(float[1][512]));
-	varresnetv22_flatten0_reshape0 = (float(*)[1][512])malloc(sizeof(float[1][512]));
-
+	if(varresnetv22_flatten0_reshape0 != NULL)
+	{
+		varresnetv22_flatten0_reshape0 = (float(*)[1][512])malloc(sizeof(float[1][512]));
+		varresnetv22_flatten0_reshape0 = (float(*)[1][512])malloc(sizeof(float[1][512]));
+	}
+	
+	
+	
 	//Constant input
 	varresnetv22_dense0_weight = (float(*)[1000][512])malloc(sizeof(float[1000][512]));
 	readFileBin.read((char *)varresnetv22_dense0_weight,4*1000*512);
@@ -1863,11 +2037,16 @@ void initializeVariables(std::string dataFilePath)
 	readFileBin.read((char *)varresnetv22_dense0_bias,4*1000);
 
 	//Reshape
-	varresnetv22_dense0_fwd_reshape = (float(*)[1][1000])malloc(sizeof(float[1][1000]));
-	varresnetv22_dense0_fwd_reshape = (float(*)[1][1000])malloc(sizeof(float[1][1000]));
-
-	varresnetv22_dense0_fwd__2 = (float(*)[1][1000])malloc(sizeof(float[1][1000]));
-
+	if(varresnetv22_dense0_fwd_reshape != NULL)
+	{
+		varresnetv22_dense0_fwd_reshape = (float(*)[1][1000])malloc(sizeof(float[1][1000]));
+		varresnetv22_dense0_fwd_reshape = (float(*)[1][1000])malloc(sizeof(float[1][1000]));
+	}
+	
+	if(varresnetv22_dense0_fwd__2 != NULL)
+	{
+		varresnetv22_dense0_fwd__2 = (float(*)[1][1000])malloc(sizeof(float[1][1000]));
+	}
 
 }
 

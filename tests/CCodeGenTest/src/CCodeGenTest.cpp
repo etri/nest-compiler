@@ -612,7 +612,13 @@ int main(int argc, char *argv[]) {
 		for(int j = 0; j < 3; j++)
 			for(int k = 0; k < 224; k++)
 				for(int l = 0; l < 224; l++)
-					(*input)[i][j][k][l] = 7.0;
+				{
+					if(input != NULL)
+					{
+						(*input)[i][j][k][l] = 7.0;
+					}
+				}
+					
 
 	if(imageFilePath != 0) {
 		bool isRead = readPngImage(*input, imageFilePath, zeroOne, imagenetNormMean, imagenetNormStd);
@@ -627,7 +633,10 @@ int main(int argc, char *argv[]) {
 
 	float (* result)[1][1000];
 	result = (float (*)[1][1000])malloc(sizeof(float[1][1000]));
-	memset(result, 0x00, sizeof(float[1][1000]));
+	if(result != NULL)
+	{
+		memset(result, 0x00, sizeof(float[1][1000]));
+	}
 
 
 	cout <<"-----------------------------" << endl<<endl;
@@ -650,10 +659,13 @@ int main(int argc, char *argv[]) {
 	inferenceTime = (double)(end - start);
     cout << "==> Initialization time : " << ((inferenceTime) / CLOCKS_PER_SEC) << " seconds" << endl<<endl;
 
-
+//
 	cout << "Inferencing (executing inference())" << endl;
 	start = clock();
-	inference(input, *result);
+	if(result != NULL)
+	{
+		inference(input, *result);
+	}
 	end = clock();
 	inferenceTime = (double)(end - start);
     cout << "==> Inference time : " << ((inferenceTime) / CLOCKS_PER_SEC) << " seconds" << endl<<endl;
