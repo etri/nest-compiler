@@ -59,7 +59,7 @@ static void loadImagesAndPreprocess(const std::vector<std::string> &filenames,
 void parseCommandLineOptions(int argc, char **argv) {
   int arg = 1;
   while (arg < argc) {
-    inputImageFilenames.push_back(argv[1]);
+      inputImageFilenames.push_back(argv[arg++]);
   }
 }
 
