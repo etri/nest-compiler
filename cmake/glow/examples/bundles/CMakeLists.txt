@@ -4,7 +4,7 @@ add_custom_command(
         COMMAND
         mkdir -p ${NESTC_BINARY_DIR}/models
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx --no-verbose
+        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx ${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx --no-sign-request
 )
 
 add_custom_target(MxnetResnet18ONNXDownload

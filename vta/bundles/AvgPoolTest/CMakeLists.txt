@@ -20,15 +20,15 @@ else()
             ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin
             ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestMainEntry.h
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestBundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.cpp
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestBundle.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.cpp --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestInput.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestInput.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestInput.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.weights.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestBundle.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestBundle.weights.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestGolden.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/AvgPoolTest/vtaAvgPoolTestMainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestMainEntry.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestMainEntry.hp ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestMainEntry.h --no-sign-request
     )
 endif()
 

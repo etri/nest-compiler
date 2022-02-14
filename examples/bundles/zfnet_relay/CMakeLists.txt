@@ -4,7 +4,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/zfnet.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/zfnet512-9.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/zfnet.onnx --no-verbose
+        aws s3 cp s3://nestc-data-pub/models/zfnet512-9.onnx ${CMAKE_CURRENT_BINARY_DIR}/zfnet.onnx --no-sign-request
 )
 
 add_custom_target(ZfNetRelayBundleONNX

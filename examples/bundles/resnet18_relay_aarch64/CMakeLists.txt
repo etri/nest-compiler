@@ -48,17 +48,13 @@ elseif(NESTC_EVTA_RUN_ON_ZCU102)
                 COMMAND
                 mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18
                 COMMAND
-                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.cpp
-                -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
+                aws s3 cp s3://nestc-data-pub/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.cpp ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
                 COMMAND
-                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.h
-                -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h
-                COMMAND
-                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18_tvm.so --no-verbose
-                -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_tvm.so
-                COMMAND
-                wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/RelayBundleTest/Resnet18AarchTest/Makefile
-                -O ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
+                aws s3 cp s3://nestc-data-pub/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18.h ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.h
+               COMMAND
+                aws s3 cp s3://nestc-data-pub/RelayBundleTest/Resnet18AarchTest/mxnet_exported_resnet18_tvm.so ${CMAKE_CURRENT_BINARY_DIR}//mxnet_exported_resnet18_tvm.so
+               COMMAND
+                aws s3 cp s3://nestc-data-pub/RelayBundleTest/Resnet18AarchTest/Makefile ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/Makefile
         )
     else()
 

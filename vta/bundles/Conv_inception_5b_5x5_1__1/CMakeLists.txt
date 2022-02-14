@@ -24,17 +24,17 @@ else()
             ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1MainEntry.h
             ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Bundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Bundle.cpp
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Bundle.cpp ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Bundle.cpp --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Input.bin -O ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Input.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Input.bin ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Input.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Bundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Bundle.weights.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Bundle.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Bundle.weights.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Golden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Golden.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1Golden.bin  ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1Golden.bin  --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1MainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1MainEntry.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Conv_inception_5b_5x5_1__1/Conv_inception_5b_5x5_1__1MainEntry.h ${CMAKE_CURRENT_BINARY_DIR}/Conv_inception_5b_5x5_1__1MainEntry.h --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Conv_inception_5b_5x5_1__1/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Conv_inception_5b_5x5_1__1/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
 
     )
 endif()

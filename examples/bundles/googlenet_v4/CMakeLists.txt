@@ -14,7 +14,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/googlenet.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/googlenet_v4.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/googlenet.onnx --no-verbose
+        aws s3 cp s3://nestc-data-pub/models/googlenet_v4.onnx ${CMAKE_CURRENT_BINARY_DIR}/googlenet.onnx --no-sign-request
 )
 
 add_custom_target(GoogleNetBundleONNX

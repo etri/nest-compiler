@@ -16,7 +16,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/resnext101.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/resnext101.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnext101.onnx --no-verbose
+        aws s3 cp s3://nestc-data-pub/models/resnext101.onnx ${CMAKE_CURRENT_BINARY_DIR}/resnext101.onnx --no-sign-request
 )
 
 add_custom_target(ResNext101BundleONNX

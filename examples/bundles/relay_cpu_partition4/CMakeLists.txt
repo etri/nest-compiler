@@ -15,7 +15,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-verbose
+        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18.onnx ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.onnx --no-sign-request
 )
 
 add_custom_target(ResNet18RelayPartition4BundleONNX

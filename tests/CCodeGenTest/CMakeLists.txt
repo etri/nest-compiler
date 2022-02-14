@@ -5,7 +5,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_SOURCE_DIR}/src/data.bin
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/ccodegen-data/data.bin -O ${CMAKE_CURRENT_SOURCE_DIR}/src/data.bin
+        aws s3 cp s3://nestc-data-pub/ccodegen-data/data.bin ${CMAKE_CURRENT_BINARY_DIR}/src/data.bin --no-sign-request
 )
 set(CMAKE_CXX_STANDARD 14)
 

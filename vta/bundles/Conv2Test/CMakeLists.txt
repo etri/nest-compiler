@@ -24,17 +24,17 @@ else()
             ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestMainEntry.h
             ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv2Test/vtaConv2TestBundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestBundle.cpp
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/VTAConv2Test/vtaConv2TestBundle.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestBundle.cpp --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv2Test/vtaConv2TestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestInput.bin
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/VTAConv2Test/vtaConv2TestInput.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestInput.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv2Test/vtaConv2TestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestBundle.weights.bin
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/VTAConv2Test/vtaConv2TestBundle.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestBundle.weights.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv2Test/vtaConv2TestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestGolden.bin
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/VTAConv2Test/vtaConv2TestGolden.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestGolden.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv2Test/vtaConv2TestMainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestMainEntry.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/VTAConv2Test/vtaConv2TestMainEntry.h ${CMAKE_CURRENT_BINARY_DIR}/vtaConv2TestMainEntry.h --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/VTAConv2Test/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/VTAConv2Test/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
 
     )
 endif()

@@ -19,18 +19,15 @@ else()
             ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.weights.bin
             ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestGolden.bin
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestBundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.cpp
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/FloatConvTest/vtaFloatConvTestBundle.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.cpp --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestInput.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/FloatConvTest/vtaFloatConvTestInput.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestInput.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.weights.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/FloatConvTest/vtaFloatConvTestBundle.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.weights.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestGolden.bin --no-verbose
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/FloatConvTest/vtaFloatConvTestGolden.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestGolden.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/vtaFloatConvTestMainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestMainEntry.h
-
-            #            COMMAND
-            #            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/FloatConvTest/ -O ${CMAKE_CURRENT_BINARY_DIR}/
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/FloatConvTest/vtaFloatConvTestMainEntry.h ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestMainEntry.h --no-sign-request
     )
 endif()
 add_custom_target(vtaFloatConvTestBundleNET DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/vtaFloatConvTestBundle.cpp

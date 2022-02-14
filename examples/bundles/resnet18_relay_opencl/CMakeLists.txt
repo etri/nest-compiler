@@ -82,6 +82,15 @@ if(NESTC_OPENCL_TEST)
         add_dependencies(resnet18RelayOpenCLBundle resnet18RelayOpenCLBundleObjectGen tvm_runtime)
     else()
         if(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS)
+            if(DEFINED $ENV{S3_BUCKET})
+                set(AWS_LOC $ENV{S3_BUCKET})
+            else()
+                set(AWS_LOC "nestc-pub")
+            endif()
+            if(${AWS_LOC} STREQUAL "nestc-pub")
+                set(AWS_PARAM "--no-sign-request")
+            endif()
+
             add_custom_command(
                     OUTPUT
                     ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18.cpp
@@ -91,7 +100,8 @@ if(NESTC_OPENCL_TEST)
                     COMMAND
                     mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18
                     COMMAND
-                    aws s3 cp s3://$ENV{S3_BUCKET}/examples/bundles/resnet18_relay_opencl/module__mxnet_exported_resnet18 ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18 --recursive
+                    aws s3 cp s3://${AWS_LOC}/examples/bundles/resnet18_relay_opencl/module__mxnet_exported_resnet18 ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18 --recursive
+                    ARGS ${AWS_PARAM}
                     COMMAND
                     cp ${CMAKE_CURRENT_BINARY_DIR}/module__mxnet_exported_resnet18/mxnet_exported_resnet18_tvm.so ${CMAKE_CURRENT_BINARY_DIR}/
             )

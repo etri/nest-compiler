@@ -4,7 +4,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml --no-sign-request
 )
 
 add_custom_target(singlevtaMxnetResnet18BundleONNX
@@ -130,7 +130,7 @@ else()
     add_custom_command(
             OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MultiEVTAResnet18Test.tar
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/MultiEVTAResnet18Test/MultiEVTAResnet18Test.tar -O ${CMAKE_CURRENT_BINARY_DIR}/MultiEVTAResnet18Test.tar
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/MultiEVTAResnet18Test/MultiEVTAResnet18Test.tar ${CMAKE_CURRENT_BINARY_DIR}/MultiEVTAResnet18Test.tar --no-sign-request
     )
     add_custom_command(
             OUTPUT
@@ -156,17 +156,17 @@ else()
                         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
                         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_profile.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18_profile.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18_debug.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18_debug.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.h -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18.h ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/mxnet_exported_resnet18.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin --no-sign-request
                 )
             else()
                 add_custom_command(
@@ -177,17 +177,17 @@ else()
                         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
                         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.cpp --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_profile.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_profile.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_profile.cpp --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_debug.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18_debug.cpp ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_debug.cpp --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/skip_quant_0/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.h -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.h ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h --no-sign-request
                         COMMAND
-                        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
+                        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/skip_quant_0/mxnet_exported_resnet18.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin --no-sign-request
                 )
             endif()
             ]]

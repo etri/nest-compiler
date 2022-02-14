@@ -83,11 +83,11 @@ if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
     if(NESTC_EVTA_RUN_ON_ZCU102)
         FetchContent_Populate(
                 VTALIB
-                URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/zcu102/21.12/vta.tar.gz
+                URL https://nestc-data-pub.s3.ap-northeast-2.amazonaws.com/lib/VTA/x86_sim/21.12/multi/vta.tar.gz
         )
         FetchContent_Populate(
                 ACL
-                URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/acl/acl.tar.gz
+                URL https://nestc-data-pub.s3.ap-northeast-2.amazonaws.com/lib/VTA/acl/acl.tar.gz
         )
         if(NESTC_EVTA_MULTI)
             if(NESTC_EVTA_RUN_WITH_GENERIC_BUNDLE)
@@ -107,12 +107,12 @@ if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
         if(NESTC_EVTA_MULTI)
             FetchContent_Populate(
                     VTALIB
-                    URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/x86_sim/21.12/multi/vta.tar.gz
+                    URL https://nestc-data-pub.s3.ap-northeast-2.amazonaws.com/lib/VTA/x86_sim/21.12/multi/vta.tar.gz
             )
         else()
             FetchContent_Populate(
                     VTALIB
-                    URL https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/lib/VTA/x86_sim/21.12/single/vta.tar.gz
+                    URL https://nestc-data-pub.s3.ap-northeast-2.amazonaws.com/lib/VTA/x86_sim/21.12/single/vta.tar.gz
             )
         endif()
         set(vtalib_location ${vtalib_SOURCE_DIR} )

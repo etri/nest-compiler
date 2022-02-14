@@ -24,17 +24,17 @@ else()
             ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestMainEntry.h
             ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestBundle.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestBundle.cpp
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestBundle.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestBundle.cpp --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestInput.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestInput.bin
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestInput.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestInput.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestBundle.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestBundle.weights.bin
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestBundle.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestBundle.weights.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestGolden.bin -O ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestGolden.bin
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestGolden.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestGolden.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestMainEntry.h -O ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestMainEntry.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnetv10S1C0Test/vtaResnetv10S1C0TestMainEntry.h ${CMAKE_CURRENT_BINARY_DIR}/vtaResnetv10S1C0TestMainEntry.h --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnetv10S1C0Test/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnetv10S1C0Test/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
 
     )
 endif()

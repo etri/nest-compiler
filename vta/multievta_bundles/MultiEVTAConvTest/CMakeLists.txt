@@ -33,7 +33,7 @@ else()
     add_custom_command(
             OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MultiEVTAConvTest.tar
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/MultiEVTAConvTest/MultiEVTAConvTest.tar -O ${CMAKE_CURRENT_BINARY_DIR}/MultiEVTAConvTest.tar
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/MultiEVTAConvTest/MultiEVTAConvTest.tar ${CMAKE_CURRENT_BINARY_DIR}/MultiEVTAConvTest.tar --no-sign-request
     )
     add_custom_command(
             OUTPUT

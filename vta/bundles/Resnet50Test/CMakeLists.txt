@@ -3,9 +3,9 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
         ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50_calib_2.yaml -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
+        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50_calib_2.yaml ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml --no-sign-request
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx --no-verbose
+        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.onnx ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx --no-sign-request
 )
 
 add_custom_target(vtaCaffe2Resnet50BundleONNX
@@ -44,13 +44,13 @@ else()
             ${CMAKE_CURRENT_BINARY_DIR}/resnet50.weights.bin
             ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50.cpp -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50.cpp
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.cpp ${CMAKE_CURRENT_BINARY_DIR}/resnet50.cpp --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50.h -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.h ${CMAKE_CURRENT_BINARY_DIR}/resnet50.h --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/resnet50.weights.bin -O ${CMAKE_CURRENT_BINARY_DIR}/resnet50.weights.bin
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.weights.bin${CMAKE_CURRENT_BINARY_DIR}/resnet50.weights.bin --no-sign-request
             COMMAND
-            wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/Resnet50/VTARuntime.h -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
     )
 endif()
 

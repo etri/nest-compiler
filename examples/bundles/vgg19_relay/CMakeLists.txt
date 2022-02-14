@@ -4,7 +4,7 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/vgg19.onnx
         COMMAND
-        wget https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/models/vgg19-caffe2-9.onnx -O ${CMAKE_CURRENT_BINARY_DIR}/vgg19.onnx --no-verbose
+        aws s3 cp s3://nestc-data-pub/models/vgg19-caffe2-9.onnx ${CMAKE_CURRENT_BINARY_DIR}/vgg19.onnx --no-sign-request
 )
 
 add_custom_target(VGG19BundleRelayONNX
