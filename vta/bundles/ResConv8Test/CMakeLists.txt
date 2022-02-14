@@ -31,5 +31,15 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
     add_nestc_test(ZCU102 NAME vtaResConv8TestBundle
             COMMAND ${CMAKE_CURRENT_BINARY_DIR}/vtaResConv8TestBundle USE_SH 1 PARAMS ${CMAKE_CURRENT_BINARY_DIR}/vtaResConv8TestInput.bin
             USE_DIFF 1 DIFF_TARGET ${CMAKE_CURRENT_BINARY_DIR}/vtaResConv8TestGolden.bin)
+
+    if(NESTC_EVTA_PROFILE_AUTOTUNE)
+        add_executable(vtaResConv8TestBundleProfiling vtaResConv8TestBundleProfilingMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaResConv8TestBundle.cpp)
+        add_dependencies(vtaResConv8TestBundleProfiling ${BUNDLE_DEPENDS})
+        target_link_libraries(vtaResConv8TestBundleProfiling VTABundle ${BUNDLE_LINK_LIB})
+        set_target_properties( vtaResConv8TestBundleProfiling
+                PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                )
+    endif()
 endif()
 

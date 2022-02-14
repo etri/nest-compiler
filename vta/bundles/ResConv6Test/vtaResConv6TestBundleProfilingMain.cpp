@@ -268,5 +268,5 @@ int main(int argc, char **argv) {
   destroyVTARuntime();
 
   fclose(stdout);
-  printf("\n")
+  printf("\n");
 }
