@@ -85,6 +85,8 @@ build:
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
+  tags:
+    - etri
 
 build_from_aws:
   stage: build
@@ -121,6 +123,8 @@ build_from_aws:
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
+  tags:
+    - etri
 
 build-publish:
   stage: build
@@ -155,6 +159,9 @@ build-publish:
     paths:
       - build_ci/vta/bundles
       - build_ci/examples
+  tags:
+    - etri
+
 
 build-multievta:
   stage: build
@@ -188,6 +195,9 @@ build-multievta:
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_EVTA_MULTI=ON"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_multievta"
     - du -h -d 1
+  tags:
+    - etri
+
 
 build-vtaconv:
   stage: build
@@ -223,6 +233,9 @@ build-vtaconv:
     - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
+  tags:
+    - etri
+
 
 build-debug:
   stage: build
@@ -258,6 +271,9 @@ build-debug:
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
     - du -h -d 1
+  tags:
+    - etri
+
 
 
 
@@ -291,6 +307,9 @@ build-without-VTA:
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
     - du -h -d 1
+  tags:
+    - etri
+
 
 
 build-all:
@@ -325,6 +344,9 @@ build-all:
     - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
     - du -h -d 1
+  tags:
+    - etri
+
 
 test-all:
   stage: test
@@ -349,6 +371,9 @@ test-all:
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check"
   when: manual
   allow_failure: true
+  tags:
+    - etri
+
 
 publish:
   stage: publish
