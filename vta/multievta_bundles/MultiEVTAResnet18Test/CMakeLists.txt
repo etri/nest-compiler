@@ -19,9 +19,6 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
                 COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/VTAConvolutionTune.txt
-                ${CMAKE_CURRENT_BINARY_DIR}/VTAConvolutionTune.txt
-                COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_CURRENT_SOURCE_DIR}/VTASkipQuantizeNodes.txt
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
                 COMMAND
@@ -44,9 +41,6 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_1.cpp
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_1.h
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_1.weights.bin
-                COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/VTAConvolutionTune.txt
-                ${CMAKE_CURRENT_BINARY_DIR}/VTAConvolutionTune.txt
                 COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_CURRENT_SOURCE_DIR}/VTASkipQuantizeNodes.txt
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
@@ -74,9 +68,6 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_2.h
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_2.weights.bin
                 COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/VTAConvolutionTune.txt
-                ${CMAKE_CURRENT_BINARY_DIR}/VTAConvolutionTune.txt
-                COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_CURRENT_SOURCE_DIR}/VTASkipQuantizeNodes.txt
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
                 COMMAND
@@ -102,9 +93,6 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_3.cpp
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_3.h
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_3.weights.bin
-                COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/VTAConvolutionTune.txt
-                ${CMAKE_CURRENT_BINARY_DIR}/VTAConvolutionTune.txt
                 COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_CURRENT_SOURCE_DIR}/VTASkipQuantizeNodes.txt
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt

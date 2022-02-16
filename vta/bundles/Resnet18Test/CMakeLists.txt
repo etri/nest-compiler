@@ -28,9 +28,6 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.h
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
                 ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
-                COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/VTAConvolutionTune.txt
-                ${CMAKE_CURRENT_BINARY_DIR}/VTAConvolutionTune.txt
                 COMMAND
                 model-compiler -g
                 -model=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
@@ -55,9 +52,6 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18.weights.bin
                 ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
-                COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_SOURCE_DIR}/VTAConvolutionTune.txt
-                ${CMAKE_CURRENT_BINARY_DIR}/VTAConvolutionTune.txt
                 COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_CURRENT_SOURCE_DIR}/VTASkipQuantizeNodes.txt
                 ${CMAKE_CURRENT_BINARY_DIR}/VTASkipQuantizeNodes.txt
