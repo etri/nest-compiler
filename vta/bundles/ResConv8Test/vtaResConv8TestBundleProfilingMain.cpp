@@ -243,8 +243,12 @@ int main(int argc, char **argv) {
   int8_t *mutableWeightVarsAddr = initMutableWeightVars(vtaResConv8TestBundle_config);
   int8_t *activationsAddr = initActivations(vtaResConv8TestBundle_config);
 
+  freopen("ResConv8Test.csv", "w", stdout);
+  printf("1,14,14,256,512,1,1,0,2,0,1,5,7,7,%d,%d,%d", input1, input2, input3);
+  fclose(stdout);
+
   freopen("ResConv8Test.csv", "a+", stdout);
-  printf("1,14,14,256,512,1,1,0,2,0,1,5,7,7,%d,%d,%d,", input1, input2, input3);
+  printf(",");
 
   vtaResConv8TestMainEntry_load_module((uint8_t*)constantWeightVarsAddr);
 

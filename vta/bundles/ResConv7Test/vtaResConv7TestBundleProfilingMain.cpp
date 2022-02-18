@@ -242,11 +242,15 @@ int main(int argc, char **argv) {
           initConstantWeights("vtaResConv7TestBundle.weights.bin", vtaResConv7TestBundle_config);
   int8_t *mutableWeightVarsAddr = initMutableWeightVars(vtaResConv7TestBundle_config);
   int8_t *activationsAddr = initActivations(vtaResConv7TestBundle_config);
-  
-  vtaResConv7TestMainEntry_load_module((uint8_t*)constantWeightVarsAddr);
+
+  freopen("ResConv7Test.csv", "w", stdout);
+  printf("1,14,14,256,256,3,3,1,1,0,1,7,14,14,%d,%d,%d", input1, input2, input3);
+  fclose(stdout);
 
   freopen("ResConv7Test.csv", "a+", stdout);
-  printf("1,14,14,256,256,3,3,1,1,0,1,7,14,14,%d,%d,%d,", input1, input2, input3);
+  printf(",");
+
+  vtaResConv7TestMainEntry_load_module((uint8_t*)constantWeightVarsAddr);
 
   // Perform the computation.
   int errCode =
