@@ -48,7 +48,7 @@ else()
             COMMAND
             aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.h ${CMAKE_CURRENT_BINARY_DIR}/resnet50.h --no-sign-request
             COMMAND
-            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.weights.bin${CMAKE_CURRENT_BINARY_DIR}/resnet50.weights.bin --no-sign-request
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.weights.bin ${CMAKE_CURRENT_BINARY_DIR}/resnet50.weights.bin --no-sign-request
             COMMAND
             aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
     )

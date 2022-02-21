@@ -28,7 +28,7 @@ else()
             COMMAND
             aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestGolden.bin ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestGolden.bin --no-sign-request
             COMMAND
-            aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestMainEntry.hp ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestMainEntry.h --no-sign-request
+            aws s3 cp s3://nestc-data-pub/VTABundleTests/AvgPoolTest/vtaAvgPoolTestMainEntry.h ${CMAKE_CURRENT_BINARY_DIR}/vtaAvgPoolTestMainEntry.h --no-sign-request
     )
 endif()
 
