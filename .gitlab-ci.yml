@@ -14,9 +14,11 @@ check-dco:
   stage: check
   image: docker:latest
   script:
-    - apk update && apk add python3 git
-    - chmod +x .gitlab-ci.d/check-dco.py
-    - .gitlab-ci.d/check-dco.py
+    - apk update && apk add python3 git wget
+    - wget https://gitlab.com/yongin.kwon/dco-check/-/raw/master/check-dco.py
+    - chmod +x ./check-dco.py
+    - ls
+    - ./check-dco.py
   variables:
     GIT_DEPTH: 1000
 
