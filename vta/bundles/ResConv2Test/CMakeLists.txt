@@ -41,6 +41,23 @@ if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
                 )
     endif()
+else()
+    add_custom_command(
+            OUTPUT
+            ${CMAKE_CURRENT_BINARY_DIR}/vtaResConv2TestBundle.cpp
+            COMMAND
+            aws s3 cp s3://nestc-pub/vta/bundles/ResConv2Test/ ${CMAKE_CURRENT_BINARY_DIR}/ --no-sign-request --recursive
+    )
+    if(NESTC_EVTA_PROFILE_AUTOTUNE)
+        INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
+        add_executable(vtaResConv2TestBundleProfiling vtaResConv2TestBundleProfilingMain.cpp ${CMAKE_CURRENT_BINARY_DIR}/vtaResConv2TestBundle.cpp)
+        add_dependencies(vtaResConv2TestBundleProfiling ${BUNDLE_DEPENDS})
+        target_link_libraries(vtaResConv2TestBundleProfiling VTABundle ${BUNDLE_LINK_LIB})
+        set_target_properties( vtaResConv2TestBundleProfiling
+                PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                )
+    endif()
 endif()
 
 
