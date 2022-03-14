@@ -291,6 +291,7 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
       DEF_INSTR(ElementSubInst, elementsub)
       DEF_INSTR(ElementDivInst, elementdiv)
       DEF_INSTR(ReluInst, relu)
+      DEF_INSTR(ElementSignInst, elementsign)
       DEF_BACKEND_SPECIFIC_INSTR(VTAInterpreterConvolutionInst, vtainterpreterconvolution)
 #undef DEF_INSTR_RANGE
 #undef DEF_INSTR

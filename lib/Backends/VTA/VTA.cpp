@@ -86,6 +86,10 @@ bool VTA::isOpSupported(const NodeInfo &NI) const {
                     {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy,
                      ElemKind::Int32ITy, ElemKind::Int64ITy});
 
+        case Kinded::Kind::SignNodeKind:
+            return NI.allInputsAndOutputsHaveSameElemKind(
+                    {ElemKind::FloatTy, ElemKind::Int8QTy});
+
         case Kinded::Kind::ResizeNearestNodeKind:
             return NI.allInputsAndOutputsHaveSameElemKind(
                     {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy,

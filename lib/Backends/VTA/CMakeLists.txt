@@ -64,8 +64,9 @@ set_target_properties( VTASaverTest
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${NESTC_BINARY_DIR}/tests"
         )
-
-add_nestc_test(VTASaverTest ${NESTC_BINARY_DIR}/tests/VTASaverTest --gtest_output=xml:VTASaverTest.xml)
+if (NOT NESTC_BNN)
+    add_nestc_test(VTASaverTest ${NESTC_BINARY_DIR}/tests/VTASaverTest --gtest_output=xml:VTASaverTest.xml)
+endif()
 
 INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/glow/tests/googletest/googletest/include)
 
@@ -86,4 +87,11 @@ if (NESTC_EVTA_GRAPH_OPT)
     message(STATUS "VTAConv graph optimization Enable ON")
 else()
     message(STATUS "VTAConv graph optimization Enable OFF")
+endif ()
+
+if (NESTC_BNN)
+    add_definitions(-DVTA_BNN)
+    message(STATUS "VTA BNN ON")
+else()
+    message(STATUS "VTA BNN OFF")
 endif ()

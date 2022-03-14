@@ -295,6 +295,11 @@ llvm::cl::opt<std::string>
                                  "of the entry point to the network."),
                   llvm::cl::cat(loaderCat));
 
+llvm::cl::opt<bool> BNNOpt(
+    "bnn",
+    llvm::cl::desc(
+        "Quantization scale = 1"),
+    llvm::cl::init(false), llvm::cl::cat(loaderCat));
 } // namespace
 
 // These are outside the namespace so they can be used by the image-classifier.
@@ -628,6 +633,7 @@ quantization::QuantizationConfiguration Loader::getQuantizationConfiguration() {
   quantConfig.enableRowwise = enableRowwiseOpt;
   quantConfig.enableChannelwise = enableChannelwiseOpt;
   quantConfig.assertAllNodesQuantized = assertAllNodesQuantizedOpt;
+  quantConfig.bnn = BNNOpt;
   if (!loadProfileFileOpt.empty()) {
     deserializeProfilingInfosFromYaml(
         loadProfileFileOpt, quantConfig.graphPreLowerHash, quantConfig.infos);

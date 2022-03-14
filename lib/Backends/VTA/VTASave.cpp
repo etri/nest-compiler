@@ -151,9 +151,22 @@ SymbolTableEntry addConstantSymbolEntry(Value* val, VTASaveContext *ctx){
       return ste;
     }
   }
+#if defined(VTA_BNN) 
+  if(val->dims().size() == 4 && val->dims()[3] % 128 == 0) {
+    csyms->push_back({val->getName().data(), ctx->getCMemSize(), val->getSizeInBytes()/8, '0'});
+    ctx->setCMemSize(ctx->getCMemSize() + val->getSizeInBytes()/8);
+    ste = csyms->back();
+  }
+  else {
+    csyms->push_back({val->getName().data(), ctx->getCMemSize(), val->getSizeInBytes(), '0'});
+    ctx->setCMemSize(ctx->getCMemSize() + val->getSizeInBytes());
+    ste = csyms->back();
+  }
+#else
   csyms->push_back({val->getName().data(), ctx->getCMemSize(), val->getSizeInBytes(), '0'});
   ctx->setCMemSize(ctx->getCMemSize() + val->getSizeInBytes());
   ste = csyms->back();
+#endif
   return ste;
 }
 
@@ -537,6 +550,194 @@ void saveNonVTAConvolutionInst(const glow::ConvolutionInst *Inst, std::string *b
   bundle->append(" );\n");
 }
 
+void saveBNNNonVTAConvolutionInst(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx) { //NON VTA Quantized Convolution
+  auto pad = Inst->getPads();
+  auto strides = Inst->getStrides();
+  //TODO : consider group
+  //auto group = Inst->getGroup();
+  auto src = Inst->getSrc();
+  auto srcDims = src->dims();
+  auto dest = Inst->getDest();
+  auto filter = Inst->getFilter();
+  auto filterDims = filter->dims();
+
+  int N = srcDims[0];
+  int H = srcDims[1];
+  int W = srcDims[2];
+  int C = srcDims[3];
+
+  int KN = filterDims[0];
+  int KH = filterDims[1];
+  int KW = filterDims[2];
+
+
+  auto bias = Inst->getBias();
+
+  int pad_size = pad[0];
+  int stride_size = strides[0];
+
+  bool doRelu = Inst->getFusedActivation()==RELU;
+  float inScale = src->getType()->getScale();
+  float filterScale = filter->getType()->getScale();
+  float outScale = Inst->getDest()->getType()->getScale();
+  float biasScale = bias->getType()->getScale();
+
+
+  filterScale = 1/filterScale;
+  inScale = 1/inScale;
+  biasScale = 1/biasScale;
+  outScale = 1/outScale;
+
+
+  //save Weight file
+  auto vMap = ctx->getVariableMap();
+  const Tensor* tensor = NULL;
+
+
+  for(auto it = vMap->begin(); it != vMap->end(); it++)
+  {
+    if(it->second == filter)
+    {
+      auto storage = it->first;
+      if (storage->getKind() == glow::Kinded::Kind::ConstantKind) {
+        const auto *constant = llvm::cast<Constant>(storage);
+        tensor = &(constant->getPayload());
+      }
+      break;
+    }
+  }
+  assert(tensor);
+  auto handle = tensor->getHandle<int8_t>();
+  assert(handle.size() %2 == 0);
+  {
+    auto fos = ctx->getWeightFileStream();
+    int16_t data16 = 0;
+    for (size_t i = 0, e = handle.size(); i < e; i++) {
+      auto data = handle.raw(i);
+      if(data>127) data=127.0;
+      if(data<-128) data=-128.0;
+      //int8_t clip_data = std::floor(data);
+      int8_t sign_data = (int(data >0) - int(data <= 0));
+      if(i%2 == 0)
+      {
+        data16 = 0xff & sign_data;
+      }
+      else{
+        data16 = data16 | sign_data<<8;
+        fos->write((const char *)&data16, 2);
+      }
+    }
+  }
+
+
+  auto filterSte = addConstantSymbolEntry(filter, ctx);
+
+  //save Bias file
+
+  bool doBias = true;
+
+  const Tensor* tensorBias = NULL;
+
+  for(auto it = vMap->begin(); it != vMap->end(); it++)
+  {
+    if(it->second == bias)
+    {
+      auto storage = it->first;
+      if (storage->getKind() == glow::Kinded::Kind::ConstantKind) {
+        const auto *constant = llvm::cast<Constant>(storage);
+        tensorBias = &(constant->getPayload());
+      }
+      break;
+    }
+  }
+  assert(tensorBias);
+  auto handleBias = tensorBias->getHandle<int32_t>();
+  assert(handleBias.size() %2 == 0);
+  {
+    auto fos = ctx->getWeightFileStream();
+    for (size_t i = 0, e = handleBias.size(); i < e; i++) {
+      auto data = handleBias.raw(i);
+      fos->write((const char *) &data, 4);
+    }
+  }
+
+  //assert(biasScale == inScale * filterScale);
+
+  auto biasSte = addConstantSymbolEntry(bias, ctx);
+
+  auto srcWeight = static_cast<WeightVar *>(src);
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(srcWeight, bundle, ctx);
+  }
+
+  auto destWeight = static_cast<WeightVar *>(dest);
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(destWeight, bundle, ctx);
+  }
+
+  bundle->append("  bnn_nonvtaconvolution(");
+
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(srcWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(src->getName());
+    bundle->append(", ");
+  }
+
+  bundle->append("(int8_t *)VTABufferGetVirtAddr(");
+  bundle->append(filterSte.name);
+  bundle->append(")");
+  bundle->append(", ");
+
+  bundle->append("(int32_t *)VTABufferGetVirtAddr(");
+  bundle->append(biasSte.name);
+  bundle->append(")");
+  bundle->append(", ");
+
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(destWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(dest->getName());
+    bundle->append(", ");
+  }
+
+  bundle->append(std::to_string(N));
+  bundle->append(", ");
+  bundle->append(std::to_string(H));
+  bundle->append(", ");
+  bundle->append(std::to_string(W));
+  bundle->append(", ");
+  bundle->append(std::to_string(C));
+  bundle->append(", ");
+  bundle->append(std::to_string(KN));
+  bundle->append(", ");
+  bundle->append(std::to_string(KH));
+  bundle->append(", ");
+  bundle->append(std::to_string(KW));
+  bundle->append(", ");
+  bundle->append(std::to_string(pad_size));
+  bundle->append(", ");
+  bundle->append(std::to_string(stride_size));
+  bundle->append(", ");
+  bundle->append(std::to_string(Inst->getGroup()));
+  bundle->append(", ");
+  bundle->append(std::to_string(Inst->getDilation()));
+  bundle->append(", ");
+  bundle->append(std::to_string(doRelu));
+  bundle->append(", ");
+  bundle->append(std::to_string(doBias));
+  bundle->append(", ");
+  bundle->append(std::to_string(dest->dims()[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(dest->dims()[2]));
+  bundle->append(" );\n");
+}
+
+
 void prepareVTAConvolutionInst(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx){
   //TODO : consider group
   //auto group = Inst->getGroup();
@@ -837,6 +1038,161 @@ void prepareEVTAConvolutionInst(const glow::VTAConvolutionInst *Inst, std::strin
 
 }
 
+void prepareBNNVTAConvolutionInst(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx){
+  auto src = Inst->getSrc();
+  auto dest = Inst->getDest();
+  auto filter = Inst->getFilter();
+  auto filterDims = filter->dims();
+
+  assert(filterDims[3] % 128 == 0);
+
+  auto bias = Inst->getBias();
+  assert(bias->dims()[0]==filterDims[0]);
+  assert(filterDims[3] == src->dims()[3]);
+
+  float inScale = src->getType()->getScale();
+  float filterScale = filter->getType()->getScale();
+  float outScale = Inst->getDest()->getType()->getScale();
+  filterScale = 1/filterScale;
+  inScale = 1/inScale;
+  outScale = 1/outScale;
+  float matMulScale = inScale * filterScale;
+
+  //save Weight file
+  auto vMap = ctx->getVariableMap();
+  const Tensor* tensor = NULL;
+  for(auto it = vMap->begin(); it != vMap->end(); it++)
+  {
+    if(it->second == filter)
+    {
+      auto storage = it->first;
+      if (storage->getKind() == glow::Kinded::Kind::ConstantKind) {
+        const auto *constant = llvm::cast<Constant>(storage);
+        tensor = &(constant->getPayload());
+      }
+      break;
+    }
+  }
+  assert(tensor);
+
+  auto filterType = Type(tensor->getType());
+  std::array<dim_t, 4> signFilterS{{(dim_t)filterDims[0], (dim_t)filterDims[1], (dim_t)filterDims[2], (dim_t)((int)filterDims[3]/8)}};
+  llvm::ArrayRef<dim_t> signFilterShape(signFilterS);
+  auto signFilterShapeType = glow::Type::newShape(filterType, signFilterShape);
+  Tensor signFilterTensor(signFilterShapeType);
+  signFilterTensor.zero();
+  auto handle = tensor->getHandle<int8_t>();
+  auto signHandle = signFilterTensor.getHandle<int8_t>();
+
+  auto packN = signFilterS[0];
+  auto packH = signFilterS[1];
+  auto packW = signFilterS[2];
+  auto packC = signFilterS[3];
+  for (dim_t b = 0; b < packN; ++b) {
+    for (dim_t h = 0; h < packH; ++h) {
+      for (dim_t w = 0; w < packW; ++w) {
+        for (dim_t c = 0; c < packC; ++c) {
+          for(dim_t bw = 0; bw < 8; ++bw){
+            signHandle.at({b, h, w, c})
+                    += ((handle.at({b, h, w, (c*8 + bw)}) > 0) <<bw);
+          }
+        }
+      }
+    }
+  }
+
+  std::array<dim_t, 6> reshapeFilterS{{(dim_t)signFilterS[0]/16, 16, (dim_t)signFilterS[1], signFilterS[2],signFilterS[3]/16, 16}};
+  llvm::ArrayRef<dim_t> reshapeFilterShape(reshapeFilterS);
+  auto filterReshapeType = glow::Type::newShape(filterType, reshapeFilterShape);
+  Tensor filterReshapeTensor(filterReshapeType);
+  filterReshapeTensor.zero();
+  auto reshapeHandle = filterReshapeTensor.getHandle<int8_t>();
+
+  for(int i = 0; i < signHandle.size(); i++){
+    auto value = signHandle.raw(i);
+    reshapeHandle.raw(i) = value;
+  }
+
+  std::array<unsigned_t, 6> transposeFilterShuffle{{0, 4, 2, 3, 1, 5}};
+  std::array<dim_t, 6> transposeFilterS{{(dim_t)reshapeFilterShape[0], (dim_t)reshapeFilterShape[2], (dim_t)reshapeFilterShape[4], (dim_t)reshapeFilterShape[5], (dim_t)reshapeFilterShape[1], (dim_t)reshapeFilterShape[3]}};
+  llvm::ArrayRef<dim_t> transposeFilterShape(transposeFilterS);
+  auto filterTransposeType = glow::Type::newShape(filterReshapeType, transposeFilterShape);
+  Tensor filterTransposeTensor(filterTransposeType);
+
+  filterReshapeTensor.transpose(&filterTransposeTensor, transposeFilterShuffle);
+
+  auto transposeHandle = filterTransposeTensor.getHandle<int8_t>();
+
+  assert(handle.size() %2 == 0);
+  {
+    auto fos = ctx->getWeightFileStream();
+    int16_t data16 = 0;
+    for (size_t i = 0, e = transposeHandle.size(); i < e; i++) {
+      auto data = transposeHandle.raw(i);
+      if(data>127) data=127.0;
+      if(data<-128) data=-128.0;
+      int8_t clip_data = std::floor(data);
+      if(i%2 == 0)
+      {
+        data16 = 0xff & clip_data;
+      }
+      else{
+        data16 = data16 | clip_data<<8;
+        fos->write((const char *)&data16, 2);
+      }
+    }
+  }
+  addConstantSymbolEntry(filter, ctx);
+
+  //save Bias file
+  bool doBias = false;
+
+  const Tensor* tensorBias = NULL;
+
+  for(auto it = vMap->begin(); it != vMap->end(); it++)
+  {
+    if(it->second == bias)
+    {
+      auto storage = it->first;
+      if (storage->getKind() == glow::Kinded::Kind::ConstantKind) {
+        const auto *constant = llvm::cast<Constant>(storage);
+        tensorBias = &(constant->getPayload());
+      }
+      break;
+    }
+  }
+  assert(tensorBias);
+  auto handleBias = tensorBias->getHandle<int32_t>();
+  {
+    for (size_t i = 0, e = handleBias.size(); i < e; i++) {
+      auto data = handleBias.raw(i);
+      if(data!=0){
+        doBias = true;
+        break;
+      }
+    }
+    if(doBias) {
+      auto fos = ctx->getWeightFileStream();
+      for (size_t i = 0, e = handleBias.size(); i < e; i++) {
+        auto data = handleBias.raw(i);
+        fos->write((const char *) &data, 4);
+      }
+    }
+  }
+  addConstantSymbolEntry(bias, ctx);
+
+  auto srcWeight = static_cast<WeightVar *>(src);
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(srcWeight, bundle, ctx);
+  }
+
+  auto destWeight = static_cast<WeightVar *>(dest);
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(destWeight, bundle, ctx);
+  }
+}
+
+
 void generateInputTranspose(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx){
   //TODO : consider group
   //auto group = Inst->getGroup();
@@ -968,6 +1324,72 @@ void generateEVTAInputTranspose(const glow::VTAConvolutionInst *Inst, std::strin
     bundle->append("_input_transpose_start)/CLOCKS_PER_SEC*1000 << std::endl;\n");
 #endif
 }
+
+void generateBNNInputTranspose(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx){
+  //TODO : consider group
+  //auto group = Inst->getGroup();
+  auto src = Inst->getSrc();
+  auto srcDims = src->dims();
+  auto dest = Inst->getDest();
+  auto filter = Inst->getFilter();
+
+  int N = srcDims[0];
+  int H = srcDims[1];
+  int W = srcDims[2];
+  int C = srcDims[3];
+  C = C/8;
+#ifdef VTA_PROFILE
+  bundle->append("  clock_t ");
+  bundle->append(Inst->getName());
+  bundle->append("_input_transpose_start = clock();\n");
+#endif
+
+  bundle->append("  int8_t* ");
+  bundle->append(Inst->getName());
+  bundle->append("_input_transpose = (int8_t *)VTABufferAlloc(");
+  bundle->append(std::to_string(N*H*W*C));
+  bundle->append(");\n");
+  bundle->append("  transpose_nhwc2vtaio_pack(");
+  auto srcWeight = static_cast<WeightVar *>(src);
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(srcWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(src->getName());
+    bundle->append(", ");
+  }
+
+  bundle->append("(int8_t* )VTABufferGetVirtAddr(");
+  bundle->append(Inst->getName());
+  bundle->append("_input_transpose), ");
+
+  bundle->append(std::to_string(N));
+  bundle->append(", ");
+  bundle->append(std::to_string(H));
+  bundle->append(", ");
+  bundle->append(std::to_string(W));
+  bundle->append(", ");
+  bundle->append(std::to_string(C));
+  bundle->append(");\n");
+
+#ifdef VTA_PROFILE
+  bundle->append("  clock_t ");
+    bundle->append(Inst->getName());
+    bundle->append("_input_transpose_end = clock();\n");
+    bundle->append("  prof_out<<\"");
+    bundle->append(Inst->getKindName());
+    bundle->append("_input_transpose:");
+    bundle->append(Inst->getName());
+    bundle->append(" : \"<<");
+    bundle->append("(double)(");
+    bundle->append(Inst->getName());
+    bundle->append("_input_transpose_end - ");
+    bundle->append(Inst->getName());
+    bundle->append("_input_transpose_start)/CLOCKS_PER_SEC*1000 << std::endl;\n");
+#endif
+}
+
 
 void declareOutputTranspose(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst){
   //TODO : consider group
@@ -1285,6 +1707,150 @@ void generateEVTAConvolutionCall(const glow::VTAConvolutionInst *Inst, std::stri
 
 }
 
+void generateBNNVTAConvolutionCall(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx) {
+  auto pad = Inst->getPads();
+  auto strides = Inst->getStrides();
+  //TODO : consider group
+  //auto group = Inst->getGroup();
+  auto src = Inst->getSrc();
+  auto srcDims = src->dims();
+  auto dest = Inst->getDest();
+  auto filter = Inst->getFilter();
+  auto filterDims = filter->dims();
+  auto bias = Inst->getBias();
+  int N = srcDims[0];
+  int H = srcDims[1];
+  int W = srcDims[2];
+  int C = srcDims[3];
+
+  C = C/8;
+
+  int KN = filterDims[0];
+  int KH = filterDims[1];
+  int KW = filterDims[2];
+  int pad_size = pad[0];
+  int stride_size = strides[0];
+  bool doRelu = Inst->getFusedActivation()==RELU;
+
+  bool doBias = false;
+
+  const Tensor* tensorBias = NULL;
+  auto vMap = ctx->getVariableMap();
+  for(auto it = vMap->begin(); it != vMap->end(); it++)
+  {
+    if(it->second == bias)
+    {
+      auto storage = it->first;
+      if (storage->getKind() == glow::Kinded::Kind::ConstantKind) {
+        const auto *constant = llvm::cast<Constant>(storage);
+        tensorBias = &(constant->getPayload());
+      }
+      break;
+    }
+  }
+  auto handleBias = tensorBias->getHandle<int32_t>();
+  {
+    for (size_t i = 0, e = handleBias.size(); i < e; i++) {
+      auto data = handleBias.raw(i);
+      if(data!=0){
+        doBias = true;
+        break;
+      }
+    }
+  }
+
+  float inScale = src->getType()->getScale();
+  float filterScale = filter->getType()->getScale();
+  float outScale = Inst->getDest()->getType()->getScale();
+  filterScale = 1/filterScale;
+  inScale = 1/inScale;
+  outScale = 1/outScale;
+  float matMulScale = inScale * filterScale;
+  float scale =  matMulScale / outScale;
+  int shift = getExpofPowerofTwo(scale);
+
+  auto filterSte = addConstantSymbolEntry(filter, ctx);
+  bundle->append("  convolution_wo_tr(");
+  bundle->append(Inst->getName());
+  bundle->append("_input_transpose, ");
+  bundle->append(filterSte.name);
+  bundle->append(", ");
+
+
+  bundle->append("(int32_t *)");
+  auto biasSte = addConstantSymbolEntry(bias, ctx);
+  bundle->append(biasSte.name);
+  bundle->append(", ");
+
+  bundle->append(Inst->getName());
+  bundle->append("_output_bef_transpose, ");
+
+
+  bundle->append(std::to_string(N));
+  bundle->append(", ");
+  bundle->append(std::to_string(H));
+  bundle->append(", ");
+  bundle->append(std::to_string(W));
+  bundle->append(", ");
+  bundle->append(std::to_string(C));
+  bundle->append(", ");
+  bundle->append(std::to_string(KN));
+  bundle->append(", ");
+  bundle->append(std::to_string(KH));
+  bundle->append(", ");
+  bundle->append(std::to_string(KW));
+  bundle->append(", ");
+  bundle->append(std::to_string(pad_size));
+  bundle->append(", ");
+  bundle->append(std::to_string(stride_size));
+  bundle->append(", ");
+  bundle->append(std::to_string(doRelu));
+  bundle->append(", ");
+  bundle->append(std::to_string(doBias));
+  bundle->append(", ");
+  bundle->append("7");    // shift
+  bundle->append(", ");
+  bundle->append(std::to_string(dest->dims()[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(dest->dims()[2]));
+  bundle->append(", vtaCmdH");
+  uint32_t idxMultiEVTA = ctx->getIdxMultiEVTA();
+  if(idxMultiEVTA){
+    bundle->append(std::to_string(idxMultiEVTA));
+  }
+#include "VTASchedules.h"
+  bool isTuned = 0;
+  for(auto elem : convTune.ConvolutionTune_){
+    if(elem.isMatch(N, H, W, C, KN, KH, KW, C, stride_size, pad_size))
+    {
+      bundle->append(", ");
+      bundle->append(std::to_string(elem.nVirtualThread_));
+      bundle->append(", ");
+      bundle->append(std::to_string(elem.tileHSize_));
+      bundle->append(", ");
+      bundle->append(std::to_string(elem.tileWSize_));
+      bundle->append(", ");
+      bundle->append(std::to_string(ctx->getIdxMultiEVTA()));
+      isTuned = 1;
+      break;
+    }
+  }
+
+  if(!isTuned){
+    if(dest->dims()[1] != 8) {
+      bundle->append(", 1, 8, 8, ");
+    }
+    else if(dest->dims()[1] == 8) {
+      bundle->append(", 1, 8, 7, ");
+    }
+    bundle->append(std::to_string(ctx->getIdxMultiEVTA()));
+  }
+
+  bundle->append(");\n");
+
+}
+
+
 void generateOutputTranspose(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx){
   //TODO : consider group
   //auto group = Inst->getGroup();
@@ -1499,6 +2065,41 @@ void saveEVTAConvolutionInst(const glow::VTAConvolutionInst *Inst, std::string *
     return;
 }
 
+void saveBNNVTAConvolutionInst(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx){
+  prepareBNNVTAConvolutionInst(Inst, bundle, initConst, ctx);
+  generateBNNInputTranspose(Inst, bundle, initConst, ctx);
+  declareOutputTranspose(Inst, bundle, initConst);
+
+#ifdef VTA_PROFILE
+  bundle->append("  clock_t ");
+  bundle->append(Inst->getName());
+  bundle->append("vta_core_start = clock();\n");
+#endif
+
+  generateBNNVTAConvolutionCall(Inst, bundle, initConst, ctx);
+
+#ifdef VTA_PROFILE
+  bundle->append("  clock_t ");
+  bundle->append(Inst->getName());
+  bundle->append("_core_end = clock();\n");
+  bundle->append("  prof_out<<\"");
+  bundle->append(Inst->getKindName());
+  bundle->append("_core:");
+  bundle->append(Inst->getName());
+  bundle->append(" : \"<<");
+  bundle->append("(double)(");
+  bundle->append(Inst->getName());
+  bundle->append("_core_end - ");
+  bundle->append(Inst->getName());
+  bundle->append("_core_start)/CLOCKS_PER_SEC*1000 << std::endl;\n");
+#endif
+
+  generateOutputTranspose(Inst, bundle, initConst, ctx);
+  generateVTABufferFree(Inst, bundle);
+
+  return;
+}
+
 
 void saveConvolutionInst(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx) {
   auto src = Inst->getSrc();
@@ -1547,6 +2148,55 @@ void saveConvolutionInst(const glow::ConvolutionInst *Inst, std::string *bundle,
     }
   }
 }
+
+void saveBNNConvolutionInst(const glow::ConvolutionInst *Inst, std::string *bundle, std::string *initConst, VTASaveContext *ctx) {
+  auto src = Inst->getSrc();
+  auto srcDims = src->dims();
+  auto filter = Inst->getFilter();
+  auto filterDims = filter->dims();
+
+  auto bias = Inst->getBias();
+  assert(bias->dims()[0]==filterDims[0]);
+
+  if(!Inst->getSrc()->getType()->isQuantizedType()){
+    saveFloatConvolutionInst(Inst, bundle, ctx);
+  }
+  else {
+    float inScale = src->getType()->getScale();
+    float filterScale = filter->getType()->getScale();
+    float outScale = Inst->getDest()->getType()->getScale();
+    float biasScale = bias->getType()->getScale();
+
+    int32_t outOffset = Inst->getDest()->getType()->getOffset();
+    int32_t inOffset = src->getType()->getOffset();
+    int32_t filterOffset = filter->getType()->getOffset();
+    int32_t biasOffset = bias->getType()->getOffset();
+
+    filterScale = 1/filterScale;
+    inScale = 1/inScale;
+    biasScale = 1/biasScale;
+    outScale = 1/outScale;
+
+    float matMulScale = inScale * filterScale;
+    float scale =  matMulScale / outScale;
+
+    int shift = getExpofPowerofTwo(scale);
+
+    if (Inst->getGroup() == 1 && srcDims[3] % 128 == 0 && filterDims[0] % 128 == 0) {
+      saveBNNVTAConvolutionInst(Inst, bundle, initConst, ctx);
+    }
+    else if (srcDims[3]  == 3 && filterDims[3] == 3
+        && biasScale == matMulScale && outOffset == 0 && inOffset == 0
+        && filterOffset == 0 && biasOffset == 0 && shift >= 0) {
+      //savezerofillVTAConvolutionInst(Inst, bundle, initConst, ctx);
+      saveBNNNonVTAConvolutionInst(Inst, bundle, initConst, ctx);
+    }
+    else {
+      saveBNNNonVTAConvolutionInst(Inst, bundle, initConst, ctx);
+    }
+  }
+}
+
 
 void saveFullyConnectedInst(const glow::FullyConnectedInst *Inst, std::string *bundle, VTASaveContext *ctx) {
   auto src = Inst->getSrc();
@@ -1723,6 +2373,178 @@ void saveFullyConnectedInst(const glow::FullyConnectedInst *Inst, std::string *b
 
 }
 
+void saveBNNFullyConnectedInst(const glow::FullyConnectedInst *Inst, std::string *bundle, VTASaveContext *ctx) {
+  auto src = Inst->getSrc();
+  auto srcDims = src->dims();
+  auto dest = Inst->getDest();
+  auto destDims = dest->dims();
+  auto filter = Inst->getWeights();
+  auto filterDims = filter->dims();
+  auto bias = Inst->getBias();
+
+  assert(srcDims.size() == 2);
+  assert(bias->dims().size() == 1);
+  assert(filterDims.size() == 2);
+  assert(destDims.size() == 2);
+
+  float inScale = src->getType()->getScale();
+  float filterScale = filter->getType()->getScale();
+  float outScale = Inst->getDest()->getType()->getScale();
+  float biasScale = bias->getType()->getScale();
+
+  filterScale = 1/filterScale;
+  inScale = 1/inScale;
+  biasScale = 1/biasScale;
+  outScale = 1/outScale;
+
+  //save Weight file
+  auto vMap = ctx->getVariableMap();
+  const Tensor* tensor = NULL;
+
+  for(auto it = vMap->begin(); it != vMap->end(); it++)
+  {
+    if(it->second == filter)
+    {
+      auto storage = it->first;
+      if (storage->getKind() == glow::Kinded::Kind::ConstantKind) {
+        const auto *constant = llvm::cast<Constant>(storage);
+        tensor = &(constant->getPayload());
+      }
+      break;
+    }
+  }
+  assert(tensor);
+  auto handle = tensor->getHandle<int8_t>();
+  assert(handle.size() %2 == 0);
+  {
+    auto fos = ctx->getWeightFileStream();
+    int16_t data16 = 0;
+    for (size_t i = 0, e = handle.size(); i < e; i++) {
+      auto data = handle.raw(i);
+      int8_t sign_data;
+      if(data>0) sign_data=1;
+      if(data<=0) sign_data=-1;
+      if(i%2 == 0)
+      {
+        data16 = 0xff & sign_data;
+      }
+      else{
+        data16 = data16 | sign_data<<8;
+        fos->write((const char *)&data16, 2);
+      }
+    }
+  }
+
+  auto filterSte = addConstantSymbolEntry(filter, ctx);
+
+  //save Bias file
+  const Tensor* tensorBias = NULL;
+
+  for(auto it = vMap->begin(); it != vMap->end(); it++)
+  {
+    if(it->second == bias)
+    {
+      auto storage = it->first;
+      if (storage->getKind() == glow::Kinded::Kind::ConstantKind) {
+        const auto *constant = llvm::cast<Constant>(storage);
+        tensorBias = &(constant->getPayload());
+      }
+      break;
+    }
+  }
+  assert(tensorBias);
+  auto handleBias = tensorBias->getHandle<int32_t>();
+  assert(handleBias.size() %2 == 0);
+  {
+    auto fos = ctx->getWeightFileStream();
+    for (size_t i = 0, e = handleBias.size(); i < e; i++) {
+      auto data = handleBias.raw(i);
+      fos->write((const char *) &data, 4);
+    }
+  }
+  auto biasSte = addConstantSymbolEntry(bias, ctx);
+
+  auto srcWeight = static_cast<WeightVar *>(src);
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(srcWeight, bundle, ctx);
+  }
+
+  auto destWeight = static_cast<WeightVar *>(dest);
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(destWeight, bundle, ctx);
+  }
+
+  bundle->append("  bnn_fullyconnected(");
+
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(srcWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(src->getName());
+    bundle->append(", ");
+  }
+  bundle->append("1.0/");
+  bundle->append(std::to_string(inScale));
+  bundle->append(", 0, ");
+
+  if(filterSte.kind=='0'){
+    bundle->append("(int8_t *)VTABufferGetVirtAddr(");
+    bundle->append(filterSte.name);
+    bundle->append(")");
+  }
+  else{
+    bundle->append(filterSte.name);
+  }
+
+  bundle->append(", ");
+  bundle->append("1.0/");
+  bundle->append(std::to_string(filterScale));
+  bundle->append(", 0, ");
+
+  if(biasSte.kind=='0') {
+    bundle->append("(int32_t *)VTABufferGetVirtAddr(");
+    bundle->append(biasSte.name);
+    bundle->append(")");
+  }
+  else{
+    bundle->append(biasSte.name);
+  }
+
+  bundle->append(", ");
+  bundle->append("1.0/");
+  bundle->append(std::to_string(biasScale));
+  bundle->append(", 0, ");
+
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(destWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(dest->getName());
+    bundle->append(", ");
+  }
+  bundle->append("1.0/");
+  bundle->append(std::to_string(outScale));
+  bundle->append(", 0, ");
+
+
+  bundle->append(std::to_string(srcDims[0]));
+  bundle->append(", ");
+  bundle->append(std::to_string(srcDims[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(filterDims[0]));
+  bundle->append(", ");
+  bundle->append(std::to_string(filterDims[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(destDims[0]));
+  bundle->append(", ");
+  bundle->append(std::to_string(destDims[1]));
+  bundle->append(", ");
+  bundle->append(std::to_string(1)); //doBias
+  bundle->append(" );\n");
+
+}
 
 
 void saveAvgPoolInst(const glow::AvgPoolInst *Inst, std::string *bundle, VTASaveContext *ctx) {
@@ -1909,6 +2731,51 @@ void saveMaxPoolInst(const glow::MaxPoolInst *Inst, std::string *bundle, VTASave
 
 }
 
+void saveElemSignInst(const glow::ElementSignInst *Inst, std::string *bundle, VTASaveContext *ctx) {
+  assert(Inst->getSrc()->getType()->isQuantizedType());
+  auto src = Inst->getSrc();
+  auto srcDims = src->dims();
+  auto dest = Inst->getDest();
+  auto destDims = dest->dims();
+
+  auto srcWeight = static_cast<WeightVar *>(src);
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(srcWeight, bundle, ctx);
+  }
+
+  auto destWeight = static_cast<WeightVar *>(dest);
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    addSymbolEntryGenBundle(destWeight, bundle, ctx);
+  }
+
+  bundle->append("  elemsign(");
+
+  if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(srcWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(src->getName());
+    bundle->append(", ");
+  }
+
+  if (destWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
+    auto ste = addSymbolEntry(destWeight, ctx);
+    bundle->append(ste.name);
+    bundle->append(", ");
+  } else {
+    bundle->append(dest->getName());
+    bundle->append(", ");
+  }
+
+  unsigned_t size = 1;
+  for(int i = 0; i < destDims.size(); i++) {
+    size *= destDims[i];
+  }
+
+  bundle->append(std::to_string(size));
+  bundle->append(");\n ");
+}
 
 
 void saveQuantizeInst(const glow::QuantizeInst *Inst, std::string *bundle, VTASaveContext *ctx) {
@@ -1931,7 +2798,11 @@ void saveQuantizeInst(const glow::QuantizeInst *Inst, std::string *bundle, VTASa
     addSymbolEntryGenBundle(destWeight, bundle, ctx);
   }
 
+#if defined(VTA_BNN)
+  bundle->append("  typecast(");
+#else ()
   bundle->append("  quantize(");
+#endif ()
 
   if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
     auto ste = addSymbolEntry(srcWeight, ctx);
@@ -1980,8 +2851,11 @@ void saveDequantizeInst(const glow::DequantizeInst *Inst, std::string *bundle, V
     addSymbolEntryGenBundle(destWeight, bundle, ctx);
   }
 
-
+#if defined(VTA_BNN)
+  bundle->append("  typecast(");
+#else
   bundle->append("  dequantize(");
+#endif
 
   if (srcWeight->getMutability() == glow::WeightVar::MutabilityKind::Mutable) {
     auto ste = addSymbolEntry(srcWeight, ctx);
@@ -3367,7 +4241,11 @@ void VTA::save(Function *F, llvm::StringRef outputDir,
     switch (I.getKind()) {
     case Kinded::Kind::ConvolutionInstKind: {
       auto I2 = llvm::cast<ConvolutionInst>(&I);
+#if defined(VTA_BNN)
+      saveBNNConvolutionInst(I2, &bundle, &initConst, &ctx);
+#else
       saveConvolutionInst(I2, &bundle, &initConst, &ctx);
+#endif
       break;                                                                     \
     }
     case Kinded::Kind::VTAConvolutionInstKind: {
@@ -3469,7 +4347,11 @@ void VTA::save(Function *F, llvm::StringRef outputDir,
     }
     case Kinded::Kind::FullyConnectedInstKind: {
       auto I2 = llvm::cast<FullyConnectedInst>(&I);
+#if defined(VTA_BNN)
+      saveBNNFullyConnectedInst(I2, &bundle, &ctx);
+#else
       saveFullyConnectedInst(I2, &bundle, &ctx);
+#endif
       break;
     }
     case Kinded::Kind::DequantizeInstKind: {
@@ -3490,6 +4372,11 @@ void VTA::save(Function *F, llvm::StringRef outputDir,
     case Kinded::Kind::DebugPrintInstKind:{
       auto I2 = llvm::cast<DebugPrintInst>(&I);
       saveDebugPrintInst(I2, &bundle, &ctx);
+      break;
+    }
+    case Kinded::Kind::ElementSignInstKind:{
+      auto I2 = llvm::cast<ElementSignInst>(&I);
+      saveElemSignInst(I2, &bundle, &ctx);
       break;
     }
     default:

@@ -374,7 +374,26 @@ void BoundVTAFunction::fwdElementMaxInst(const ElementMaxInst *I) {
   llvm_unreachable("Not supported for VTA");
 }
 
+void BoundVTAFunction::fwdElementSignInstI8Impl(const ElementSignInst *I) {
+  assert(getTensor(I->getSrc())->getType().isQuantizedType() &&
+      "Wrong function");
 
+  auto inW = getWeightHandle<int8_t>(I->getSrc());
+  auto outW = getWeightHandle<int8_t>(I->getDest());
+
+  for (size_t i = 0, e = outW.size(); i < e; i++) {
+    outW.raw(i) = (inW.raw(i) > 0) - (inW.raw(i) <= 0);
+  }
+}
+
+void BoundVTAFunction::fwdElementSignInst(const ElementSignInst *I) {
+  if (getTensor(I->getSrc())->getType().isQuantizedType()) {
+    fwdElementSignInstI8Impl(I);
+    return;
+  }
+
+  llvm_unreachable("Not supported for VTA");
+}
 
 //===----------------------------------------------------------------------===//
 //                       Convolution

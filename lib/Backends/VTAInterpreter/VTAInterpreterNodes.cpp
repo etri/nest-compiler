@@ -2091,6 +2091,33 @@ void BoundVTAInterpreterFunction::fwdAdaptiveAvgPoolGradInst(
 #undef END_IND
 }
 
+template <typename ElemTy>
+void BoundVTAInterpreterFunction::fwdElementSignInstImpl(const ElementSignInst *I) {
+
+  auto inW = getWeightHandle<int8_t>(I->getSrc());
+  auto outW = getWeightHandle<int8_t>(I->getDest());
+
+  for (size_t i = 0, e = outW.size(); i < e; i++) {
+    outW.raw(i) = int(inW.raw(i) > 0) - int(inW.raw(i) <= 0);
+  }
+}
+
+void BoundVTAInterpreterFunction::fwdElementSignInst(
+    const glow::ElementSignInst *I) {
+  switch (I->getSrc()->getElementType()) {
+    case ElemKind::FloatTy:
+    fwdElementSignInstImpl<float>(I);
+    break;
+    case ElemKind::Int8QTy:
+    fwdElementSignInstImpl<int8_t>(I);
+    break;
+  default:
+    llvm_unreachable("Type is not supported");
+    break;
+  }
+}
+
+
 void BoundVTAInterpreterFunction::fwdMaxPoolWithArgmaxGradInst(
     const MaxPoolWithArgmaxGradInst *I) {
   auto inG = getWeightHandle(I->getSrcGrad());
@@ -3566,12 +3593,12 @@ void BoundVTAInterpreterFunction::fwdElementFloorInst(
   auto func = [](float x) -> float { return std::floor(x); };
   dispatchImpl(fwdUnaryArithmeticImpl, I->getSrc()->getElementType(), I, func);
 }
-
+/*
 void BoundVTAInterpreterFunction::fwdElementSignInst(const ElementSignInst *I) {
   auto func = [](float x) -> float { return ((x > 0) - (x < 0)); };
   dispatchImpl(fwdUnaryArithmeticImpl, I->getSrc()->getElementType(), I, func);
 }
-
+*/
 void BoundVTAInterpreterFunction::fwdElementCeilInst(const ElementCeilInst *I) {
   auto func = [](float x) -> float { return std::ceil(x); };
   dispatchImpl(fwdUnaryArithmeticImpl, I->getSrc()->getElementType(), I, func);

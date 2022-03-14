@@ -167,6 +167,7 @@ namespace glow {
 
         void fwdVTAReluInstQuantizedImpl(Value *inV, Value *outV, float scale);
 
+        void fwdElementSignInstI8Impl(const ElementSignInst *I);
 /*
         template <typename ElemTy = float>
         void fwdConvolutionInstFloatImpl(Value *inV, Value *outV, Value *filterV,

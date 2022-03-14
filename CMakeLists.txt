@@ -17,6 +17,7 @@ option(NESTC_USE_PRECOMPILED_EVTA_LIBRARY "use pre-compiled EVTA library" OFF)
 option(NESTC_USE_PRECOMPILED_BUNDLE "use pre-compiled bundle code from nestc-data" OFF)
 option(NESTC_OPENCL_TEST "Enable OpenCL TEST" OFF)
 option(NESTC_CUDA_TEST "Enable CUDA TEST" OFF)
+option(NESTC_BNN "Enable BNN mode" OFF)
 
 include(CTest)
 include(NESTCTestSupport)
@@ -43,6 +44,12 @@ endif()
 if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h)
     message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h")
     execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h)
+
+endif()
+
+if(EXISTS ${NESTC_ROOT_DIR}/glow/include/glow/Quantization/Base/Base.h)
+    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/include/glow/Quantization/Base/Base.h")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/include/glow/Quantization/Base/Base.h)
 
 endif()
 

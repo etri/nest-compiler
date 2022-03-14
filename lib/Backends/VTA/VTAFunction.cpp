@@ -291,6 +291,7 @@ DEF_INSTR(InsertTensorInst, inserttensor)
 DEF_INSTR(ElementSubInst, elementsub)
 DEF_INSTR(ElementDivInst, elementdiv)
 DEF_INSTR(ReluInst, relu)
+DEF_INSTR(ElementSignInst, elementsign)
 DEF_BACKEND_SPECIFIC_INSTR(VTAConvolutionInst, vtaconvolution)
 #undef DEF_INSTR_RANGE
 #undef DEF_INSTR
