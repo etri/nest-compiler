@@ -1,19 +1,19 @@
-#[[
+
 set(BNN_ONNX ${CMAKE_SOURCE_DIR}/vta/bundles/bnn)
 
 add_custom_command(
         OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/profile.yml
+        #${CMAKE_CURRENT_BINARY_DIR}/profile.yml
         ${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx
-        ${CMAKE_CURRENT_BINARY_DIR}/cat_3.png
-        COMMAND
-        aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/profile.yaml ${CMAKE_CURRENT_BINARY_DIR}/profile.yaml --no-sign-request
+        #${CMAKE_CURRENT_BINARY_DIR}/cat_3.png
+        #COMMAND
+        #aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/profile.yaml ${CMAKE_CURRENT_BINARY_DIR}/profile.yaml --no-sign-request
         COMMAND
         aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/binarynet.onnx ${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx --no-sign-request
-        COMMAND
-        aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/cat_3.png ${CMAKE_CURRENT_BINARY_DIR}/cat_3.png --no-sign-request
+        #COMMAND
+        #aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/cat_3.png ${CMAKE_CURRENT_BINARY_DIR}/cat_3.png --no-sign-request
         )
-
+#[[
 if(NESTC_USE_VTASIM)
     add_custom_target(vtaBinarynetBundleONNX
 	    DEPENDS
@@ -77,7 +77,7 @@ else()
 endif()
 ]]
 
-set(BNN_ONNX ${CMAKE_SOURCE_DIR}/vta/bundles/bnn)
+#set(BNN_ONNX ${CMAKE_SOURCE_DIR}/vta/bundles/bnn)
 
 add_custom_command(
         OUTPUT
@@ -89,7 +89,7 @@ add_custom_command(
 if(NESTC_USE_VTASIM)
     add_custom_target(vtaBinarynetBundleONNX
 	    DEPENDS
-            ${BNN_ONNX}/binarynet.onnx
+            ${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx
             ${CMAKE_CURRENT_BINARY_DIR}/binarynet.yaml
 	    )
 
@@ -101,7 +101,7 @@ if(NESTC_USE_VTASIM)
 	    ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
 	    COMMAND
 	    model-compiler -g    
-            -model=${BNN_ONNX}/binarynet.onnx
+            -model=${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx
             -backend=VTA
             -assert-all-nodes-quantized
             -bnn
@@ -131,7 +131,7 @@ else()
 	    COMMAND
             wget -O ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h https://gitlab.com/yongin.kwon/nestc-data/-/raw/master/VTABundleTests/bnn/VTARuntime.h
             )
-endif() 
+endif()
 
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 add_executable(vtaBinarynetBundle ${BNN_ONNX}/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/binarynet.cpp)
