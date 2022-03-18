@@ -1,3 +1,0 @@
-cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/root/nest-compiler/glow/utils/llvm_install/lib/cmake/llvm -DCMAKE_BUILD_TYPE=Release -DNESTC_USE_VTASIM=OFF -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON -DNESTC_BNN=ON ../nest-compiler
-
-make vtaBinarynetBundle
