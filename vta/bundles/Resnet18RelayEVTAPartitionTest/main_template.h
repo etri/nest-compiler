@@ -1,74 +1,20 @@
-/*
-//
-// Created by luiin on 20. 10. 20..
-//
-
-#ifndef GLOW_MAIN_TEMPLATE_H
-#define GLOW_MAIN_TEMPLATE_H
-
-#include <assert.h>
-#include <inttypes.h>
-#include <png.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <string>
-#include <vector>
-
-#include "main_header_test.h"
-
-/// This is an example demonstrating how to use auto-generated bundles and
-/// create standalone executables that can perform neural network computations.
-/// This example loads and runs the compiled resnet50 network model.
-/// This example is using the dynamic bundle API (default).
-
-#define DEFAULT_HEIGHT 224
-#define DEFAULT_WIDTH 224
-
-//===----------------------------------------------------------------------===//
-//                   Image processing helpers
-//===----------------------------------------------------------------------===//
-class main_template {
-  std::vector<std::string> inputImageFilenames;
-
-  size_t getXYZW(const size_t *dims, size_t x, size_t y, size_t z, size_t w);
-  size_t getXYZ(const size_t *dims, size_t x, size_t y, size_t z);
-  bool readPngImage(const char *filename, std::pair<float, float> range,
-                    float *&imageT, size_t *imageDims);
-  static void loadImagesAndPreprocess(const std::vector<std::string> &filenames,
-                                      float *&resultT, size_t *resultDims);
-  void parseCommandLineOptions(int argc, char **argv);
-  const SymbolTableEntry *getWeightVar(const BundleConfig &config,
-                                       const char *name);
-  const SymbolTableEntry &getMutableWeightVar(const BundleConfig &config,
-                                              const char *name);
-  void *alignedAlloc(const BundleConfig &config, size_t size);
-  static uint8_t *initConstantWeights(const char *weightsFileName,
-                                      const BundleConfig &config);
-  static uint8_t *allocateMutableWeightVars(const BundleConfig &config);
-  static void dumpInferenceResults(const BundleConfig &config,
-                                   uint8_t *mutableWeightVars, char* resultName);
-  static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT);
-  static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT);
-  static uint8_t *copyMutableWeightVarsWithoutAlloc(const BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float* inputT);
-  void transpose(float* &in, float* &out);
-
-  #define NHWC 1
-
-  static uint8_t *initMutableWeightVars(const BundleConfig &config, char* varName);
-  static uint8_t *initActivations(const BundleConfig &config);
-  static float* getInferenceResultVar(const BundleConfig &config,
-                                      uint8_t *mutableWeightVars, const char* name);
-
-};
-
-#endif // GLOW_MAIN_TEMPLATE_H
-*/
-
-//
-// Created by luiin on 20. 10. 20..
-//
+/*****************************************************************************
+	*
+	* Copyright Next-Generation System Software Research Group, All rights reserved.
+	* Future Computing Research Division, Artificial Intelligence Reserch Laboratory
+	* Electronics and Telecommunications Research Institute (ETRI)
+	*
+	* THESE DOCUMENTS CONTAIN CONFIDENTIAL INFORMATION AND KNOWLEDGE
+	* WHICH IS THE PROPERTY OF ETRI. NO PART OF THIS PUBLICATION IS
+	* TO BE USED FOR ANY OTHER PURPOSE, AND THESE ARE NOT TO BE"
+	* REPRODUCED, COPIED, DISCLOSED, TRANSMITTED, STORED IN A RETRIEVAL
+	"* SYSTEM OR TRANSLATED INTO ANY OTHER HUMAN OR COMPUTER LANGUAGE,
+	* IN ANY FORM, BY ANY MEANS, IN WHOLE OR IN PART, WITHOUT THE
+	* COMPLETE PRIOR WRITTEN PERMISSION OF ETRI.
+	*
+	* LICENSE file : README_LICENSE_ETRI located in the top directory
+	*
+*****************************************************************************/
 
 #include <assert.h>
 #include <inttypes.h>

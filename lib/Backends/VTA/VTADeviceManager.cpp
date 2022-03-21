@@ -14,6 +14,7 @@
  * limitations under the License.
  * Modifications copyright (C) 2022 <ETRI/Yongin Kwon>
  */
+
 #include "VTADeviceManager.h"
 #include "VTA.h"
 
