@@ -12,7 +12,7 @@
 	* IN ANY FORM, BY ANY MEANS, IN WHOLE OR IN PART, WITHOUT THE
 	* COMPLETE PRIOR WRITTEN PERMISSION OF ETRI.
 	*
-	* LICENSE file : README_LICENSE_ETRI located in the top directory
+	* LICENSE file : LICENSE_ETRI located in the top directory
 	*
 *****************************************************************************/
 
