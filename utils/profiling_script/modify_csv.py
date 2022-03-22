@@ -34,12 +34,28 @@ with open('./'+file_name+'.csv', 'r') as raw:
     for line in reader:
         data_list.append(line)
         line_num += 1
-    
-    if line_num < 1:
+
+    if line_num < 1: # no output
         result_list = ["error"]
-    elif line_num == 1: 
+
+    elif line_num == 1: # simulator case 1
         result_list = data_list[0]
         if len(result_list) > 17:
+            if os.path.isfile("./output.bin"):
+                command_result = os.system("diff output.bin "+"vta"+file_name+"Golden.bin")
+                if command_result == 0:
+                    result_list.append("vaild")
+                else:
+                    result_list.append("invaild")
+            else:
+                result_list.append("error")
+        else:
+            result_list.append("error")
+            
+    elif line_num == 5: # simulator case 2
+        result_list = data_list[0][:-1]
+        result_list += data_list[4]
+        if os.path.isfile("./output.bin"):
             command_result = os.system("diff output.bin "+"vta"+file_name+"Golden.bin")
             if command_result == 0:
                 result_list.append("vaild")
@@ -47,15 +63,22 @@ with open('./'+file_name+'.csv', 'r') as raw:
                 result_list.append("invaild")
         else:
             result_list.append("error")
-    else:
-        command_result = os.system("diff output.bin "+"vta"+file_name+"Golden.bin")
-        if command_result == 0:
-            data_list[2] = data_list[2][0].split()
-            result_list = data_list[0]
-            result_list.append(data_list[2][13])
+
+    else: # board
+        if os.path.isfile("./output.bin"):
+            command_result = os.system("diff output.bin "+"vta"+file_name+"Golden.bin")
+            if command_result == 0:
+                data_list[2] = data_list[2][0].split()
+                result_list = data_list[0]
+                result_list.append(data_list[2][13])
+            else:
+                result_list = data_list[0]
+                result_list.append(-1)
         else:
             result_list = data_list[0]
-            result_list.append(-1)
+            result_list.append("error")
     
     wr.writerow(result_list)
 
+if os.path.isfile("./output.bin"):
+    os.remove("./output.bin")
