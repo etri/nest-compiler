@@ -178,6 +178,7 @@ public:
 
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
+  void partitionBranchesForRelay(std::vector<NodeGroup*>* branchList);
   void loadPerformProfileInfo(std::string pdir);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends, CostNode* prevCNode = nullptr);
   void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* prevCNode, CostNode* curCNode);
@@ -196,9 +197,11 @@ public:
   void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
   void findParallelBranchesForMultiVTA(std::vector<NodeGroup*>* branchList, int cpuNum, int vtaNum);
   void allocateVTAOps(std::vector<NodeGroup*>* branchList);
+  void allocateRelayOps(std::vector<NodeGroup*>* branchList);
   bool isVTAConv(ConvolutionNode* convNode);
 
   void generatePlanForVTAOps(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void generatePlanForRelay(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateTestProfile(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
 //  void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);

@@ -1204,6 +1204,60 @@ void makeSingleList(std::vector<NodeGroup*>* branchList, NodeGroup* singleBranch
 }
 
 
+void NestPartitioner::partitionBranchesForRelay(std::vector<NodeGroup*>* branchList) {
+//  std::cout << "--------- partitionBranches -----------" << std::endl;
+
+    unsigned int partitionID = 0;
+    NodeGroup* lastPartition = nullptr;
+
+    std::set<int> processedLevels;
+    for (auto i = branchList->begin(); i != branchList->end(); i++) {
+        NodeGroup* branch = *i;
+//        if(processedLevels.find(branch->level_) != processedLevels.end())
+//            continue;
+//
+////        std::vector<NodeGroup*> parallelBranches;
+//        int bn = getBranchesWithSameLevel(branchList, &parallelBranches, branch->level_);
+//        processedLevels.insert(branch->level_);
+////        std::cout << "bn: " << bn << " level = " << branch->level_ << std::endl;
+//        if(isParallel && bn > 1 ) {
+////            std::cout << "(*i)->isParallelBranch_: " << ", " << (*i)->isParallelBranch_ << std::endl;
+//            if((*i)->isParallelBranch_) {
+//                for(auto pb: parallelBranches) {
+//                    //std::cout << "partitionID " << partitionID  << std::endl;
+//                    lastPartition = partitionSingleBranch(&nodeGroups_, pb, &partitionID, nullptr);
+//                    lastPartition = nullptr;
+//                }
+//            } else {
+//                NodeGroup* nb = new NodeGroup;
+//                nb->level_ = branch->level_;
+//                nb->backendName_ = branch->backendName_;
+//                nb->branchID_ = branch->ID_;
+//
+//                makeSingleList(&parallelBranches, nb, nullptr);
+//                lastPartition = partitionSingleBranch(&nodeGroups_, nb, &partitionID, nullptr);
+//            }
+//
+//        } else if(bn == 1) {
+            //std::cout << "4 branch --->" << partitionID << std::endl;
+            lastPartition = partitionSingleBranch(&nodeGroups_, branch, &partitionID, lastPartition);
+            //std::cout << "backend: " << lastPartition->backendName_ << std::endl;
+//        } else {
+//            std::cout << "No branch in branchList." << std::endl;
+//            continue;
+//        }
+
+        //      std::cout << "lastPartition size = " <<lastPartition->nodeList_.size() << std::endl;
+    }
+
+  for (auto partition : nodeGroups_) {
+    std::cout << "partition backend: " << partition->backendName_ << std::endl;
+  }
+    std::cout << "--------- # partition: " << nodeGroups_.size() << "-----------" << std::endl;
+
+}
+
+
 void NestPartitioner::partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel) {
 //  std::cout << "--------- partitionBranches -----------" << std::endl;
 
@@ -1760,6 +1814,7 @@ bool NestPartitioner::isVTAConv(ConvolutionNode* convNode)
 
     return false;
 }
+
 void NestPartitioner::allocateVTAOps(std::vector<NodeGroup*>* branchList) {
      std::cout << "--------- allocateVTAOps -----------" << std::endl;
     //std::cout << "\n[allocateVTAOps] Allocate VTA to VTA-computable operations*." << std::endl;
@@ -1810,6 +1865,45 @@ void NestPartitioner::allocateVTAOps(std::vector<NodeGroup*>* branchList) {
 
                 cnode->exeCost_ = backendExeProfileMap_[cnode->backendName_][key];
             }
+
+            if(prevCnode != nullptr && cnode->backendName_.compare(prevCnode->backendName_)){
+                cnode->commCost_ = backendCommProfileMap_[cnode->backendName_][key];;
+            }
+
+            prevCnode = cnode;
+        }
+    }
+}
+
+void NestPartitioner::allocateRelayOps(std::vector<NodeGroup*>* branchList) {
+    std::cout << "--------- allocateRelayOps -----------" << std::endl;
+    //std::cout << "\n[allocateVTAOps] Allocate VTA to VTA-computable operations*." << std::endl;
+    std::vector<Backend *> backends;
+    genBackendMap(backendMap_, backendHolder_, backends);
+
+    if(backendMap_.find("Relay") == backendMap_.end()) {
+        std::cout << "No Relay backend!!" << std::endl;
+        return;
+    }
+
+    CostNode* prevCnode = nullptr;
+    std::string key, compKey;
+    for (auto i = branchList->begin(); i != branchList->end(); i++) {
+        for (auto bi = (*i)->nodeList_.begin(); bi != (*i)->nodeList_.end(); bi++) {
+            CostNode *cnode = *bi;
+
+            key = appGen_.getProfileKey(cnode->node_);
+            cnode->commCost_ = 0.0;
+
+            if (isSupportedOpType(cnode->node_->getKind(), "Relay", cnode)) {
+                cnode->backendName_ = "Relay";
+            } else {
+                cnode->backendName_ = "CPU";
+//                std::cout << "node = " << cnode->node_->getName().str() << std::endl;
+//                std::cout << "Backend = " << cnode->backendName_ << std::endl;
+            }
+
+            cnode->exeCost_ = backendExeProfileMap_[cnode->backendName_][key];
 
             if(prevCnode != nullptr && cnode->backendName_.compare(prevCnode->backendName_)){
                 cnode->commCost_ = backendCommProfileMap_[cnode->backendName_][key];;
@@ -1890,8 +1984,13 @@ void NestPartitioner::findParallelBranchesForMultiVTA(std::vector<NodeGroup *> *
             if(pBranchList.size() >= 2) {
                 std::cout << "# parallel branches: " << pBranchList.size() << std::endl;
 //                std::cout << "cpuCnt = " << cpuCnt << ", " << "vtaCnt = " << vtaCnt << std::endl;
-                if(cpuCnt > cpuNum || vtaCnt > vtaNum) {
-                    std::cout << "Too many parallel branches!!" << std::endl;
+                if(cpuCnt > cpuNum) {
+                    std::cout << "Too many parallel branches for CPU!!" << std::endl;
+                    continue;
+                }
+
+                if(vtaCnt > vtaNum) {
+                    std::cout << "Too many parallel branches for NPU!!" << std::endl;
                     continue;
                 }
 
@@ -2233,7 +2332,30 @@ void NestPartitioner::generateOptimalPlanForSingleNodes(Function *function, std:
     partitionBranches(&branchList, false);
     outPartitionPlan(function->getName().str(), profilePath + "/SingleOpOptimalPlan.yaml", false);
 
-    std::cout << "[generateOptimalPlanForSingleNodes] Total cost = " << getCost(&branchList) << std::endl;
+//    std::cout << "[generateOptimalPlanForSingleNodes] Total cost = " << getCost(&branchList) << std::endl;
+
+    for(auto branch: nodeGroups_)
+        delete branch;
+
+    nodeGroups_.clear();
+}
+
+void NestPartitioner::generatePlanForRelay(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode) {
+
+    BFSLevel bfs = getBFSLevel(function);
+    std::vector<std::vector<CostNode>> cnodeBfs;
+    std::vector<NodeGroup*> branchList;
+
+    //    loadFuseOperatorsConfig(profilePath + "/profileConfigs.yaml");//current: Conv+Relu
+    makeCostNode(function, &cnodeBfs);
+    loadPerformProfileInfo(profilePath+"/test");
+
+    analyzeDAG(&cnodeBfs, bfs, &branchList);
+    allocateRelayOps(&branchList);
+    partitionBranchesForRelay(&branchList);
+    outPartitionPlan(function->getName().str(), profilePath + "/RelayOPsPlan.yaml", false);
+
+    std::cout << "[generatePlanForRelay] Total cost = " << getCost(&branchList) << std::endl;
 
     for(auto branch: nodeGroups_)
         delete branch;
@@ -2285,7 +2407,7 @@ void NestPartitioner::generateMinCostPlan(Function *function, std::string profil
     partitionBranches(&branchList, true);
     outPartitionPlan(function->getName().str(), profilePath + planName, true);
 
-    std::cout << "[generateMinCostPlan] Total cost = " << getCost(&branchList) << std::endl;
+//    std::cout << "[generateMinCostPlan] Total cost = " << getCost(&branchList) << std::endl;
 
     for(auto branch: nodeGroups_)
         delete branch;
@@ -2374,7 +2496,10 @@ Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t 
     } else if (exeType == 5) {
         generateMinCostPlan(function, profilePath, partitionPlanFile, profileMode, 4); //CPU-single-thread + Multi-VTA
         exit(0);
-    } else if (exeType == 6){
+    } else if(exeType == 6) {
+        generatePlanForRelay(function, profilePath, partitionPlanFile, profileMode);
+        exit(0);
+    }else if (exeType == 7){
         generateDAGStatistics(function);
         exit(0);
     }
