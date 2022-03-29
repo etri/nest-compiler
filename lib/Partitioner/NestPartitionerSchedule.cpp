@@ -95,7 +95,7 @@ void NestPartitionerSchedule::generateDeclaration(string& wfilec, int partitionN
 
     if(profileMode_ == 1) {
         wfilec.append("#define ARRAY_LENGTH " + std::to_string(partitionNum) + "\n");
-        wfilec.append("unsigned long delay_time[ARRAY_LENGTH];\n\n");
+        wfilec.append("unsigned long p_time_ary[ARRAY_LENGTH], comm_time_ary[ARRAY_LENGTH];\n\n");
     }
 }
 
@@ -132,11 +132,12 @@ void NestPartitionerSchedule::generateYamlFile(string& wfilec, std::size_t parti
 //  std::cout << "== [Start] generateYamlFile == " << std::endl;
 
     std::string backendName = partitionConfig.backendNames[0];
-    std::string filename;
+    std::string pTimeFilename, commTimeFilename;
     std::string keyList[partitionNum];
     std::string keys;
 
-    filename = "./" + inputPartitionName + "Profile.yaml";
+    pTimeFilename = "./" + inputPartitionName + "Profile.yaml";
+    commTimeFilename = "./" + inputPartitionName + "CommProfile.yaml";
 
     std::cout << "partition # : " << partitionNum << std::endl;
     std::cout << "inputPartitionName: " << inputPartitionName << std::endl;
@@ -164,23 +165,41 @@ void NestPartitionerSchedule::generateYamlFile(string& wfilec, std::size_t parti
     keys.pop_back();
 
     wfilec.append("void createYamlFile(){\n");
-    wfilec.append("\tprintf(\"== createYamlFile start ==\\n\");\n");
+    wfilec.append("\tprintf(\"== create Yaml files ==\\n\");\n");
     wfilec.append("\tstd::string keyList[" + std::to_string(partitionNum) + "] = {" + keys + "};\n");
-    wfilec.append("\tstd::string filename = \"" + filename + "\";\n");
-    wfilec.append("\tstd::ofstream profileFile(filename);\n\n");
-    wfilec.append("\tchar* str = new char[10];\n\n");
-    wfilec.append("\tif (profileFile.is_open()) {\n");
-    wfilec.append("\t\tprofileFile << \"---\" << std::endl;\n");
-    wfilec.append("\t\tprofileFile << \"backendName: " + backendName + "\" << std::endl;\n");
+
+    wfilec.append("\tstd::string pTimeFName = \"" + pTimeFilename + "\";\n");
+    wfilec.append("\tstd::ofstream pTimeProfile(pTimeFName);\n\n");
+
+    wfilec.append("\tstd::string commTimeFName = \"" + commTimeFilename + "\";\n");
+    wfilec.append("\tstd::ofstream commTimeProfile(commTimeFName);\n\n");
+
+    wfilec.append("\tchar* p_str = new char[10];\n");
+    wfilec.append("\tchar* comm_str = new char[10];\n\n");
+
+    wfilec.append("\tif(pTimeProfile.is_open() && commTimeProfile.is_open()) {\n");
+    wfilec.append("\t\tpTimeProfile << \"---\" << std::endl;\n");
+    wfilec.append("\t\tcommTimeProfile << \"---\" << std::endl;\n");
+
+    wfilec.append("\t\tpTimeProfile << \"Type: ExeTime\" << std::endl;\n");
+    wfilec.append("\t\tcommTimeProfile << \"CommTime\" << std::endl;\n");
+
+    wfilec.append("\t\tpTimeProfile << \"backendName: " + backendName + "\" << std::endl;\n");
+    wfilec.append("\t\tcommTimeProfile << \"backendName: " + backendName + "\" << std::endl;\n");
     wfilec.append("\t\tfor(int i = 0; i < " + std::to_string(partitionNum-1) + "; i++){\n");
     wfilec.append("\t\t\tif(keyList[i].compare(\"blank\")) {\n");
-    wfilec.append("\t\t\t\tsprintf(str, \"%lu\", delay_time[i]);\n");
-    wfilec.append("\t\t\t\tprofileFile << keyList[i] << \" : \" << str;\n");
-    wfilec.append("\t\t\t\tprofileFile << std::endl;\n");
+    wfilec.append("\t\t\t\tsprintf(p_str, \"%lu\", p_time_ary[i]);\n");
+    wfilec.append("\t\t\t\tsprintf(comm_str, \"%lu\", comm_time_ary[i]);\n");
+    wfilec.append("\t\t\t\tpTimeProfile << keyList[i] << \" : \" << p_str;\n");
+    wfilec.append("\t\t\t\tcommTimeProfile << keyList[i] << \" : \" << comm_str;\n");
+    wfilec.append("\t\t\t\tpTimeProfile << std::endl;\n");
+    wfilec.append("\t\t\t\tcommTimeProfile << std::endl;\n");
     wfilec.append("\t\t\t}\n");
     wfilec.append("\t\t}\n");
-    wfilec.append("\t\tprofileFile << \"...\" << std::endl;\n");
-    wfilec.append("\t\tprofileFile.close();\n");
+    wfilec.append("\t\tpTimeProfile << \"...\" << std::endl;\n");
+    wfilec.append("\t\tcommTimeProfile << \"...\" << std::endl;\n");
+    wfilec.append("\t\tpTimeProfile.close();\n");
+    wfilec.append("\t\tcommTimeProfile.close();\n");
     wfilec.append("\t}\n");
     wfilec.append("}\n");
 }
@@ -382,7 +401,12 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
                     varStr = "inputVar" + std::to_string(pi) + "_" + std::to_string(cnt);
                 }
                 partitionOutVarList_[nodeName] = varStr;
+
                 if(pi > 0) {
+
+                    if(profileMode == 1) {
+                        wfilec.append("\n\tgettimeofday(&comm_time_start, NULL);\n");
+                    }
                     std::string rVarName =
                             wfilec.append("\tfloat* " + varStr +
                                           " = getInferenceResultVar(p" + varPi +
@@ -394,32 +418,39 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
             std::cout << "No output: " << nodeName << std::endl;
         }
 
+
         if(pi > 0) {
             wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(pi) +
                           "_config, mutableWeightVarsAddr" + std::to_string(pi) + ", \"" + inputList->at(cnt) + "\", " +
                           varStr + ");\n");
+
+            if(profileMode == 1) {
+                wfilec.append("\tgettimeofday(&comm_time_end, NULL);\n");
+                wfilec.append("\tcomm_time = (comm_time_end.tv_sec - comm_time_start.tv_sec)*1000000.0 + (comm_time_end.tv_usec - comm_time_start.tv_usec);\n");
+                wfilec.append("\tcomm_time_ary[" + std::to_string(pi-1) + "] = comm_time;\n");
+                wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi-1) + " p time] %lu microsec.\\n\", p_time_ary[" + std::to_string(pi-1) + "]);\n");
+                wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi-1) + " comm time] %lu microsec.\\n\", comm_time_ary[" + std::to_string(pi-1) + "]);\n\n");
+            }
         }
     }
 
-//    if(profileMode == 1) {
+    if(profileMode == 1) {
 //        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
-//        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+", NULL);\n");
-//    }
+        wfilec.append("\tgettimeofday(&p_time_start, NULL);\n");
+    }
 
     wfilec.append("\tp" +
                   std::to_string(pi) + "(constantWeightVarsAddr" +
                   std::to_string(pi) + ", mutableWeightVarsAddr" +
                   std::to_string(pi) + ", activationsAddr" +
-                  std::to_string(pi) + ");\n\n");
+                  std::to_string(pi) + ");\n");
 
     if(profileMode == 1) {
-        wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
-        wfilec.append("\tgettimeofday(&now_"+std::to_string(pi)+", NULL);\n");
-        wfilec.append("\tdouble inftime_" +  std::to_string(pi) + " = (now_" + std::to_string(pi) + ".tv_sec - start_"+ std::to_string(pi) +
-                      ".tv_sec)*1000000.0 + (now_"  + std::to_string(pi) + ".tv_usec - start_" + std::to_string(pi) + ".tv_usec);\n");
-
-        wfilec.append("\tdelay_time[" + std::to_string(pi) + "] = inftime_" + std::to_string(pi) + ";\n");
-        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(pi) + "]);\n\n");
+//        wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
+        wfilec.append("\tgettimeofday(&p_time_end, NULL);\n");
+        wfilec.append("\tp_time = (p_time_end.tv_sec - p_time_start.tv_sec)*1000000.0 + (p_time_end.tv_usec - p_time_start.tv_usec);\n");
+        wfilec.append("\tp_time_ary[" + std::to_string(pi) + "] = p_time;\n");
+//        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(pi) + "]);\n\n");
     }
 }
 
@@ -576,19 +607,27 @@ void getParallelGroup(std::vector<std::set<std::string>> parallelPartitions, int
 
 void NestPartitionerSchedule::generatePartitionCall(std::string &wfilec, int partitionNum, std::vector<Function *> funcList, const PartitionConfig &partitionConfig) {
 
+//first partition
+
+    wfilec.append("\ttimeval t1, t2;\n");
+    if(profileMode_ == 1) {
+        wfilec.append("\ttimeval p_time_start, p_time_end;\n");
+        wfilec.append("\ttimeval comm_time_start, comm_time_end;\n");
+        wfilec.append("\tdouble p_time = 0.0, comm_time = 0.0;\n");
+    }
+
+    wfilec.append("\tgettimeofday(&t1, NULL);\n\n");
 
     std::vector<std::string> processedPP;
+    std::string finalOutStr;
     for(int pi = 0; pi < partitionNum - 1; pi++) {
 
         auto func = funcList[pi];
-        //int isParallel = false;
 
         std::vector<std::string> inputList;
         std::vector<std::string> outputList;
 
         setPartitionInputOutputList(func, &inputList, &outputList, pi);
-
-//        partitionInList_[pi] = inputList;
 
 //        std::cout << "in = " << inputList.size() << std::endl;
 //        std::cout << "out = " << outputList.size() << std::endl;
@@ -597,12 +636,6 @@ void NestPartitionerSchedule::generatePartitionCall(std::string &wfilec, int par
         getParallelGroup(partitionConfig.parallelPartitions, pi, &pGroup);
         if(std::find(processedPP.begin(), processedPP.end(), "p"+std::to_string(pi)) != processedPP.end())
             continue;
-
-        //first partition
-        if(pi == 0) { //first partition, input: image data
-            wfilec.append("\ttimeval t1, t2;\n");
-            wfilec.append("\tgettimeofday(&t1, NULL);\n\n");
-        }
 
         //partition call
         if(pGroup.size() == 0) {
@@ -615,20 +648,29 @@ void NestPartitionerSchedule::generatePartitionCall(std::string &wfilec, int par
 
         //last partition
         if (pi == partitionNum - 2) { //last partition
-            wfilec.append("\tgettimeofday(&t2, NULL);\n");
-            wfilec.append("\tdouble inftime_total = (t2.tv_sec - t1.tv_sec)*1000000.0 + (t2.tv_usec - t1.tv_usec);\n");
-            wfilec.append("\tprintf(\"\\n====> [Total inference time] %.4f msec.\\n\", inftime_total);\n\n");
-
-
-            wfilec.append("\t// Report the results.\n");
-            wfilec.append("\tprintf(\"====== final result of this neural net ========\\n\");\n");
-            wfilec.append("\tdumpInferenceResults(p" + std::to_string(pi) +
-                          "_config, mutableWeightVarsAddr" + std::to_string(pi) +
-                          ", \"" + outputList.at(0) + "\");\n\n");
+            finalOutStr = outputList.at(0);
             break;
         }
     }
 
+    if(profileMode_ == 1) {
+        wfilec.append("\tgettimeofday(&comm_time_end, NULL);\n");
+        wfilec.append("\tcomm_time = (comm_time_end.tv_sec - comm_time_start.tv_sec)*1000000.0 + (comm_time_end.tv_usec - comm_time_start.tv_usec);\n");
+        wfilec.append("\tcomm_time_ary[" + std::to_string(partitionNum - 2) + "] = comm_time;\n");
+        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(partitionNum - 2) + " p time] %lu microsec.\\n\", p_time_ary[" + std::to_string(partitionNum - 2) + "]);\n");
+        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(partitionNum - 2) + " comm time] %lu microsec.\\n\", comm_time_ary[" + std::to_string(partitionNum - 2) + "]);\n\n");
+    }
+
+    wfilec.append("\tgettimeofday(&t2, NULL);\n");
+    wfilec.append("\tdouble inftime_total = (t2.tv_sec - t1.tv_sec)*1000.0 + (t2.tv_usec - t1.tv_usec)/1000.0;\n");
+    wfilec.append("\tprintf(\"\\n====> [Total inference time] %.4f msec.\\n\", inftime_total);\n\n");
+
+
+    wfilec.append("\t// Report the results.\n");
+    wfilec.append("\tprintf(\"====== final result of this neural net ========\\n\");\n");
+    wfilec.append("\tdumpInferenceResults(p" + std::to_string(partitionNum - 2) +
+                  "_config, mutableWeightVarsAddr" + std::to_string(partitionNum - 2) +
+                  ", \"" + finalOutStr + "\");\n\n");
 }
 
 

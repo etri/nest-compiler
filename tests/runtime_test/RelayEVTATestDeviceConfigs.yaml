@@ -2,11 +2,13 @@
 - name:    PU1
   backendName: Relay
   parameters: |
+    "nonSupportedNodes":"SoftMax,Splat"
     "deviceID" : "0"
   dramMemory: 200000000
 - name:    PU2
   backendName: VTA
   parameters: |
+    "supportedNodes":"Convolution"
     "deviceID" : "1"
   dramMemory: 200000000
 ...

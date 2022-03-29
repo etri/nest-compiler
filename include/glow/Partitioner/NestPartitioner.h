@@ -1,19 +1,21 @@
-/**
- * Copyright (c) Glow Contributors. See CONTRIBUTORS file.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * Modifications copyright (C) 2022 <ETRI/Yongin Kwon>
- */
+/*****************************************************************************
+	*
+	* Copyright Next-Generation System Software Research Group, All rights reserved.
+	* Future Computing Research Division, Artificial Intelligence Reserch Laboratory
+	* Electronics and Telecommunications Research Institute (ETRI)
+	*
+	* THESE DOCUMENTS CONTAIN CONFIDENTIAL INFORMATION AND KNOWLEDGE
+	* WHICH IS THE PROPERTY OF ETRI. NO PART OF THIS PUBLICATION IS
+	* TO BE USED FOR ANY OTHER PURPOSE, AND THESE ARE NOT TO BE"
+	* REPRODUCED, COPIED, DISCLOSED, TRANSMITTED, STORED IN A RETRIEVAL
+	"* SYSTEM OR TRANSLATED INTO ANY OTHER HUMAN OR COMPUTER LANGUAGE,
+	* IN ANY FORM, BY ANY MEANS, IN WHOLE OR IN PART, WITHOUT THE
+	* COMPLETE PRIOR WRITTEN PERMISSION OF ETRI.
+	*
+	* LICENSE file : README_LICENSE_ETRI located in the top directory
+	*
+*****************************************************************************/
+
 #ifndef GLOW_NEST_PARTITIONER_PARTITIONER_H
 #define GLOW_NEST_PARTITIONER_PARTITIONER_H
 
@@ -26,14 +28,24 @@ using namespace runtime;
 
 class CostNode {
 public:
-  Node* node_;
-  size_t partitionID_ = -1;
-  std::string name_;
-  std::string backendName_;
-  float cost_ = INFINITY;
-  //bool isFused_ = false;
+    Node* node_;
+    std::string name_;
+    std::string backendName_;
 
-  bool isChecked_ = false;
+    float commCost_ = INFINITY;
+    float exeCost_ = INFINITY;
+    bool isChecked_ = false;
+
+    //for our backend-allocation algorithm
+    std::map<std::string, float> minCostMap_;
+    std::map<std::string, std::string> prevMinBackendMap_;
+
+public:
+    float getCost() { return (commCost_ + exeCost_);}
+    void initCost() {
+        commCost_ = INFINITY;
+        exeCost_ = INFINITY;
+  }
 };
 
 class NodeGroup {
@@ -102,7 +114,7 @@ class NestPartitioner final : public PartitionerBase {
     std::set<std::string> backendSet_;
     std::string quantFileName_;
 
-    std::map<std::string, std::map<std::string, float>> backendProfileMap_;
+    std::map<std::string, std::map<std::string, float>> backendExeProfileMap_, backendCommProfileMap_;
     NestPartitionerSchedule appGen_;
 
     std::set<std::string> fuseOperatorSet_;
@@ -110,7 +122,7 @@ class NestPartitioner final : public PartitionerBase {
     std::string outputDir_;
     std::map<std::string, int>* puIdxMap_;
 
-    bool preventFragmentation_ = true;
+//    bool preventFragmentation_ cnode->minCostPrevNodeMap_[backend->getName()] = nullptr;= true;
 
   /// Initialization. Called in class constructor.
     void init();
@@ -167,9 +179,9 @@ public:
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
   void loadPerformProfileInfo(std::string pdir);
-  void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends);
-  void getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCNode);
-  void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* firstPrevCNode, CostNode* curCNode);
+  void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends, CostNode* prevCNode = nullptr);
+  void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* prevCNode, CostNode* curCNode);
+//  void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* firstPrevCNode, CostNode* curCNode);
   int getFusedPartitionCount(std::vector<NodeGroup*>* branchList);
 
   void outPartitionPlanForFusion(std::string funcName, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
@@ -177,6 +189,8 @@ public:
   void outPartitionPlanForSingleNode(Function *function, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
   void outPerformProfileForFusedNode(std::vector<NodeGroup*>* branchList, std::string filename, DeviceInfo device);
   void allocOptimalPUFusedNodes(std::vector<NodeGroup*>* branchList);
+  void allocMinBranchCost(std::vector<NodeGroup*>* branchList);
+
   void loadFuseOperatorsConfig(std::string fname);
   void allocateOptimalPUSingleNode(std::vector<NodeGroup*>* branchList);
   void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
@@ -187,8 +201,9 @@ public:
   void generatePlanForVTAOps(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateTestProfile(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+//  void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+//  void generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void generateMinCostPlan(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int VTANum = 1);
 
   void generateDAGStatistics(Function *function);
   Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
@@ -206,8 +221,11 @@ public:
                  unsigned int level, unsigned int branchID, std::vector<NodeGroup*>* branchList);
   void analyzeDAG(std::vector<std::vector<CostNode>>* cnodebfs, BFSLevel dag, std::vector<NodeGroup*>* branchList);
   bool setBranchPU(NodeGroup *branch);
+  void setCost(std::vector<Backend *>* backends, CostNode* pnode, CostNode* cnode);
+  void makeCostNode(Function* function, std::vector<std::vector<CostNode>>* cnodeBfs);
+  bool isSupportedOpType(Kinded::Kind opType, std::string backendName, CostNode* cnode);
 
-        void setOutputDir(std::string path) {
+  void setOutputDir(std::string path) {
     outputDir_ = path;
     appGen_.setOutputDir(path);
   }

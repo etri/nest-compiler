@@ -848,7 +848,8 @@ void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vec
                 }
 
                 if(backendMap_[deviceInfo.backendName].supportedNodesKinds.size() > 0 &&
-                     backendMap_[deviceInfo.backendName].supportedNodesKinds.find(node->getKind()) == backendMap_[deviceInfo.backendName].supportedNodesKinds.end()) {
+                     backendMap_[deviceInfo.backendName].supportedNodesKinds.find(node->getKind())
+                     == backendMap_[deviceInfo.backendName].supportedNodesKinds.end()) {
                     isOffloading = true;
                 }
 
@@ -1096,16 +1097,7 @@ void NestPartitioner::outPartitionPlan(std::string funcName, std::string filenam
 //          std::cout << "node name: " << cnode->node_->getName().str() << std::endl;
 //          std::cout << "node type: " << cnode->node_->getKindName() << std::endl;
 //          std::cout << "partition ID: " << partition->ID_ << std::endl;
-//
-//                if(!std::string(cnode->node_->getKindName()).compare("Convolution")) {
-//                    convNum++;
-//                    if (!cnode->backendName_.compare("VTA"))
-//                        vtaConvNum++;
-//                }else if(!std::string(cnode->node_->getKindName()).compare("Relu")) {
-//                    if (!cnode->backendName_.compare("VTA"))
-//                        vtaReluNum++;
-//                }
-//
+
                 nodeToPartitionStr +=
                         (cnode->name_ + "-" + std::to_string(partition->ID_));
                 nodeToPartitionStr += "\n  :";
@@ -1267,7 +1259,8 @@ void NestPartitioner::partitionBranches(std::vector<NodeGroup*>* branchList, boo
 
 void NestPartitioner::loadPerformProfileInfo(std::string pdir)
 {
-    //std::cout << "=== loadPerformProfileInfo  === " << std::endl;
+//    std::cout << "=== loadPerformProfileInfo start === " << std::endl;
+
     struct dirent *entry;
     DIR *dir = opendir(pdir.c_str());
     if (dir == NULL) {
@@ -1283,81 +1276,94 @@ void NestPartitioner::loadPerformProfileInfo(std::string pdir)
         if(fn.substr(fn.find_last_of(".") + 1) == "yaml") {
 
             std::map<std::string, std::string> profileMap = deserializeStrStrMapFromYaml(pdir+"/"+fn);
+            std::map<std::string, std::map<std::string, float>>* performMap;
+            std::string performType = "ExeTime";
+            if(profileMap.find("Type") != profileMap.end()) {
+                performType = profileMap["Type"];
+//                std::cout <<"perform fn = " << fn << std::endl;
+//                std::cout <<"type = " << performType << std::endl;
+            }
+
+            if(!performType.compare("ExeTime")) {
+                performMap = &backendExeProfileMap_;
+            } else {
+                performMap = &backendCommProfileMap_;
+            }
+
             std::string backendName = profileMap["backendName"];
             backendSet_.insert(backendName);
 
-            std::map<std::string, float> puvalues;
-            backendProfileMap_.insert(std::make_pair(backendName, puvalues));
+            std::map<std::string, float> puValues;
+            (*performMap).insert(std::make_pair(backendName, puValues));
 
             for(auto it = profileMap.begin();it != profileMap.end();it++) {
-                if(!it->first.compare("backendName")) continue;
+                if(!it->first.compare("backendName"))
+                    continue;
 
                 std::string costValueStr = profileMap[it->first].c_str();
+
+//                std::cout <<"name = " << it->first.c_str() << std::endl;
+//                std::cout <<"value = " << costValueStr.c_str() << std::endl;
+
                 if(!costValueStr.compare("INFINITY")) {
-                    puvalues.insert(std::make_pair(it->first.c_str(), INFINITY));
+                    puValues.insert(std::make_pair(it->first.c_str(), INFINITY));
                 } else {
-                    puvalues.insert(std::make_pair(it->first.c_str(), atof(costValueStr.c_str())));
+                    puValues.insert(std::make_pair(it->first.c_str(), atof(costValueStr.c_str())));
                 }
             }
-            backendProfileMap_[backendName].insert(puvalues.begin(), puvalues.end());
-        }
-    }
-
-    if(preventFragmentation_) {
-        if (backendProfileMap_.find("CPU") != backendProfileMap_.end()  &&
-        backendProfileMap_.find("Relay") != backendProfileMap_.end()) {
-            std::map<std::string, float> puvalues = backendProfileMap_["CPU"];
-            for(auto ele: puvalues) {
-                backendProfileMap_["CPU"][ele.first] = INFINITY;
-            }
+            (*performMap)[backendName].insert(puValues.begin(), puValues.end());
         }
     }
 
     closedir(dir);
+
+//    std::cout << "=== loadPerformProfileInfo end === " << std::endl;
 }
 
-void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends)
+void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends, CostNode* prevCNode)
 {
     //std::cout << "--------- getMinCostOfSingleNode -----------" << std::endl;
     //std::cout << "node type: " << cnode->node_->getKindName() << std::endl;
 
     std::string key = appGen_.getProfileKey(cnode->node_);
-    //std::cout << "key: " << key << std::endl;
+//    std::cout << "key: " << key << std::endl;
 
-    cnode->cost_ = INFINITY;
+//    cnode->cost_ = INFINITY;
+    cnode->initCost();
 
     for(int i = 0; i < backends.size(); i++) {
         std::string backendName = backends[i]->getBackendName();
-        //std::cout << "backendName = " << backendName << std::endl;
+//        std::cout << "backendName = " << backendName << std::endl;
         //non supported type
-        if(backendMap_[backendName].nonSupportedNodesKinds.size() > 0 &&
-           (backendMap_[backendName].nonSupportedNodesKinds.find(cnode->node_->getKind())
-            != backendMap_[backendName].nonSupportedNodesKinds.end())) continue;
+        if(!isSupportedOpType(cnode->node_->getKind(), backendName, cnode)) {
+            continue;
+        }
 
-        if(backendMap_[backendName].supportedNodesKinds.size() > 0) {
-            if(backendMap_[backendName].supportedNodesKinds.find(cnode->node_->getKind()) == backendMap_[backendName].supportedNodesKinds.end()) {
-                continue;
-            }
-            if (cnode->node_->getKind() == Kinded::Kind::ConvolutionNodeKind && !isVTAConv((ConvolutionNode *) cnode->node_)) {
-                continue;
+        float exeCost = backendExeProfileMap_[backendName][key];
+        float commCost = 0.0;
+
+        if(prevCNode != nullptr) {
+            if(prevCNode->backendName_.compare(backendName)) {//different backend
+                std::string prevKey = appGen_.getProfileKey(prevCNode->node_);
+                commCost = backendCommProfileMap_["CPU"][prevKey];
             }
         }
 
-        float compCost = backendProfileMap_[backendName][key];
-//    std::cout << "compCost = " << compCost << std::endl;
+//        std::cout << "exeCost = " << exeCost << std::endl;
+//        std::cout << "commCost = " << commCost << std::endl;
 
-        float cost = compCost;
-        if(cost <= cnode->cost_) {
-            cnode->cost_ = cost;
+        float cost = exeCost + commCost;
+        if(cost <= cnode->getCost()) {
+            cnode->commCost_ = commCost;
+            cnode->exeCost_ = exeCost;
             cnode->backendName_ = backendName;
         }
     }
-//    std::cout << "costNode->totalCost = " << cnode->totalCost << std::endl;
-//    std::cout << "node = " << cnode->name_<<  ", backendName = " << cnode->backendName_ << std::endl;
+//    std::cout << "node = " << cnode->name_ << ", type = " << cnode->node_->getKindName() <<", selected backendName = " << cnode->backendName_ << std::endl;
 }
 
 
-void NestPartitioner::getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCNode)
+void NestPartitioner::getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* prevCNode, CostNode* curCNode)
 {
     //std::cout << "--------- getMinCostOfFusedNode -----------" << std::endl;
     // std::cout << "cur kind name = " << curCNode->node_->getKindName() << std::endl;
@@ -1383,8 +1389,9 @@ void NestPartitioner::getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCN
 
     std::copy(backendSet_.begin(), backendSet_.end(), backendList.begin());
 
-    float originalCost = prevCNode->cost_ + curCNode->cost_;
-    //std::cout << "original prev backend = " << prevCNode->backendName_ << std::endl;
+//    float originalCost = prevCNode->cost_ + curCNode->cost_;
+    float originalCost = prevCNode->getCost() + curCNode->getCost();
+//std::cout << "original prev backend = " << prevCNode->backendName_ << std::endl;
     //std::cout << "original cur backend = " << curCNode->backendName_ << std::endl;
 
     // std::cout << "compKey = " << compKey << std::endl;
@@ -1394,28 +1401,35 @@ void NestPartitioner::getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCN
     for(int i = 0; i < backendList.size(); i++) {
 
         std::string backendName = backendList[i];
-
-        if(backendProfileMap_[backendName].find(compKey) == backendProfileMap_[backendName].end())
+        if(backendExeProfileMap_[backendName].find(compKey) == backendExeProfileMap_[backendName].end())
             continue;
 
-        float cost = backendProfileMap_[backendName][compKey];
+        float commCost = 0.0;
+        if(secondPrevCNode != nullptr) {
+            if(secondPrevCNode->backendName_.compare(backendName)) {//different backend
+                std::string spkey = appGen_.getProfileKey(secondPrevCNode->node_);
+                commCost = backendCommProfileMap_["CPU"][spkey];
+            }
+        }
+        float exeCost = backendExeProfileMap_[backendName][compKey];
+        float cost = commCost + exeCost;
         if(cost < originalCost && cost < prevCost) {
 //          std::cout << "First node: " << prevCNode->name_ << ", " << prevCNode->backendName_ << std::endl;
 //          std::cout << "Second node: " << curCNode->name_ << ", " << curCNode->backendName_ << std::endl;
 //          std::cout << "Original cost: " << prevCNode->cost_ + curCNode->cost_ << std::endl;;
 
             prevCost = cost;
-            prevCNode->cost_ = cost;
+            prevCNode->exeCost_ = exeCost;
             prevCNode->backendName_ = backendName;
 
-            curCNode->cost_ = 0.0;
+            curCNode->exeCost_ = 0.0;
+            curCNode->commCost_ = 0.0;
             curCNode->backendName_ = backendName;
 //          curCNode->isFused_ = false;
 
-//          std::cout << "=> First node: " << prevCNode->backendName_ << std::endl;
-//          std::cout << "=> Second node: " << curCNode->backendName_ << std::endl;
-//          std::cout << "=> Changed cost: " << prevCNode->cost_ + curCNode->cost_ << std::endl<< std::endl;
-
+          std::cout << "=> First node: " << prevCNode->backendName_ << std::endl;
+          std::cout << "=> Second node: " << curCNode->backendName_ << std::endl;
+          std::cout << "=> Changed cost: " << prevCNode->getCost() + curCNode->getCost() << std::endl<< std::endl;
         }
     }
 
@@ -1423,70 +1437,6 @@ void NestPartitioner::getMinCostOfFusedNode(CostNode* prevCNode, CostNode* curCN
     //std::cout << "changed cur backend = " << curCNode->backendName_ << std::endl;
     //std::cout << "fused cost prev = " << prevCNode->totalCost << std::endl;
     //std::cout << "fused cost cur = " << curCNode->totalCost << std::endl;
-}
-
-void NestPartitioner::getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* firstPrevCNode, CostNode* curCNode)
-{
-    // std::cout << "--------- getMinCostOfFusedNode -----------" << std::endl;
-    // std::cout << "cur kind name = " << curCNode->node_->getKindName() << std::endl;
-    // std::cout << "cur node name = " << curCNode->node_->getName().str() << std::endl;
-
-    std::string compType = secondPrevCNode->node_->getKindName() + std::string("-") + firstPrevCNode->node_->getKindName() + std::string("-") + curCNode->node_->getKindName();
-    if(fuseOperatorSet_.find(compType) == fuseOperatorSet_.end()) {
-        return;
-    }
-
-    CostNode tmpcnode[3];
-    tmpcnode[0] = *secondPrevCNode;
-    tmpcnode[1] = *firstPrevCNode;
-    tmpcnode[2] = *curCNode;
-
-    std::string key[3];
-    for(int i = 0; i < 3; i++){
-        key[i] = appGen_.getProfileKey(tmpcnode[i].node_);
-    }
-    std::string compKey = key[0] + "+" + key[1] +  "+" + key[2];
-
-    std::vector<std::string> backendList(backendSet_.size());
-    std::copy(backendSet_.begin(), backendSet_.end(), backendList.begin());
-
-    float originalCost = secondPrevCNode->cost_ + firstPrevCNode->cost_ + curCNode->cost_;
-    //std::cout << "original prev backend = " << prevCNode->backendName_ << std::endl;
-    //std::cout << "original cur backend = " << curCNode->backendName_ << std::endl;
-    //std::cout << "compKey = " << compKey << std::endl;
-
-    float prevCost = INFINITY;
-    for(int i = 0; i < backendList.size(); i++) {
-
-        std::string backendName = backendList[i];
-
-        if(backendProfileMap_[backendName].find(compKey) == backendProfileMap_[backendName].end())
-            continue;
-        float cost = backendProfileMap_[backendName][compKey];
-        if(cost <= originalCost && cost <= prevCost) {
-//          std::cout << "[Original cost] = " << secondPrevCNode->cost_ + firstPrevCNode->cost_ + curCNode->cost_ << std::endl;
-
-            prevCost = cost;
-            secondPrevCNode->cost_ = cost;
-            secondPrevCNode->backendName_ = backendName;
-
-            firstPrevCNode->cost_ = 0.0;
-            firstPrevCNode->backendName_ = backendName;
-//            firstPrevCNode->isFused_ = false;
-
-            curCNode->cost_ = 0.0;
-            curCNode->backendName_ = backendName;
-//            curCNode->isFused_ = false;
-//          std::cout << "[Changed cost] = " << secondPrevCNode->cost_ + firstPrevCNode->cost_ + curCNode->cost_ << std::endl;
-        }
-    }
-
-    //std::cout << "changed prev backend = " << secondPrevCNode->backendName_ << std::endl;
-    //std::cout << "changed cur backend = " << curCNode->backendName_ << std::endl;
-    //std::cout << "fused cost prev = " << secondPrevCNode->totalCost_ << std::endl;
-    //std::cout << "fused cost cur = " << curCNode->totalCost_ << std::endl;
-    //std::cout << "\tChanged cost = " << secondPrevCNode->totalCost_ + firstPrevCNode->totalCost_ + curCNode->totalCost_ << std::endl;
-
 }
 
 void setChecked(std::vector<std::vector<CostNode>>* cnodeBfs, Node* node)
@@ -1527,7 +1477,7 @@ CostNode* getCostNode(std::vector<std::vector<CostNode>>* cnodeBfs, Node* node)
     return nullptr;
 }
 
-void makeCostNode(Function* function, std::vector<std::vector<CostNode>>* cnodeBfs) {
+void NestPartitioner::makeCostNode(Function* function, std::vector<std::vector<CostNode>>* cnodeBfs) {
     //std::cout << "--------- makeCostNode -----------" << std::endl;
     BFSLevel bfs = getBFSLevel(function);
     size_t level = bfs.size();
@@ -1540,6 +1490,11 @@ void makeCostNode(Function* function, std::vector<std::vector<CostNode>>* cnodeB
             cnode.node_ = node;
             cnode.name_ = node->getName();
             cnodeGroup.push_back(cnode);
+
+            for (size_t i = 0, e = deviceInfo_.size(); i < e; i++) {
+                std::string backendName = deviceInfo_[i].backendName;
+                cnode.minCostMap_[backendName] = INFINITY;
+            }
         }
         cnodeBfs->push_back(cnodeGroup);
     }
@@ -1568,46 +1523,17 @@ void NestPartitioner::loadFuseOperatorsConfig(std::string fname) {
                 }
 }
 
-
-float getCostRemain(std::vector<NodeGroup*>* branchList, std::set<CostNode*> skip){
-
-    float totalCost = 0.0;
-    for (auto i = branchList->begin(); i != branchList->end(); i++) {
-        NodeGroup* branch = *i;
-
-        for (auto ii = branch->nodeList_.begin(); ii != branch->nodeList_.end(); ii++) {
-            //std::cout << "name: " << (*ii)->name_<< ", backend = " << (*ii)->backendName_ << ", cost = " << (*ii)->cost_ << std::endl;
-            if(skip.find((*ii)) != skip.end())
-                totalCost+=(*ii)->cost_;
-        }
-    }
-    return totalCost;
-}
-
-
-float getCostWithConstraint(std::vector<NodeGroup*>* branchList, NodeGroup* exception){
-    //std::cout << "----------- getCostWithConstraint ---------------" << std::endl;
+float getCost(std::vector<NodeGroup*>* branchList){
+    //std::cout << "----------- getCost ---------------" << std::endl;
     //std::cout << "branch size: " << branchList->size() << std::endl;
 
     float totalCost = 0.0;
     for (auto i = branchList->begin(); i != branchList->end(); i++) {
         NodeGroup* branch = *i;
 
-        if(branch != nullptr && branch == exception)
-            continue;
-
         //std::cout << "branch id: " << branch->ID_ << std::endl;
         for (auto ii = branch->nodeList_.begin(); ii != branch->nodeList_.end(); ii++) {
-            //std::cout << "name: " << (*ii)->name_<< ", backend = " << (*ii)->backendName_ << ", cost = " << (*ii)->cost_ << std::endl;
-
-            if(exception != nullptr) {
-                if((*ii)->backendName_.compare("VTA")){
-                    std::cout << "** Node backend must be VTA! **" << std::endl;
-                    exit(0);
-                }
-            }
-
-            totalCost+=(*ii)->cost_;
+            totalCost+=(*ii)->getCost();
             //std::cout << "totalCost: " << totalCost << std::endl;
         }
     }
@@ -1619,9 +1545,171 @@ float getCost(NodeGroup* branch){
     float totalCost = 0.0;
     for (auto ii = branch->nodeList_.rbegin(); ii != branch->nodeList_.rend(); ++ii ) {
         //std::cout << "name: " << (*ii)->name_<< ", backend = " << (*ii)->backendName_ << ", cost = " << (*ii)->cost_ << std::endl;
-        totalCost+=(*ii)->cost_;
+        totalCost+=(*ii)->getCost();
     }
     return totalCost;
+}
+
+
+bool NestPartitioner::isSupportedOpType(Kinded::Kind opType, std::string backendName, CostNode* cnode) {
+
+    if(backendMap_[backendName].nonSupportedNodesKinds.size() > 0 &&
+       (backendMap_[backendName].nonSupportedNodesKinds.find(opType)
+        != backendMap_[backendName].nonSupportedNodesKinds.end())) return false;
+
+    if(backendMap_[backendName].supportedNodesKinds.size() > 0) {
+        if (backendMap_[backendName].supportedNodesKinds.find(opType) ==
+            backendMap_[backendName].supportedNodesKinds.end()) {
+            return false;
+        }
+        if (opType == Kinded::Kind::ConvolutionNodeKind && !isVTAConv((ConvolutionNode *) cnode->node_)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+void NestPartitioner::setCost(std::vector<Backend *>* backends, CostNode* pnode, CostNode* cnode)
+{
+//    std::cout << "----------- getCost() start ---------------" << std::endl;
+
+    std::string curKey = appGen_.getProfileKey(cnode->node_);
+
+    if(pnode == nullptr) {
+        for(Backend* backend: *backends) {
+            float exeCost = 0.0;
+            if(isSupportedOpType(cnode->node_->getKind(), backend->getBackendName(), cnode)) {
+                exeCost = backendExeProfileMap_[backend->getBackendName()][curKey];
+            } else {
+                exeCost = INFINITY;
+            }
+
+            cnode->minCostMap_[backend->getBackendName()] = exeCost;
+        }
+    } else {
+        std::string compKey = appGen_.getProfileKey(pnode->node_) +"+"+ curKey;
+
+        for(Backend* curBackend: *backends) {
+            float exeCost = INFINITY;
+            float minCost = INFINITY;
+            float totalCost = INFINITY;
+            std::string minBackend = "";
+
+            if(isSupportedOpType(cnode->node_->getKind(), curBackend->getBackendName(), cnode)) {
+                exeCost = backendExeProfileMap_[curBackend->getBackendName()][curKey];
+            } else {
+                exeCost = INFINITY;
+            }
+
+//            std::cout << "curBackend = " << curBackend->getBackendName() << std::endl;
+//            std::cout << "exeCost = " << exeCost << std::endl;
+////
+            for(Backend* prevBackend: *backends) {
+                float commCost = backendCommProfileMap_["CPU"][curKey];
+//                std::cout << "curKey = " << curKey << std::endl;
+//                std::cout << "commCost = " << commCost << std::endl;
+                if (!curBackend->getBackendName().compare(prevBackend->getBackendName())) {
+                    if(backendExeProfileMap_[curBackend->getBackendName()].find(compKey) != backendExeProfileMap_[prevBackend->getBackendName()].end()) {
+                        //fusible
+                        float compCost = backendExeProfileMap_[curBackend->getBackendName()][compKey];
+                        //float additionalCost = compCost - exeCost;
+                        //std::cout << "additionalCost = " << additionalCost << std::endl;
+                        float prevExeCost = backendExeProfileMap_[prevBackend->getBackendName()][appGen_.getProfileKey(pnode->node_)];
+                        totalCost = pnode->minCostMap_[prevBackend->getBackendName()] - prevExeCost + compCost - commCost;
+                    } else {
+                        //not fusible
+                        totalCost = pnode->minCostMap_[prevBackend->getBackendName()] + exeCost - commCost;
+                    }
+                } else {
+                    totalCost = pnode->minCostMap_[prevBackend->getBackendName()] + commCost + exeCost;
+                }
+//                std::cout << "prevBackend = " << prevBackend->getBackendName() << std::endl;
+//                std::cout << "totalCost = " << totalCost << std::endl;
+//                std::cout << "minCost = " << minCost << std::endl;
+
+                if (totalCost <= minCost) {
+                    minCost = totalCost;
+                    minBackend = prevBackend->getBackendName();
+                }
+            }
+            cnode->minCostMap_[curBackend->getBackendName()] = minCost;
+            cnode->prevMinBackendMap_[curBackend->getBackendName()] = minBackend;
+        }
+    }
+
+//    for(Backend* curBackend: *backends) {
+//        std::cout << "backend => " << curBackend->getBackendName() << std::endl;
+//        std::cout << "cost => " << cnode->minCostMap_[curBackend->getBackendName()] << std::endl;
+//        std::cout << "prev backend => " << cnode->prevMinBackendMap_[curBackend->getBackendName()] << std::endl;
+//    }
+
+//    std::cout << "----------- getCost() end ---------------" << std::endl;
+}
+
+void NestPartitioner::allocMinBranchCost(std::vector<NodeGroup*>* branchList)
+{
+  std::cout << "--------- allocMinBranchCost -----------" << std::endl;
+
+    std::vector<Backend *> backends;
+    genBackendMap(backendMap_, backendHolder_, backends);
+
+    //calculate costs for nodes
+    float totalCost = 0.0;
+    for (auto i = branchList->begin(); i != branchList->end(); i++) {
+//        std::cout << " ================== new branch =================="<< std::endl;
+        NodeGroup* branch = (*i);
+
+        int size = branch->nodeList_.size();
+        for (int bi = 0; bi < size; bi++) {
+            CostNode *cnode = branch->nodeList_.at(bi);
+            CostNode *pnode = nullptr;
+
+            if(bi > 0) {
+                pnode = branch->nodeList_.at(bi-1);
+            }
+//            if(pnode != nullptr)
+//                std::cout << "pnode = " << pnode->node_->getName().str() << std::endl;
+//            std::cout << "cnode = " << cnode->node_->getName().str() << std::endl;
+            setCost(&backends, pnode, cnode);
+            pnode = cnode;
+        }
+        //allocate backends requiring the minimum total cost
+        CostNode* lastNode = branch->nodeList_.at(size-1);
+//        std::cout << "lastNode = " << lastNode->node_->getName().str() << std::endl;
+        float minCost = INFINITY;
+        std::string minBackend = "";
+        for(Backend* backend: backends) {
+            std::string backendName = backend->getBackendName();
+            float cost = lastNode->minCostMap_[backendName];
+
+//            std::cout << "backend = " << backendName << std::endl;
+//            std::cout << "cost = " << cost << std::endl;
+
+            if(cost <= minCost) {
+                minCost = cost;
+                minBackend = backendName;
+            }
+        }
+        lastNode->backendName_ = minBackend;
+        totalCost += lastNode->minCostMap_[minBackend];
+
+//        std::cout << "Last node = " << lastNode->node_->getName().str() << std::endl;
+//        std::cout << "Backend = " << minBackend << std::endl;
+
+        for (int bi = size-2; bi >= 0; bi--) {
+            CostNode *cnode = branch->nodeList_.at(bi);
+            cnode->backendName_ = lastNode->prevMinBackendMap_[minBackend];
+            minBackend = cnode->backendName_;
+            lastNode = cnode;
+
+//            std::cout << "node = " << cnode->node_->getName().str() << std::endl;
+//            std::cout << "Backend = " << cnode->backendName_ << std::endl;
+        }
+    }
+
+    std::cout << "Total Cost = " << totalCost << std::endl;
+
 }
 
 void NestPartitioner::allocOptimalPUFusedNodes(std::vector<NodeGroup*>* branchList)
@@ -1645,25 +1733,17 @@ void NestPartitioner::allocOptimalPUFusedNodes(std::vector<NodeGroup*>* branchLi
                     continue;
 
                 if(firstPrevCNode->node_->getKind() == Kinded::Kind::ConvolutionNodeKind && !isVTAConv((ConvolutionNode *)firstPrevCNode->node_)) {
-                        continue;
+                    continue;
                 }
 
                 if(!firstPrevCNode->backendName_.compare(cnode->backendName_))
                     continue;
 
-                getMinCostOfFusedNode(firstPrevCNode, cnode);
-
-                if(bi > 1) {
+                if(bi > 1)
                     secondPrevCNode = branch->nodeList_.at(bi-2);
-                    if(secondPrevCNode == nullptr )
-                        continue;
 
-                    if(!firstPrevCNode->backendName_.compare(secondPrevCNode->backendName_) &&
-                       !secondPrevCNode->backendName_.compare(cnode->backendName_))
-                        continue;
+                getMinCostOfFusedNode(secondPrevCNode, firstPrevCNode, cnode);
 
-                    getMinCostOfFusedNode(secondPrevCNode, firstPrevCNode, cnode);
-                }
             }
         }
     }
@@ -1686,35 +1766,56 @@ void NestPartitioner::allocateVTAOps(std::vector<NodeGroup*>* branchList) {
     std::vector<Backend *> backends;
     genBackendMap(backendMap_, backendHolder_, backends);
 
+    bool isRelayExist = false;
+    if(backendMap_.find("Relay") != backendMap_.end()) {
+        isRelayExist = true;
+    }
+
     CostNode* prevCnode = nullptr;
+    std::string key, compKey;
     for (auto i = branchList->begin(); i != branchList->end(); i++) {
         for (auto bi = (*i)->nodeList_.begin(); bi != (*i)->nodeList_.end(); bi++) {
             CostNode *cnode = *bi;
+            bool isAlloc = false;
 
-            if (cnode->node_->getKind() == Kinded::Kind::ReluNodeKind) {
-                cnode->backendName_ = prevCnode->backendName_;
+            key = appGen_.getProfileKey(cnode->node_);
+            cnode->commCost_ = 0.0;
+
+            if(isSupportedOpType(cnode->node_->getKind(), "VTA", cnode)) {
+                cnode->backendName_ = "VTA";
+                isAlloc = true;
+
+                cnode->exeCost_ = backendExeProfileMap_[cnode->backendName_][key];
+
             } else {
-                if (backendMap_["VTA"].supportedNodesKinds.size() > 0 &&
-                    (backendMap_["VTA"].supportedNodesKinds.find(cnode->node_->getKind()) !=
-                     backendMap_["VTA"].supportedNodesKinds.end())) {
-                    if (cnode->node_->getKind() == Kinded::Kind::ConvolutionNodeKind) {
-                        if (isVTAConv((ConvolutionNode *) cnode->node_)) {
-                            cnode->backendName_ = "VTA";
-                        } else {
-                            std::cout << "** nonVTA Convolution." << std::endl;
-                            std::cout << "cnode->backendName_ = " << cnode->backendName_ << std::endl;
-                            cnode->backendName_ = "Relay";
-                        }
-                    } else {
-                        cnode->backendName_ = "VTA";
-                    }
+                if (prevCnode != nullptr && cnode->node_->getKind() == Kinded::Kind::ReluNodeKind) {
+                    if (prevCnode->node_->getKind() == Kinded::Kind::ConvolutionNodeKind) {
+                        cnode->backendName_ = prevCnode->backendName_;
+                        isAlloc = true;
 
-                } else {
-                    std::cout << "cnode->backendName_ = " << cnode->backendName_ << std::endl;
-                    cnode->backendName_ = "Relay";
+                        compKey = appGen_.getProfileKey(prevCnode->node_) +"+"+ key;
+                        prevCnode->exeCost_ = backendExeProfileMap_[prevCnode->backendName_][compKey];
+                        cnode->exeCost_ = 0.0;
+                    }
                 }
-                prevCnode = cnode;
             }
+            if(!isAlloc) {
+                if (isRelayExist && isSupportedOpType(cnode->node_->getKind(), "Relay", cnode)) {
+                    cnode->backendName_ = "Relay";
+                } else {
+                    cnode->backendName_ = "CPU";
+//                std::cout << "node = " << cnode->node_->getName().str() << std::endl;
+//                std::cout << "Backend = " << cnode->backendName_ << std::endl;
+                }
+
+                cnode->exeCost_ = backendExeProfileMap_[cnode->backendName_][key];
+            }
+
+            if(prevCnode != nullptr && cnode->backendName_.compare(prevCnode->backendName_)){
+                cnode->commCost_ = backendCommProfileMap_[cnode->backendName_][key];;
+            }
+
+            prevCnode = cnode;
         }
     }
 }
@@ -1725,10 +1826,12 @@ void NestPartitioner::allocateOptimalPUSingleNode(std::vector<NodeGroup*>* branc
     std::vector<Backend *> backends;
     genBackendMap(backendMap_, backendHolder_, backends);
 
+    CostNode* prevCNode = nullptr;
     for (auto i = branchList->begin(); i != branchList->end(); i++) {
         for (auto bi = (*i)->nodeList_.begin(); bi != (*i)->nodeList_.end(); bi++) {
             CostNode *cnode = *bi;
-            getMinCostOfSingleNode(cnode, backends);
+            getMinCostOfSingleNode(cnode, backends, prevCNode);
+            prevCNode = cnode;
         }
     }
 }
@@ -1737,17 +1840,6 @@ void getBackendSet(std::set<std::string>* bset, NodeGroup* branch){
     for (auto bii = branch->nodeList_.begin(); bii != branch->nodeList_.end(); bii++) {
         bset->insert((*bii)->backendName_);
     }
-}
-
-float getMaxCost(std::vector<NodeGroup*>* branchList) {
-    float maxCost = 0;
-    for(auto branch: *branchList) {
-        float cost = getCost(branch);
-        if(maxCost < cost)
-            maxCost = cost;
-    }
-
-    return maxCost;
 }
 
 bool NestPartitioner::setBranchPU(NodeGroup *branch) {
@@ -1772,12 +1864,12 @@ bool NestPartitioner::setBranchPU(NodeGroup *branch) {
 
 void NestPartitioner::findParallelBranchesForMultiVTA(std::vector<NodeGroup *> *branchList, int cpuNum, int vtaNum) {
     std::cout << "--------- [findParallelBranches] -----------" << std::endl;
-    float originalTotalCost = getCostWithConstraint(branchList, nullptr);
     //std::cout << "Original total cost =  " << originalTotalCost << std::endl;
 
     for (auto i = branchList->begin(); i != branchList->end(); i++) {
         NodeGroup* branch = (*i);
         setBranchPU(branch);
+//        std::cout << "branch backend =  " << branch->backendName_ << std::endl;
     }
 
     for (auto i = branchList->begin(); i != branchList->end(); i++) {
@@ -1796,10 +1888,10 @@ void NestPartitioner::findParallelBranchesForMultiVTA(std::vector<NodeGroup *> *
             }
 
             if(pBranchList.size() >= 2) {
-
+                std::cout << "# parallel branches: " << pBranchList.size() << std::endl;
 //                std::cout << "cpuCnt = " << cpuCnt << ", " << "vtaCnt = " << vtaCnt << std::endl;
                 if(cpuCnt > cpuNum || vtaCnt > vtaNum) {
-//                    std::cout << "Too many parallel branches!!" << std::endl;
+                    std::cout << "Too many parallel branches!!" << std::endl;
                     continue;
                 }
 
@@ -1945,10 +2037,7 @@ void NestPartitioner::getBranch(std::vector<std::vector<CostNode>>* cnodebfs, BF
                 setChecked(cnodebfs, curNode);
 
                 pNodes = getParentNodes(dag, curNode);
-                //       if(pNodes.size() == 1) {
-                //std::cout << "[getBranch 12]" << std::endl;
                 getBranch(cnodebfs, dag, pNodes, curNode, branch, level+1, ++branchID, branchList);
-//        }
 //      } else {
 //        std::cout << "HERE 1." << std::endl;
             }
@@ -2027,7 +2116,7 @@ void NestPartitioner::analyzeDAG(std::vector<std::vector<CostNode>>* cnodebfs, B
 
         std::vector<Node *> pNodes = getParallelNodes(dag, dag[0][i]);
 
-        std::cout << " curNode = " << dag[0][i]->getKindName() << ", "<< dag[0][i]->getName().str() << std::endl;
+//        std::cout << " curNode = " << dag[0][i]->getKindName() << ", "<< dag[0][i]->getName().str() << std::endl;
 //    std::cout << "[analyzeDAG]"
 //              << " pNodes size = " << pNodes.size() << std::endl;
         //  std::cout << "[getBranch 0]" << std::endl;
@@ -2092,7 +2181,6 @@ void NestPartitioner::generateTestProfile(Function *function, std::string profil
 
     BFSLevel bfs = getBFSLevel(function);
 
-    //loadPerformProfileInfo(profilePath+"/test");
     std::vector<std::vector<CostNode>> cnodeBfs;
     makeCostNode(function, &cnodeBfs);
     std::vector<NodeGroup*> branchList;
@@ -2145,7 +2233,7 @@ void NestPartitioner::generateOptimalPlanForSingleNodes(Function *function, std:
     partitionBranches(&branchList, false);
     outPartitionPlan(function->getName().str(), profilePath + "/SingleOpOptimalPlan.yaml", false);
 
-    std::cout << "Total cost = " << getCostWithConstraint(&branchList, nullptr) << std::endl;
+    std::cout << "[generateOptimalPlanForSingleNodes] Total cost = " << getCost(&branchList) << std::endl;
 
     for(auto branch: nodeGroups_)
         delete branch;
@@ -2156,26 +2244,27 @@ void NestPartitioner::generateOptimalPlanForSingleNodes(Function *function, std:
 void NestPartitioner::generatePlanForVTAOps(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode) {
 
     BFSLevel bfs = getBFSLevel(function);
-
-    //loadPerformProfileInfo(profilePath+"/test");
     std::vector<std::vector<CostNode>> cnodeBfs;
-    makeCostNode(function, &cnodeBfs);
     std::vector<NodeGroup*> branchList;
+
+    //    loadFuseOperatorsConfig(profilePath + "/profileConfigs.yaml");//current: Conv+Relu
+    makeCostNode(function, &cnodeBfs);
+    loadPerformProfileInfo(profilePath+"/test");
 
     analyzeDAG(&cnodeBfs, bfs, &branchList);
     allocateVTAOps(&branchList);
-    partitionBranches(&branchList, false);
-    //partitionBranches(&branchList, true);
+    partitionBranches(&branchList, true);
     outPartitionPlan(function->getName().str(), profilePath + "/VTAOPsPlan.yaml", false);
 
+    std::cout << "[generatePlanForVTAOps] Total cost = " << getCost(&branchList) << std::endl;
+
     for(auto branch: nodeGroups_)
         delete branch;
 
     nodeGroups_.clear();
-
 }
 
-void NestPartitioner::generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode) {
+void NestPartitioner::generateMinCostPlan(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int VTANum) {
 
     std::vector<std::vector<CostNode>> cnodeBfs;
     BFSLevel bfs = getBFSLevel(function);
@@ -2186,42 +2275,22 @@ void NestPartitioner::generateOptimalPlanForParallelBranches(Function *function,
     loadPerformProfileInfo(profilePath+"/test");
 
     analyzeDAG(&cnodeBfs, bfs, &branchList);
-    allocOptimalPUFusedNodes(&branchList);
-    findParallelBranchesForMultiVTA(&branchList, 1, 1);
-    partitionBranches(&branchList, true);
+    allocMinBranchCost(&branchList);
 
-    outPartitionPlan(function->getName().str(), profilePath + "/NESTOptimalPlan-parallel.yaml", true);
+    std::string planName = "/NESTMinCostOptimalPlan.yaml";
+    if(VTANum > 1) {
+        findParallelBranchesForMultiVTA(&branchList, 0, 4);
+        planName = "/NESTMinCostOptimalPlan-multiVTA.yaml";
+    }
+    partitionBranches(&branchList, true);
+    outPartitionPlan(function->getName().str(), profilePath + planName, true);
+
+    std::cout << "[generateMinCostPlan] Total cost = " << getCost(&branchList) << std::endl;
 
     for(auto branch: nodeGroups_)
         delete branch;
 
     nodeGroups_.clear();
-}
-
-void NestPartitioner::generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode) {
-
-
-    std::vector<std::vector<CostNode>> cnodeBfs;
-    BFSLevel bfs = getBFSLevel(function);
-    std::vector<NodeGroup*> branchList;
-
-    loadFuseOperatorsConfig(profilePath + "/profileConfigs.yaml");
-    makeCostNode(function, &cnodeBfs);
-    loadPerformProfileInfo(profilePath+"/test");
-
-    analyzeDAG(&cnodeBfs, bfs, &branchList);
-    allocOptimalPUFusedNodes(&branchList);
-
-    findParallelBranchesForMultiVTA(&branchList, 0, 4);
-
-    partitionBranches(&branchList, true);
-    outPartitionPlan(function->getName().str(), profilePath + "/NESTOptimalPlan-multivta.yaml", true);
-
-    for(auto branch: nodeGroups_)
-        delete branch;
-
-    nodeGroups_.clear();
-
 }
 
 void NestPartitioner::generateDAGStatistics(Function *function) {
@@ -2299,14 +2368,13 @@ Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx, size_t 
     } else if (exeType == 3) {
         generatePlanForVTAOps(function, profilePath, partitionPlanFile, profileMode);
         exit(0);
-
-    } else if (exeType == 4) {//1 Relay, 1 CPU(Glow) , 1 VTA
-        generateOptimalPlanForParallelBranches(function, profilePath, partitionPlanFile, profileMode);
+    } else if (exeType == 4) {
+        generateMinCostPlan(function, profilePath, partitionPlanFile, profileMode, 1); //CPU-single-thread + Single-VTA
         exit(0);
-    }else if (exeType == 5){
-        generateOptimalPlanForMultiVTA(function, profilePath, partitionPlanFile, profileMode);
+    } else if (exeType == 5) {
+        generateMinCostPlan(function, profilePath, partitionPlanFile, profileMode, 4); //CPU-single-thread + Multi-VTA
         exit(0);
-    }else if (exeType == 6){
+    } else if (exeType == 6){
         generateDAGStatistics(function);
         exit(0);
     }
