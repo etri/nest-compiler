@@ -3,6 +3,8 @@
 
 ## Overview  
 
+[![Video Label](https://img.youtube.com/vi/Lx6PYoUUgvo/0.jpg)](https://youtu.be/Lx6PYoUUgvo?t=0s)
+
 The NEST Compiler (NEST-C) is an open source project led by ETRI, which is based on [GLOW project] (https://github.com/pytorch/glow). 
 
 Glow is a machine learning compiler and execution engine for hardware
