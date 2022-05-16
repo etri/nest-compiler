@@ -1,6 +1,18 @@
 <!---![NEST-C Logo](docs/nestc/logo_nestc.png)-->
 <img src="./docs/nestc/logo_nestc.png" width="300"> 
 
+## Contacts
+### PI
+* taehokim@etri.re.kr
+### Developers
+* msyu@etri.re.kr
+* yongin.kwon@etri.re.kr
+* leejaymin@etri.re.kr
+* jeman@etri.re.kr
+    
+## cConf
+
+
 ## Overview  
 
 [![Video Label](https://img.youtube.com/vi/Lx6PYoUUgvo/0.jpg)](https://youtu.be/Lx6PYoUUgvo?t=0s)
