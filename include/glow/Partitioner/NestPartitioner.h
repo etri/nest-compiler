@@ -177,19 +177,19 @@ public:
 
 
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
+  void outPartitionPlanCPUVTA(std::string funcName, std::string filename, bool isParallel);
   void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
+  void partitionBranchesCPUVTA(std::vector<NodeGroup*>* branchList, bool isParallel);
   void partitionBranchesForRelay(std::vector<NodeGroup*>* branchList);
   void loadPerformProfileInfo(std::string pdir);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends, CostNode* prevCNode = nullptr);
   void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* prevCNode, CostNode* curCNode);
-//  void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* firstPrevCNode, CostNode* curCNode);
   int getFusedPartitionCount(std::vector<NodeGroup*>* branchList);
 
   void outPartitionPlanForFusion(std::string funcName, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
   bool isUserDefinedFusable(Node *node);
   void outPartitionPlanForSingleNode(Function *function, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename);
   void outPerformProfileForFusedNode(std::vector<NodeGroup*>* branchList, std::string filename, DeviceInfo device);
-  void allocOptimalPUFusedNodes(std::vector<NodeGroup*>* branchList);
   void allocMinBranchCost(std::vector<NodeGroup*>* branchList);
 
   void loadFuseOperatorsConfig(std::string fname);
@@ -204,9 +204,10 @@ public:
   void generatePlanForRelay(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateTestProfile(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-//  void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-//  void generateOptimalPlanForMultiVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void generateMinCostPlan(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int VTANum = 1);
+  void generateMinCostPlan(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int cpuNum = 0, int VTANum = 1);
+  void generateMinCostPlanCPUVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int cpuNum = 0, int VTANum = 1);
+  void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void findParallelBranchesForCPUVTA(std::vector<NodeGroup *> *branchList, int cpuNum, int vtaNum);
 
   void generateDAGStatistics(Function *function);
   Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
@@ -227,6 +228,8 @@ public:
   void setCost(std::vector<Backend *>* backends, CostNode* pnode, CostNode* cnode);
   void makeCostNode(Function* function, std::vector<std::vector<CostNode>>* cnodeBfs);
   bool isSupportedOpType(Kinded::Kind opType, std::string backendName, CostNode* cnode);
+  float getTotalCommCost(std::vector<NodeGroup*>* branchList);
+  float getInCommCost(CostNode* cnode);
 
   void setOutputDir(std::string path) {
     outputDir_ = path;

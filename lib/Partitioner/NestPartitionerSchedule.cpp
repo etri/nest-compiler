@@ -372,16 +372,21 @@ void NestPartitionerSchedule::setPartitionInputOutputList(Function* function, st
         }
     }
 
+    std::sort(inputList->begin(), inputList->end());
+    inputList->erase(std::unique(inputList->begin(), inputList->end()), inputList->end());
+
+    std::sort(outputList->begin(), outputList->end());
+    outputList->erase(std::unique(outputList->begin(), outputList->end()), outputList->end());
 }
 void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi, bool profileMode, std::vector<std::string>* inputList) {
 
 //    std::map<std::string, std::string> nodeToVarMap;
 //    std::map<std::string, std::string> nodeToPiMap;
 
-    if(profileMode == 1) {
-        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
-        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+", NULL);\n\n");
-    }
+//    if(profileMode == 1) {
+//        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
+//        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+", NULL);\n\n");
+//    }
 
     for(int cnt = 0; cnt < inputList->size(); cnt++) {
         std::string varStr = "";
@@ -420,6 +425,13 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
 
 
         if(pi > 0) {
+
+//            std::cout << "inputList->at(cnt) => " << inputList->at(cnt) << std::endl;
+//
+//            std::cout << "\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(pi) +
+//                         "_config, mutableWeightVarsAddr" + std::to_string(pi) + ", \"" + inputList->at(cnt) + "\", " +
+//                         varStr + ");\n" << nodeName << std::endl;
+
             wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" + std::to_string(pi) +
                           "_config, mutableWeightVarsAddr" + std::to_string(pi) + ", \"" + inputList->at(cnt) + "\", " +
                           varStr + ");\n");
@@ -427,15 +439,14 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
             if(profileMode == 1) {
                 wfilec.append("\tgettimeofday(&comm_time_end, NULL);\n");
                 wfilec.append("\tcomm_time = (comm_time_end.tv_sec - comm_time_start.tv_sec)*1000000.0 + (comm_time_end.tv_usec - comm_time_start.tv_usec);\n");
-                wfilec.append("\tcomm_time_ary[" + std::to_string(pi-1) + "] = comm_time;\n");
+                wfilec.append("\tcomm_time_ary[" + std::to_string(pi) + "] += comm_time;\n");
                 wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi-1) + " p time] %lu microsec.\\n\", p_time_ary[" + std::to_string(pi-1) + "]);\n");
-                wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi-1) + " comm time] %lu microsec.\\n\", comm_time_ary[" + std::to_string(pi-1) + "]);\n\n");
+                wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " comm time] %lu microsec.\\n\", comm_time_ary[" + std::to_string(pi) + "]);\n\n");
             }
         }
     }
 
     if(profileMode == 1) {
-//        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
         wfilec.append("\tgettimeofday(&p_time_start, NULL);\n");
     }
 
@@ -446,22 +457,14 @@ void NestPartitionerSchedule::generateNonThreadCall(std::string &wfilec, int pi,
                   std::to_string(pi) + ");\n");
 
     if(profileMode == 1) {
-//        wfilec.append("\ttimeval now_" + std::to_string(pi) + ";\n");
         wfilec.append("\tgettimeofday(&p_time_end, NULL);\n");
         wfilec.append("\tp_time = (p_time_end.tv_sec - p_time_start.tv_sec)*1000000.0 + (p_time_end.tv_usec - p_time_start.tv_usec);\n");
         wfilec.append("\tp_time_ary[" + std::to_string(pi) + "] = p_time;\n");
-//        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(pi) + " time] %lu microsec.\\n\", delay_time[" + std::to_string(pi) + "]);\n\n");
     }
 }
 
 void NestPartitionerSchedule::generateThreadCall(std::string &wfilec, int pi, std::set<std::string>* pGroup, bool profileMode, std::vector<std::string>* inputList) {
 
-    if (profileMode == 1) {
-        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
-        wfilec.append("\tgettimeofday(&start_" + std::to_string(pi) + ", NULL);\n");
-    }
-
-//    std::string pname = *(pGroup->begin());
     for (int cnt = 0; cnt < inputList->size(); cnt++) {
         std::string varStr = "";
         std::string varPi = "";
@@ -497,11 +500,6 @@ void NestPartitionerSchedule::generateThreadCall(std::string &wfilec, int pi, st
                           varStr + ");\n");
         }
     }
-
-//    if (profileMode == 1) {
-//        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
-//        wfilec.append("\tgettimeofday(&start_" + std::to_string(pi) + ", NULL);\n");
-//    }
 
     wfilec.append("#ifdef THREAD\n");
     for(auto gpname:*pGroup) {
@@ -656,9 +654,10 @@ void NestPartitionerSchedule::generatePartitionCall(std::string &wfilec, int par
     if(profileMode_ == 1) {
         wfilec.append("\tgettimeofday(&comm_time_end, NULL);\n");
         wfilec.append("\tcomm_time = (comm_time_end.tv_sec - comm_time_start.tv_sec)*1000000.0 + (comm_time_end.tv_usec - comm_time_start.tv_usec);\n");
-        wfilec.append("\tcomm_time_ary[" + std::to_string(partitionNum - 2) + "] = comm_time;\n");
+        wfilec.append("\tcomm_time_ary[" + std::to_string(partitionNum - 1) + "] = comm_time;\n");
         wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(partitionNum - 2) + " p time] %lu microsec.\\n\", p_time_ary[" + std::to_string(partitionNum - 2) + "]);\n");
-        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(partitionNum - 2) + " comm time] %lu microsec.\\n\", comm_time_ary[" + std::to_string(partitionNum - 2) + "]);\n\n");
+//        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(partitionNum - 2) + " comm time] %lu microsec.\\n\", comm_time_ary[" + std::to_string(partitionNum - 2) + "]);\n\n");
+        wfilec.append("\tprintf(\"\\n====> [Inference_" + std::to_string(partitionNum - 1) + " comm time] %lu microsec.\\n\", comm_time_ary[" + std::to_string(partitionNum - 1) + "]);\n\n");
     }
 
     wfilec.append("\tgettimeofday(&t2, NULL);\n");
@@ -686,6 +685,9 @@ void NestPartitionerSchedule::generateMain(std::string &wfilec, int partitionNum
     }
 
     wfilec.append("int main(int argc, char **argv) {\n");
+    if(profileMode_ == 1) {
+        wfilec.append("\tmemset(comm_time_ary, 0, ARRAY_LENGTH*sizeof(unsigned long));\n");
+    }
     wfilec.append("\tparseCommandLineOptions(argc, argv);\n\n");
 
     bool vtaFlag = false;
