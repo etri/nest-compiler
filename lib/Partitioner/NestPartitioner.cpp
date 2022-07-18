@@ -7,8 +7,8 @@
 	* THESE DOCUMENTS CONTAIN CONFIDENTIAL INFORMATION AND KNOWLEDGE
 	* WHICH IS THE PROPERTY OF ETRI. NO PART OF THIS PUBLICATION IS
 	* TO BE USED FOR ANY OTHER PURPOSE, AND THESE ARE NOT TO BE"
-	* REPRODUCED, COPIED, DISCLOSED, TRANSMITTED, STORED IN A RETRIEVAL
-	"* SYSTEM OR TRANSLATED INTO ANY OTHER HUMAN OR COMPUTER LANGUAGE,
+	* REPRODUCED, COPIED, DISCLOSED, TRANSMITTED, STORED IN A RETRIEVAL"
+    * SYSTEM OR TRANSLATED INTO ANY OTHER HUMAN OR COMPUTER LANGUAGE,
 	* IN ANY FORM, BY ANY MEANS, IN WHOLE OR IN PART, WITHOUT THE
 	* COMPLETE PRIOR WRITTEN PERMISSION OF ETRI.
 	*
@@ -770,12 +770,9 @@ void NestPartitioner::outPerformProfileForFusedNode(std::vector<NodeGroup*>* bra
 
                 Node *firstPrevNode;
                 Node *secondPrevNode;
-//                Node *node = bfs[i][j];
-/*
-                if(!isFusable(node))
-                    continue;
-*/
+
                 firstPrevNode = getFirstInputOpNode(node);
+
                 if(firstPrevNode == nullptr || !isFusable(firstPrevNode))
                     continue;
 
@@ -812,6 +809,96 @@ void NestPartitioner::outPerformProfileForFusedNode(std::vector<NodeGroup*>* bra
     }
 }
 
+
+void NestPartitioner::outPartitionPlanForFusion(std::string funcName, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename)
+{
+//  std::cout << "== outPartitionPlanForFusedNode : " << filename << " == " << std::endl;
+
+    std::ofstream planFile(filename);
+    if (planFile.is_open()) {
+
+        int partitionSize = getFusedPartitionCount(branchList);
+
+        planFile << "---" << std::endl;
+        planFile << "funcName: " << funcName << std::endl;
+        planFile << "numOfPartitions: " << partitionSize << std::endl;
+
+        std::string backendNameStr;
+        std::string partitionNameStr;
+        std::string nodeToPartitionStr;
+        std::string logicalIDStr;
+
+        //std::cout << "partitionSize = " << partitionSize << std::endl;
+
+        size_t idx = 0;
+        for (auto partition : *branchList) {
+            for (auto cnode : partition->nodeList_) {
+                Node *node = cnode->node_;
+
+                if (node->getKind() == Kinded::Kind::SaveNodeKind)
+                    continue;
+
+                bool isFused = isUserDefinedFusable(node);
+
+                if(!isFused) {
+
+                    nodeToPartitionStr +=
+                            (node->getName().str() + "-" + std::to_string(idx));
+                    nodeToPartitionStr += "\n  :";
+                    partitionNameStr += ("p" + std::to_string(idx) + ":");
+
+                    bool isOffloading = false;
+                    if(!isSupportedOpType(cnode->node_->getKind(), deviceInfo.backendName, cnode)) {
+                        isOffloading = true;
+                    }
+
+                    if(!isOffloading) {
+                        backendNameStr += (deviceInfo.backendName + ":");
+                        logicalIDStr += (std::to_string(deviceInfo.deviceID) + ":");
+                    }else { //default
+                        if(backendMap_["Relay"].nonSupportedNodesKinds.size() > 0 &&
+                           backendMap_["Relay"].nonSupportedNodesKinds.find(node->getKind())
+                           != backendMap_["Relay"].nonSupportedNodesKinds.end()) {
+                            backendNameStr += "CPU:";
+                            logicalIDStr += std::to_string(getDeviceInfoForBackend("CPU").deviceID) + ":";
+                        }else {
+                            backendNameStr += "Relay:";
+                            logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID) + ":";
+                        }
+                    }
+                    idx++;
+                } else {
+                    nodeToPartitionStr +=
+                            (node->getName().str() + "-" + std::to_string(idx-1));
+                    nodeToPartitionStr += "\n  :";
+                }
+            }
+        }
+        nodeToPartitionStr.pop_back();
+
+        partitionNameStr += ("p" + std::to_string(partitionSize-1));
+
+        if(backendMap_.find("Relay") == backendMap_.end()) {
+            backendNameStr += "CPU";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("CPU").deviceID);
+        } else {
+            backendNameStr += "Relay";
+            logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID);
+        }
+
+        planFile << "backendNames: " << backendNameStr << std::endl;
+        planFile << "partitionNames: " << partitionNameStr << std::endl;
+        planFile << "nodeToPartition: " << nodeToPartitionStr << std::endl;
+        planFile << "logicalIDs: " << logicalIDStr << std::endl;
+
+        planFile << "..." << std::endl;
+        planFile.close();
+
+    }
+//  std::cout << "----------- [end] outPartitionPlanForSingleNode ---------------" << std::endl;
+}
+
+
 void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename)
 {
 //  std::cout << "== outPartitionPlanForSingleNode : " << filename << " == " << std::endl;
@@ -830,7 +917,6 @@ void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vec
         std::string logicalIDStr;
 
         size_t idx = 0;
-//
         for (auto partition : *branchList) {
             for (auto cnode : partition->nodeList_) {
                 Node *node = cnode->node_;
@@ -841,15 +927,7 @@ void NestPartitioner::outPartitionPlanForSingleNode(Function *function, std::vec
                 partitionNameStr += ("p" + std::to_string(idx));
 
                 bool isOffloading = false;
-                if(backendMap_[deviceInfo.backendName].nonSupportedNodesKinds.size() > 0 &&
-                        backendMap_[deviceInfo.backendName].nonSupportedNodesKinds.find(node->getKind())
-                        != backendMap_[deviceInfo.backendName].nonSupportedNodesKinds.end()) {
-                    isOffloading = true;
-                }
-
-                if(backendMap_[deviceInfo.backendName].supportedNodesKinds.size() > 0 &&
-                     backendMap_[deviceInfo.backendName].supportedNodesKinds.find(node->getKind())
-                     == backendMap_[deviceInfo.backendName].supportedNodesKinds.end()) {
+                if(!isSupportedOpType(cnode->node_->getKind(), deviceInfo.backendName, cnode)) {
                     isOffloading = true;
                 }
 
@@ -922,104 +1000,6 @@ int NestPartitioner::getFusedPartitionCount(std::vector<NodeGroup*>* branchList)
     }
     return (cnt);
 }
-
-void NestPartitioner::outPartitionPlanForFusion(std::string funcName, std::vector<NodeGroup*>* branchList, DeviceInfo deviceInfo, std::string filename)
-{
-//  std::cout << "== outPartitionPlanForFusedNode : " << filename << " == " << std::endl;
-
-    std::ofstream planFile(filename);
-    if (planFile.is_open()) {
-
-        int partitionSize = getFusedPartitionCount(branchList);
-
-        planFile << "---" << std::endl;
-        planFile << "funcName: " << funcName << std::endl;
-        planFile << "numOfPartitions: " << partitionSize << std::endl;
-
-        std::string backendNameStr;
-        std::string partitionNameStr;
-        std::string nodeToPartitionStr;
-        std::string logicalIDStr;
-
-        ///
-        //std::cout << "partitionSize = " << partitionSize << std::endl;
-
-        size_t idx = 0;
-        for (auto partition : *branchList) {
-            for (auto cnode : partition->nodeList_) {
-                Node *node = cnode->node_;
-
-                if (node->getKind() == Kinded::Kind::SaveNodeKind)
-                    continue;
-
-                bool isFused = isUserDefinedFusable(node);
-
-                if(!isFused) {
-
-                    nodeToPartitionStr +=
-                            (node->getName().str() + "-" + std::to_string(idx));
-                    nodeToPartitionStr += "\n  :";
-                    partitionNameStr += ("p" + std::to_string(idx) + ":");
-
-
-                    bool isOffloading = false;
-                    if(backendMap_[deviceInfo.backendName].nonSupportedNodesKinds.size() > 0 &&
-                       backendMap_[deviceInfo.backendName].nonSupportedNodesKinds.find(node->getKind())
-                       != backendMap_[deviceInfo.backendName].nonSupportedNodesKinds.end()) {
-                        isOffloading = true;
-                    }
-
-                    if(backendMap_[deviceInfo.backendName].supportedNodesKinds.size() > 0 &&
-                       backendMap_[deviceInfo.backendName].supportedNodesKinds.find(node->getKind()) == backendMap_[deviceInfo.backendName].supportedNodesKinds.end()) {
-                        isOffloading = true;
-                    }
-
-                    if(!isOffloading) {
-                        backendNameStr += (deviceInfo.backendName + ":");
-                        logicalIDStr += (std::to_string(deviceInfo.deviceID) + ":");
-                    }else { //default
-                        if(backendMap_["Relay"].nonSupportedNodesKinds.size() > 0 &&
-                           backendMap_["Relay"].nonSupportedNodesKinds.find(node->getKind())
-                           != backendMap_["Relay"].nonSupportedNodesKinds.end()) {
-                            backendNameStr += "CPU:";
-                            logicalIDStr += std::to_string(getDeviceInfoForBackend("CPU").deviceID) + ":";
-                        }else {
-                            backendNameStr += "Relay:";
-                            logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID) + ":";
-                        }
-                    }
-                    idx++;
-                } else {
-                    nodeToPartitionStr +=
-                            (node->getName().str() + "-" + std::to_string(idx-1));
-                    nodeToPartitionStr += "\n  :";
-                }
-            }
-        }
-        nodeToPartitionStr.pop_back();
-
-        partitionNameStr += ("p" + std::to_string(partitionSize-1));
-
-        if(backendMap_.find("Relay") == backendMap_.end()) {
-            backendNameStr += "CPU";
-            logicalIDStr += std::to_string(getDeviceInfoForBackend("CPU").deviceID);
-        } else {
-            backendNameStr += "Relay";
-            logicalIDStr += std::to_string(getDeviceInfoForBackend("Relay").deviceID);
-        }
-
-        planFile << "backendNames: " << backendNameStr << std::endl;
-        planFile << "partitionNames: " << partitionNameStr << std::endl;
-        planFile << "nodeToPartition: " << nodeToPartitionStr << std::endl;
-        planFile << "logicalIDs: " << logicalIDStr << std::endl;
-
-        planFile << "..." << std::endl;
-        planFile.close();
-
-    }
-//  std::cout << "----------- [end] outPartitionPlanForSingleNode ---------------" << std::endl;
-}
-
 
 int getBranchesWithSameLevel(std::vector<NodeGroup*>* branchList, std::vector<NodeGroup*>* result, int level) {
 //    std::cout << "----------- getBranchesWithSameLevel level (" << level << ")---------------" << std::endl;
