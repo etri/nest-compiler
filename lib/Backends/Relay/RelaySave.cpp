@@ -956,6 +956,10 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
   std::string output_temp_name = "";
   WeightVar *output_temp_var;
   for (const auto &W : IR->getWeights()) {
+    // Exception for SoftMaxGradNode
+    if ((std::string)W->getName() == "selected") {
+      continue;
+    }
 
     // debug
     // std::cout << W->getKindName() << "] " << W->toString() << std::endl;
