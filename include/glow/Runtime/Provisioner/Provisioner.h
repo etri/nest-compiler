@@ -57,6 +57,8 @@ enum class NetworkType {
   FX_NETWORK,
   // Glow Module network
   GLOW_NETWORK,
+  // NEST network
+  NEST_NETWORK,
 };
 
 /// Base struct for passing in a network to Provisioner. It contains all common
@@ -96,6 +98,15 @@ struct FXNetwork : Network {
 struct GlowNetwork : Network {
   GlowNetwork(DAGListTy &networks, Module &module, CompilationContext &cctx)
       : Network(NetworkType::GLOW_NETWORK, networks, module, cctx) {}
+};
+
+struct NestNetwork : Network {
+  std::string bundleDir;
+  std::map<std::string, int> *puIdxMap;
+  NestNetwork(DAGListTy &networks, Module &module, CompilationContext &cctx,
+              std::string bundleDir, std::map<std::string, int> *puIdxMap)
+      : Network(NetworkType::NEST_NETWORK, networks, module, cctx),
+        bundleDir(bundleDir), puIdxMap(puIdxMap) {}
 };
 
 /// The Provisioner is responsible for assigning networks to an actual device.
@@ -156,9 +167,7 @@ public:
 #endif
   // Unified provisioning function, tries to re-use most shared logic between
   // provision and provisionFX.
-  Error provisionNetwork(std::unique_ptr<Network> network,
-                         std::string bundleDir = "",
-                         std::map<std::string, int> *puIdxMap = nullptr);
+  Error provisionNetwork(std::unique_ptr<Network> network);
   Error provisionForNestPartition(DAGListTy &networks, Module &module,
                                   CompilationContext &cctx,
                                   std::string bundleDir,

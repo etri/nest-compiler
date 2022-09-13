@@ -301,9 +301,7 @@ Provisioner::generateDeviceAssignments(
   return deviceAssignment;
 }
 
-Error Provisioner::provisionNetwork(std::unique_ptr<Network> network,
-                                    std::string bundleDir,
-                                    std::map<std::string, int> *puIdxMap) {
+Error Provisioner::provisionNetwork(std::unique_ptr<Network> network) {
   VLOG(1) << "Started provisioner";
   DAGListTy &networks = network->networks;
   Module &module = network->module;
@@ -448,34 +446,6 @@ Error Provisioner::provisionNetwork(std::unique_ptr<Network> network,
 
       // Dump graph and logs
       for (auto *function : functionsToCompile) {
-        if (deviceBackendName.compare("Interpreter") &&
-            deviceBackendName.compare("VTAInterpreter")) {
-          // Create bundle directory if not exists.
-          if (!llvm::sys::fs::is_directory(bundleDir)) {
-            llvm::sys::fs::create_directory(bundleDir);
-          }
-#ifdef GLOW_WITH_VTA
-          if (!deviceBackendName.compare("VTA")) {
-            int vtaIdx = pow(2, (*puIdxMap)[function->getName().str()]);
-            std::cout << "Partition name = " << function->getName().str() << "("
-                      << deviceBackendName << ") VTA index: " << vtaIdx
-                      << std::endl;
-            static_cast<VTA *>(backends_["VTA"].get())
-                ->save(function, bundleDir + "/", function->getName(),
-                       function->getName(), vtaIdx);
-
-          } else {
-#endif
-            std::cout << "Partition name = " << function->getName().str() << "("
-                      << deviceBackendName << ")" << std::endl;
-            backends_[deviceBackendName]->save(function, bundleDir + "/",
-                                               function->getName(),
-                                               function->getName());
-#ifdef GLOW_WITH_VTA
-          }
-#endif
-        }
-
         // Note: This needs to come after compile above because compile may
         // modify the Function as well.
         if (cctx.dumpFinalGraph) {
@@ -731,6 +701,229 @@ Error Provisioner::provisionNetwork(std::unique_ptr<Network> network,
       }
     }
 #endif
+  } else if (network->networkType == NetworkType::NEST_NETWORK) {
+    auto nestNetwork = static_cast<NestNetwork *>(network.get());
+    auto bundleDir = nestNetwork->bundleDir;
+    auto puIdxMap = nestNetwork->puIdxMap;
+    // Create bundle directory if not exists.
+    if (!llvm::sys::fs::is_directory(bundleDir)) {
+      llvm::sys::fs::create_directory(bundleDir);
+    }
+
+    for (auto &assignment : assignments) {
+      auto logicalDevice = assignment.first;
+      auto physicalDevice = assignment.second;
+      auto deviceBackendName = logicalDevices[logicalDevice][0]->backendName;
+
+      if (backends_.find(deviceBackendName) == backends_.end()) {
+        // Return error requested device type not found.
+        return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_DEVICE_NOT_FOUND,
+                        "Unable to find device of type: " + deviceBackendName);
+      }
+
+      // Stores all the functions in a logical device.
+      std::vector<glow::Function *> functionsToCompile;
+      // Stores the compiled functions that will be added to physical device.
+      FunctionMapTy functionMap;
+
+      // Collect all the functions in a logical device.
+      for (auto &node : logicalDevices[logicalDevice]) {
+        // If the function name exist we don't need to compile it again.
+        if (optsMap.count(node->name)) {
+          remainingDeviceCount[node->name] -= 1;
+          continue;
+        }
+
+        auto options = cctx.backendOpts;
+        options.backendHints = node->backendHints;
+        // Insert all options loaded in the Partitioner alongside options
+        // previously inserted, with Partitioner options taking precedence in
+        // case of a collision of keys.
+        for (auto &it : node->backendSpecificOpts) {
+          options.backendSpecificOpts[it.first] = it.second;
+        }
+        std::lock_guard<std::mutex> functionsLock(functionsLock_);
+        Function *function = module.getFunction(node->name);
+
+        functionsToCompile.push_back(function);
+        optsMap.insert({function->getName(), options});
+        functionReplicaCount_.emplace(node->name, node->replicationCount);
+        remainingDeviceCount.insert(
+            {node->name, node->logicalDevices.size() - 1});
+      }
+
+      // Compile all the functions in the logical device together.
+      // We add a lock here because some backends are not threadsafe (CPU
+      // backend).
+      std::unique_lock<std::mutex> compileLock(functionsLock_);
+      auto compiledOrErr = backends_[deviceBackendName]->compileFunctions(
+          functionsToCompile, optsMap);
+      VLOG(1) << "After compile";
+      compileLock.unlock();
+
+      // Dump graph and logs
+      for (auto *function : functionsToCompile) {
+        if (deviceBackendName.compare("Interpreter") &&
+            deviceBackendName.compare("VTAInterpreter")) {
+#ifdef GLOW_WITH_VTA
+          if (!deviceBackendName.compare("VTA")) {
+            int vtaIdx = pow(2, (*puIdxMap)[function->getName().str()]);
+            std::cout << "Partition name = " << function->getName().str() << "("
+                      << deviceBackendName << ") VTA index: " << vtaIdx
+                      << std::endl;
+            static_cast<VTA *>(backends_["VTA"].get())
+                ->save(function, bundleDir + "/", function->getName(),
+                       function->getName(), vtaIdx);
+
+          } else {
+#endif
+            std::cout << "Partition name = " << function->getName().str() << "("
+                      << deviceBackendName << ")" << std::endl;
+            backends_[deviceBackendName]->save(function, bundleDir + "/",
+                                               function->getName(),
+                                               function->getName());
+#ifdef GLOW_WITH_VTA
+          }
+#endif
+        }
+
+        // Note: This needs to come after compile above because compile may
+        // modify the Function as well.
+        if (cctx.dumpFinalGraph) {
+          auto fname = strFormat(
+              "%sfinal_graph_%s_%s.dot", cctx.dumpGraphPath.c_str(),
+              deviceBackendName.c_str(), function->getName().str().c_str());
+          LOG(INFO) << "Dumping final graph to " << fname;
+          function->dumpDAG(fname);
+          // print stats of node
+          std::map<std::string, int> opCounter;
+          for (const auto &node : function->getNodes()) {
+            opCounter[node.getKindName()]++;
+          }
+          std::ostringstream ss;
+          ss << "Dump of Node stats for Function:\n";
+          ss << folly::stringPrintf("%30s %13s \n", "NodeKind", "Count");
+          for (const auto &p : opCounter) {
+            ss << folly::stringPrintf("%30s %13d \n", p.first.c_str(),
+                                      p.second);
+          }
+          LOG(INFO) << ss.str();
+        }
+
+        if (glow::flags::DumpCompilationLog) {
+          llvm::SmallString<64> path;
+          std::string prefix =
+              llvm::formatv("{0}-{1}", cctx.compilationLogPrefix,
+                            function->getName())
+                  .str();
+          auto tempFileRes =
+              llvm::sys::fs::createTemporaryFile(prefix, "log", path);
+          if (tempFileRes.value() != 0) {
+            LOG(ERROR)
+                << "Failed to create temp file for Glow compilation log: "
+                << tempFileRes;
+          }
+
+          function->getLogContext()->dumpLog(path);
+        }
+      }
+
+      // If err return it, else store compiled functions into compiledFunctions.
+      if (!compiledOrErr) {
+        RETURN_ERR(compiledOrErr.takeError());
+      }
+      auto compiled = std::move(*compiledOrErr);
+      for (auto &compiledFunction : compiled) {
+
+        // Deserialize compiled function from cctx.nameToFunctions
+        if (cctx.backendOpts.useDeserialize) {
+          std::string name = compiledFunction.first().str();
+          if (cctx.nameToFunctions.find(name) == cctx.nameToFunctions.end()) {
+            return MAKE_ERR(
+                ErrorValue::ErrorCode::UNKNOWN,
+                "Cannot find compiled function when deserializing " + name);
+          }
+          RETURN_IF_ERR(compiledFunction.second->deserialize(
+              *(cctx.nameToFunctions.find(name)->second)));
+        }
+        compiledFunctions.try_emplace(compiledFunction.first(),
+                                      std::move(compiledFunction.second));
+      }
+      // Construnct functionMap for physical device.
+      for (auto &node : logicalDevices[logicalDevice]) {
+        RETURN_ERR_IF_NOT(compiledFunctions.count(node->name),
+                          "Can't find corresponding compiled function " +
+                              node->name);
+
+        auto *compiledFunction = compiledFunctions[node->name].get();
+        functionMap.emplace(node->name, compiledFunction);
+
+        for (unsigned i = 1; i < node->replicationCount; i++) {
+          auto replicatedName = getReplicatedName(node->name, i);
+          functionMap.emplace(replicatedName, compiledFunction);
+        }
+
+        // Dump backend-specific IR
+        if (glow::flags::DumpBackendSpecificIRJSON) {
+          compiledFunction->dumpJSON(strFormat("%sbackend_specific_ir_%s.json",
+                                               cctx.dumpGraphPath.c_str(),
+                                               node->name.c_str()));
+        }
+
+        node->runtimeBundle = glow::make_unique<RuntimeBundle>(
+            compiledFunction->getRuntimeBundle());
+      }
+
+      // Now that the functions are compiled add them to their assigned device
+      // then cleanup.
+      std::promise<void> addPromise;
+      auto ready = addPromise.get_future();
+      std::unique_ptr<Error> addErr;
+      devices_[physicalDevice]->addNetwork(
+          &module, functionMap,
+          [&addErr, &addPromise](const Module *, Error err) {
+            addErr = glow::make_unique<Error>(std::move(err));
+            addPromise.set_value();
+          });
+      ready.wait();
+      DCHECK_NOTNULL(addErr.get());
+      if (*addErr.get()) {
+        return std::move(*addErr.get());
+      }
+
+      // Add networks successfully loaded on device to addedNetworks, this way
+      // if we fail later we can evict them.
+      for (const auto &func : functionMap) {
+        addedNetworks[physicalDevice].push_back(func.first);
+      }
+      VLOG(1) << "Added networks";
+
+      // Free up memory no longer needed by the compiledFunction.
+      for (auto &node : logicalDevices[logicalDevice]) {
+        // If the compiled function still needs to be added to other device,
+        // don't free the resources.
+        if (remainingDeviceCount[node->name] > 0) {
+          continue;
+        }
+
+        // Free compilation resources. This need to be done after add network
+        // and before move on to next logical device. If
+        // DisableFreeCompilationResource is true, we will not free it here.
+        // This is used in scenarios like model serialization.
+        auto &funtionPtr = compiledFunctions[node->name];
+        if (!glow::flags::DisableFreeCompilationResource) {
+          funtionPtr->freeCompilationResources();
+        }
+
+        // Move compiled functions from compiledFunctions to functions_.
+        {
+          std::lock_guard<std::mutex> functionsLock(functionsLock_);
+          functions_.emplace(node->name, std::move(funtionPtr));
+        }
+
+        compiledFunctions.erase(node->name);
+      }
+    }
   }
   RETURN_ERR_IF_NOT(compiledFunctions.empty(),
                     "compiledFunctions should be empty because all compiled "
@@ -893,9 +1086,8 @@ Error Provisioner::provisionFX(DAGListTy &networks, Module &module,
 Error Provisioner::provisionForNestPartition(
     DAGListTy &networks, Module &module, CompilationContext &cctx,
     std::string bundleDir, std::map<std::string, int> *puIdxMap) {
-  return provisionNetwork(
-      glow::make_unique<GlowNetwork>(networks, module, cctx), bundleDir,
-      puIdxMap);
+  return provisionNetwork(glow::make_unique<NestNetwork>(networks, module, cctx,
+                                                         bundleDir, puIdxMap));
 };
 
 Backend &Provisioner::getBackend(llvm::StringRef backendName) const {
