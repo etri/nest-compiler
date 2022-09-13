@@ -36,18 +36,6 @@ if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h)
     execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/loader/Loader.h)
 endif()
 
-if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/ClassGen/NodeBuilder.h)
-    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/tools/ClassGen/NodeBuilder.h")
-    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/ClassGen/NodeBuilder.h)
-
-endif()
-
-if(EXISTS ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h)
-    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h")
-    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/tools/ClassGen/MemberType.h)
-
-endif()
-
 if(EXISTS ${NESTC_ROOT_DIR}/glow/include/glow/Quantization/Base/Base.h)
     message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/include/glow/Quantization/Base/Base.h")
     execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/include/glow/Quantization/Base/Base.h)
@@ -79,7 +67,6 @@ include_directories(BEFORE
         ${NESTC_ROOT_DIR}/
         ${NESTC_ROOT_DIR}/include
         ${NESTC_ROOT_DIR}/include/tools/loader
-        ${NESTC_ROOT_DIR}/tools/ClassGen/
 )
 message(STATUS "START CMAKE TVM")
 SET(USE_LLVM ON)

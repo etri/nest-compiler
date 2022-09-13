@@ -22,10 +22,13 @@ BB.newNode("VTAConvolution")
     .addInput("Bias")
     .addMember(MemberType::VectorUnsigned, "Kernels")
     .addMember(MemberType::VectorUnsigned, "Strides")
-    .addMember(MemberType::VectorUnsigned, "Pads")
-    .addMember(MemberType::Unsigned, "Group")
+    .addMember(MemberType::VectorUnsigned, "Pads", /* addSetter */ true)
+    .addMember(MemberType::Unsigned, "Group", /* addSetter */ true)
+    .addMember(MemberType::VectorUnsigned, "Dilation")
+    .addMember(MEMBER_TYPE_INFO(glow::ConvolutionLayout), "Layout")
+    .addFusedActivation()
     .addResultFromCtorArg()
-    .addFusedActivationVTA()
+    // .addGradient()
     .setDocstring("This is a VTA-specific convolution node that is "
                   "identical to the normal ConvolutionNode. That node "
                   "and convolution + relu are replaced with this one "
