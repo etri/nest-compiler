@@ -1962,168 +1962,6 @@ Error ONNXModelLoader::loadConv2D(const ONNX_NAMESPACE::NodeProto &op,
                              " found axes %zu",
                              dilations.size())));
 
-  // jeman 20210701
-  dim_t depth1 = filterValue.dims()[0];
-
-  // Construct the Bias field.
-  NodeValue bias;
-  // Check if we have a serialized bias vector.
-  if (op.input_size() > 2) {
-    auto &biasTensorName = op.input(2);
-    // Load the serialized bias vector as NodeValue.
-    ASSIGN_VALUE_OR_RETURN_ERR(bias, getNodeValueByName(biasTensorName));
-  }
-
-  // If a serialized bias wasn't found then create a zero bias.
-  if (op.input_size() == 2) {
-    auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth1});
-    Tensor biasTensor(biasTy);
-    biasTensor.zero();
-    bias = mod_.createConstant("conv.bias", std::move(biasTensor));
-  }
-
-  // jeman 20210622 - channel padding 16X
-  if (npuConvFitting > 0) {
-    int vta_conv_value = npuConvFitting;
-    // printf("mooyaaho %d", vta_conv_value);
-    int channelpads[] = {0, 0, 0, 0, 0, 0, 0, 0};
-    unsigned_t mode = PaddingMode::CONSTANT;
-
-    // int input_channel_size = in.dims()[1];
-    int input_channel_size = filterValue.dims()[1];
-    int channelpads_r = input_channel_size % vta_conv_value;
-    int channelpads_size = vta_conv_value - channelpads_r;
-
-    int filter_batch_size = filterValue.dims()[0];
-    int filter_batch_pads_r = filter_batch_size % vta_conv_value;
-    int filter_batch_pads_size = vta_conv_value - filter_batch_pads_r;
-
-    auto filterDims = filterValue.dims();
-    auto filterchannelnumDims = filterDims.size();
-    std::vector<dim_t> filterchanneloutDims(filterchannelnumDims);
-
-    if (channelpads_r > 0 && group == 1) {
-      // if (input_channel_size < 40 && channelpads_r > 7 && group == 1 &&
-      // in.dims()[2] != 1) {
-      channelpads[5] = input_channel_size + channelpads_size;
-
-      if (in.dims()[1] % vta_conv_value) {
-        auto DataDims = in.dims();
-        auto channelnumDims = DataDims.size();
-
-        std::vector<dim_t> channeloutDims(channelnumDims);
-        for (unsigned_t i = 0; i < channelnumDims; i++) {
-          auto data_new_channel_size = DataDims[i];
-          if (i == 1) {
-            data_new_channel_size += channelpads_size;
-          }
-
-          RETURN_ERR_IF_NOT(
-              data_new_channel_size > 0,
-              opErrMsg(op,
-                       "The padding can't remove all elements of a dimension"));
-          channeloutDims[i] = data_new_channel_size;
-        }
-        auto channeloutTy = mod_.uniqueType(ElemKind::FloatTy, channeloutDims);
-        // std::vector<int> channelpads;
-        // int channelpads[] = {0,0,0,0,0,0,0,0};
-        //      ASSIGN_VALUE_OR_RETURN_ERR(channelpads,
-        //      getShape<int>(dict["pads"]));
-        in = G_->createPad(opName, in, channeloutTy, mode, channelpads, 0);
-        // std::cout << "1: " << opName.data() << in.getType()->dims() <<
-        // std::endl;
-      }
-
-      for (unsigned_t i = 0; i < filterchannelnumDims; i++) {
-        auto filter_new_size = filterDims[i];
-        if (i == 1) {
-          filter_new_size += channelpads_size;
-        }
-        RETURN_ERR_IF_NOT(
-            filter_new_size > 0,
-            opErrMsg(op,
-                     "The padding can't remove all elements of a dimension"));
-        filterchanneloutDims[i] = filter_new_size;
-      }
-      auto filterchanneloutTy =
-          mod_.uniqueType(ElemKind::FloatTy, filterchanneloutDims);
-      // std::vector<int> filterchannelpads;
-      // int filterchannelpads[] = {0,0,0,0,0,0,0,0};
-      // ASSIGN_VALUE_OR_RETURN_ERR(filterchannelpads,
-      // getShape<int>(dict["pads"]));
-      filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode,
-                                  channelpads, 0);
-
-      // std::cout << "2: " << opName.data() << in.getType()->dims() <<
-      // std::endl; std::cout << "2: " << opName.data() <<
-      // filterValue.getType()->dims() << std::endl;
-
-      // filterValue = G_->createPad(opName, filterValue, filterchanneloutTy,
-      // mode, 0, 0);
-    }
-
-    if (filter_batch_pads_r > 0) {
-      filterDims = filterValue.dims();
-      if (group > 1) {
-        group = group + filter_batch_pads_size;
-      }
-      for (unsigned_t i = 0; i < filterchannelnumDims; i++) {
-        auto filter_new_size = filterDims[i];
-        if (i == 0) {
-          filter_new_size += filter_batch_pads_size;
-        }
-        RETURN_ERR_IF_NOT(
-            filter_new_size > 0,
-            opErrMsg(op,
-                     "The padding can't remove all elements of a dimension"));
-        filterchanneloutDims[i] = filter_new_size;
-      }
-      auto filterchanneloutTy =
-          mod_.uniqueType(ElemKind::FloatTy, filterchanneloutDims);
-      // std::vector<int> filterchannelpads;
-      int filterchannelpads[] = {0, 0, 0, 0, 0, 0, 0, 0};
-      filterchannelpads[4] = filter_batch_size + filter_batch_pads_size;
-      // ASSIGN_VALUE_OR_RETURN_ERR(filterchannelpads,
-      // getShape<int>(dict["pads"]));
-      filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode,
-                                  filterchannelpads, 0);
-      // std::cout << "2: "<< opName.data() << filterValue.getType()->dims() <<
-      // std::endl; filterValue = G_->createPad(opName, filterValue,
-      // filterchanneloutTy, mode, 0, 0);
-
-      // std::cout << "3: " << opName.data() << in.getType()->dims() <<
-      // std::endl; std::cout << "3: " << opName.data() <<
-      // filterValue.getType()->dims() << std::endl;
-      //
-      //            int filter_batch_size = filterValue.dims()[0];
-      //            int filter_batch_pads_r = filter_batch_size %
-      //            vta_conv_value; int filter_batch_pads_size = vta_conv_value
-      //            - filter_batch_pads_r;
-      //
-      //            auto filterDims = filterValue.dims();
-      //            auto filterchannelnumDims = filterDims.size();
-      //            std::vector<dim_t>
-      //            filterchanneloutDims(filterchannelnumDims);
-
-      auto biasDims = bias.dims();
-      auto biasnumDims = biasDims.size();
-      std::vector<dim_t> biaschanneloutDims(biasnumDims);
-
-      // bias->dims() = *biaschanneloutDims;
-      // std::cout << "3: " << opName.data() << ": " << bias->dims()[0] << "
-      // biaschanneloutDims:" << biaschanneloutDims[0] << std::endl;
-
-      auto bias_new_size = biasDims[0] + filter_batch_pads_size;
-      biaschanneloutDims[0] = bias_new_size;
-      auto biasoutTy = mod_.uniqueType(ElemKind::FloatTy, biaschanneloutDims);
-      int biaspads[] = {0, 0};
-      biaspads[1] = filter_batch_size + filter_batch_pads_size;
-      // NodeValue bias_nv;
-
-      bias = G_->createPad(opName, bias, biasoutTy, mode, biaspads, 0);
-    }
-  }
-
   // Transpose the filter to the right format. Glow expects to read the
   // weights in the format CRSK. ONNX stores the operators as KCRS.
   // C - output_depth, R - filter_height, S - filter_width, K - input_depth.
@@ -2133,7 +1971,7 @@ Error ONNXModelLoader::loadConv2D(const ONNX_NAMESPACE::NodeProto &op,
   // The structure of the conv weights is: CRSK. We take the C, which is the
   // number of filters. We use this value to calculate the size of the bias
   // if it is not specified.
-  const NodeValue filterTransposedValue = filterTransposeNode->getResult();
+  NodeValue filterTransposedValue = filterTransposeNode->getResult();
   dim_t depth = filterTransposedValue.dims()[0];
 
   // Get the kernel shape from the input.
@@ -2155,22 +1993,94 @@ Error ONNXModelLoader::loadConv2D(const ONNX_NAMESPACE::NodeProto &op,
     (void)kernelShapeAttribute; // Avoids compilation warning in release mode.
   }
 
-  // // Construct the Bias field.
-  // NodeValue B;
-  // // Check if we have a serialized bias vector.
-  // if (op.input_size() > 2) {
-  //   auto &biasTensorName = op.input(2);
-  //   // Load the serialized bias vector as NodeValue.
-  //   ASSIGN_VALUE_OR_RETURN_ERR(B, getNodeValueByName(biasTensorName));
-  // }
+  // Construct the Bias field.
+  NodeValue B;
+  // Check if we have a serialized bias vector.
+  if (op.input_size() > 2) {
+    auto &biasTensorName = op.input(2);
+    // Load the serialized bias vector as NodeValue.
+    ASSIGN_VALUE_OR_RETURN_ERR(B, getNodeValueByName(biasTensorName));
+  }
 
-  // // If a serialized bias wasn't found then create a zero bias.
-  // if (op.input_size() == 2) {
-  //   auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth});
-  //   Tensor biasTensor(biasTy);
-  //   biasTensor.zero();
-  //   B = mod_.createConstant("conv.bias", std::move(biasTensor));
-  // }
+  // If a serialized bias wasn't found then create a zero bias.
+  if (op.input_size() == 2) {
+    auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth});
+    Tensor biasTensor(biasTy);
+    biasTensor.zero();
+    B = mod_.createConstant("conv.bias", std::move(biasTensor));
+  }
+
+  // channel padding 16X
+  if (npuConvFitting > 0) {
+    // filterTransposedValuePads :
+    //    {C pre, R pre, S pre, K pre, C post, R post, S post, K post}
+    std::vector<int> filterTransposedValuePads(8, 0);
+    auto filterTransposedValueDims = filterTransposedValue.dims();
+    auto inDims = in.dims();
+    std::array<dim_t, 4> paddedFilterTransposedValueDims = {
+        filterTransposedValueDims[0], filterTransposedValueDims[1],
+        filterTransposedValueDims[2], filterTransposedValueDims[3]};
+    auto mode = PaddingMode::CONSTANT;
+    int inputDepthRem = (int)inDims[1] % npuConvFitting;
+    int outputDepthRem = (int)depth % npuConvFitting;
+
+    // input_depth padding
+    if ((inputDepthRem > 0) && (group == 1)) {
+      int inputDepthPad = npuConvFitting - inputDepthRem;
+      filterTransposedValuePads[7] = inputDepthPad;        // K post
+      paddedFilterTransposedValueDims[3] += inputDepthPad; // K
+      std::vector<int> inPads = {
+          0,             // N pre
+          0,             // C pre
+          0,             // H pre
+          0,             // W pre
+          0,             // N post
+          inputDepthPad, // C post
+          0,             // H post
+          0,             // W post
+      };
+      std::array<dim_t, 4> paddedInDims = {inDims[0],
+                                           inDims[1] + inputDepthPad, // C
+                                           inDims[2], inDims[3]};
+      in =
+          G_->createPad(opName + "_input_pad_for_npu", in,
+                        mod_.uniqueTypeWithNewShape(in.getType(), paddedInDims),
+                        mode, inPads, 0);
+    }
+
+    // output_depth padding
+    if (outputDepthRem > 0) {
+      int outputDepthPad = npuConvFitting - outputDepthRem;
+      filterTransposedValuePads[4] = outputDepthPad;        // C post
+      paddedFilterTransposedValueDims[0] += outputDepthPad; // C
+      std::vector<int> BPads = {
+          0,              // C pre
+          outputDepthPad, // C post
+      };
+      std::array<dim_t, 1> paddedBDims = {
+          depth + outputDepthPad // C
+      };
+      B = G_->createPad(opName + "_bias_pad_for_npu", B,
+                        mod_.uniqueTypeWithNewShape(B.getType(), paddedBDims),
+                        mode, BPads, 0);
+
+      // depthwise conv
+      // TODO: grouped conv
+      if (group > 1) {
+        group += outputDepthPad;
+      }
+    }
+
+    if (std::any_of(filterTransposedValuePads.cbegin(),
+                    filterTransposedValuePads.cend(),
+                    [](int i) { return i != 0; })) {
+      filterTransposedValue = G_->createPad(
+          opName + "_filter_transposed_pad_for_npu", filterTransposedValue,
+          mod_.uniqueTypeWithNewShape(filterTransposedValue.getType(),
+                                      paddedFilterTransposedValueDims),
+          mode, filterTransposedValuePads, 0);
+    }
+  }
 
   // ONNX passes the input as NCHW, and we expect the input to be NHWC.
   auto *tr = G_->createTranspose(opName, in, NCHW2NHWC);
@@ -2191,7 +2101,7 @@ Error ONNXModelLoader::loadConv2D(const ONNX_NAMESPACE::NodeProto &op,
   std::array<dim_t, 4> outDims = {{idim.n, outSz.first, outSz.second, depth}};
   auto outTy = mod_.uniqueTypeWithNewShape(in.getType(), outDims);
 
-  auto *node = G_->createConv(opName, tr, filterTransposedValue, bias, outTy,
+  auto *node = G_->createConv(opName, tr, filterTransposedValue, B, outTy,
                               kernelShape, strides, pads, group, dilations);
 
   // Transpose the output back.
