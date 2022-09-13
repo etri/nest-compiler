@@ -559,31 +559,29 @@ void BoundVTAInterpreterFunction::fwdConvolutionInstQuantizedImpl(
 }
 
 void BoundVTAInterpreterFunction::fwdVTAInterpreterConvolutionInst(
-    const glow::Instruction *I) {
+    const VTAInterpreterConvolutionInst *I) {
   llvm::outs() << "VTAConvolution reach out here in VTAInterpreter backend.\n";
-  assert(I->getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind);
-  auto *CI = llvm::cast<VTAInterpreterConvolutionInst>(I);
-  assert(CI);
-  auto kernelSizes = CI->getKernels();
-  auto pads = CI->getPads();
-  auto strides = CI->getStrides();
-  size_t group = CI->getGroup();
+  assert(I);
+  auto kernelSizes = I->getKernels();
+  auto pads = I->getPads();
+  auto strides = I->getStrides();
+  size_t group = I->getGroup();
   size_t dilation = 0;
 
-  assert(CI->getSrc()->getType()->isQuantizedType());
+  assert(I->getSrc()->getType()->isQuantizedType());
 
-  auto inW = getWeightHandle<int8_t>(CI->getSrc());
+  auto inW = getWeightHandle<int8_t>(I->getSrc());
   ShapeVTAIO idim(inW.dims());
-  auto outW = getWeightHandle<int8_t>(CI->getDest());
+  auto outW = getWeightHandle<int8_t>(I->getDest());
   ShapeVTAIO odim(outW.dims());
 
-  assert(CI->getSrc()->getElementType() == ElemKind::Int8QTy &&
-         CI->getBias()->getElementType() == ElemKind::Int32QTy);
+  assert(I->getSrc()->getElementType() == ElemKind::Int8QTy &&
+         I->getBias()->getElementType() == ElemKind::Int32QTy);
 
-  Value *inV = CI->getSrc();
-  Value *outV = CI->getDest();
-  Value *filterV = CI->getFilter();
-  Value *biasV = CI->getBias();
+  Value *inV = I->getSrc();
+  Value *outV = I->getDest();
+  Value *filterV = I->getFilter();
+  Value *biasV = I->getBias();
 
   auto filterW = getWeightHandle<int8_t>(filterV);
   ShapeVTAKernel fdim(filterW.dims());
@@ -623,7 +621,7 @@ void BoundVTAInterpreterFunction::fwdVTAInterpreterConvolutionInst(
   uint32_t stride_size = strides[0];
 
   bool doRelu = false;
-  if (CI->getFusedActivation() == FusedActivation::RELU) {
+  if (I->getFusedActivation() == FusedActivation::RELU) {
     doRelu = true;
   }
   bool doBias = false;
@@ -2834,7 +2832,6 @@ void BoundVTAInterpreterFunction::fwdReluInst(const ReluInst *I) {
   }
 }
 
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 template <typename ElemTy>
 void BoundVTAInterpreterFunction::fwdReluInstFloatImpl(const ReluInst *I) {
   staticAssertFloatingPointType(ElemTy);
@@ -4543,33 +4540,9 @@ void BoundVTAInterpreterFunction::fwdElementFloorInst(
   dispatchImpl(fwdUnaryArithmeticImpl, I->getSrc()->getElementType(), I, func);
 }
 
-// void BoundVTAInterpreterFunction::fwdElementSignInst(const ElementSignInst
-// *I) {
-//   auto func = [](float x) -> float { return ((x > 0) - (x < 0)); };
-//   dispatchImpl(fwdUnaryArithmeticImpl, I->getSrc()->getElementType(), I,
-//   func);
-// }
-
-void BoundVTAInterpreterFunction::fwdElementSignInstI8Impl(
-    const ElementSignInst *I) {
-  assert(getTensor(I->getSrc())->getType().isQuantizedType() &&
-         "Wrong function");
-
-  auto inW = getWeightHandle<int8_t>(I->getSrc());
-  auto outW = getWeightHandle<int8_t>(I->getDest());
-
-  for (size_t i = 0, e = outW.size(); i < e; i++) {
-    outW.raw(i) = (inW.raw(i) > 0) - (inW.raw(i) <= 0);
-  }
-}
-
 void BoundVTAInterpreterFunction::fwdElementSignInst(const ElementSignInst *I) {
-  if (getTensor(I->getSrc())->getType().isQuantizedType()) {
-    fwdElementSignInstI8Impl(I);
-    return;
-  }
-
-  llvm_unreachable("Not supported for VTA");
+  auto func = [](float x) -> float { return ((x > 0) - (x < 0)); };
+  dispatchImpl(fwdUnaryArithmeticImpl, I->getSrc()->getElementType(), I, func);
 }
 
 void BoundVTAInterpreterFunction::fwdElementCeilInst(const ElementCeilInst *I) {

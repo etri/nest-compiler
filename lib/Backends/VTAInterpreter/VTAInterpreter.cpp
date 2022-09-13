@@ -80,6 +80,7 @@ std::unique_ptr<CompiledFunction> VTAInterpreter::compileIRWithoutConstants(
 bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
   switch (NI.getKind()) {
   case Kinded::Kind::VTAInterpreterConvolutionNodeKind:
+  case Kinded::Kind::ReluNodeKind:
     return true;
 
   case Kinded::Kind::BatchedReduceProdNodeKind:
@@ -94,10 +95,9 @@ bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::DivNodeKind:
   case Kinded::Kind::MaxNodeKind:
   case Kinded::Kind::MinNodeKind:
-  case Kinded::Kind::ReluNodeKind:
   case Kinded::Kind::ClipNodeKind:
   case Kinded::Kind::BatchedReduceMinNodeKind:
-    // case Kinded::Kind::BatchedReduceMaxNodeKind:
+  case Kinded::Kind::BatchedReduceMaxNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
          ElemKind::Int8QTy, ElemKind::Int32ITy, ElemKind::Int64ITy});
@@ -217,11 +217,11 @@ bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
            (NI.getOutElemTy(ArgMaxNode::ResultIdx) == ElemKind::Int64ITy ||
             NI.getOutElemTy(ArgMaxNode::ResultIdx) == ElemKind::Int32ITy);
 
-    // case Kinded::Kind::AcosNodeKind:
-    // case Kinded::Kind::AsinNodeKind:
-    // case Kinded::Kind::AtanNodeKind:
-    //   return NI.allInputsAndOutputsHaveSameElemKind(
-    //       {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy});
+  case Kinded::Kind::AcosNodeKind:
+  case Kinded::Kind::AsinNodeKind:
+  case Kinded::Kind::AtanNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy});
 
   case Kinded::Kind::PowNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -270,8 +270,7 @@ bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::XorNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::BoolTy});
 
-  // case Kinded::Kind::SignNodeKind:
-  case Kinded::Kind::FloorNodeKind:
+  case Kinded::Kind::SignNodeKind:
   case Kinded::Kind::CeilNodeKind:
   case Kinded::Kind::RoundNodeKind:
   case Kinded::Kind::SqrtNodeKind:
@@ -294,7 +293,7 @@ bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Int32ITy, ElemKind::Int8QTy});
 
-  // case Kinded::Kind::FloorNodeKind:
+  case Kinded::Kind::FloorNodeKind:
   case Kinded::Kind::TruncateNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy});
@@ -843,22 +842,22 @@ bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
     return NI.getInElemTy(MFCCNode::SpectrogramIdx) == ElemKind::FloatTy &&
            NI.getOutElemTy(MFCCNode::CoefficientsIdx) == ElemKind::FloatTy;
 
-    // case Kinded::Kind::ROIAlignNodeKind:
-    //   return (NI.getInElemTy(ROIAlignNode::BatchIndicesIdx) ==
-    //               ElemKind::Int32ITy ||
-    //           NI.getInElemTy(ROIAlignNode::BatchIndicesIdx) ==
-    //               ElemKind::Int64ITy) &&
-    //          NI.allInputsAndOutputsHaveSameElemKind(
-    //              {ElemKind::FloatTy, ElemKind::Float16Ty},
-    //              /*ignoreIn*/ {ROIAlignNode::BatchIndicesIdx});
+  case Kinded::Kind::ROIAlignNodeKind:
+    return (NI.getInElemTy(ROIAlignNode::BatchIndicesIdx) ==
+                ElemKind::Int32ITy ||
+            NI.getInElemTy(ROIAlignNode::BatchIndicesIdx) ==
+                ElemKind::Int64ITy) &&
+           NI.allInputsAndOutputsHaveSameElemKind(
+               {ElemKind::FloatTy, ElemKind::Float16Ty},
+               /*ignoreIn*/ {ROIAlignNode::BatchIndicesIdx});
 
   case Kinded::Kind::CollectRpnProposalsNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty});
 
-    // case Kinded::Kind::BBoxTransformNodeKind:
-    //   return NI.allInputsAndOutputsHaveSameElemKind(
-    //       {ElemKind::FloatTy, ElemKind::Float16Ty});
+  case Kinded::Kind::BBoxTransformNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty});
 
   case Kinded::Kind::SoftMaxGradNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -1005,8 +1004,8 @@ static bool checkLayout(const T &I) {
 template <typename T,
           std::enable_if_t<has_getLayout<T, ConvolutionLayout>::value, int> = 0>
 static bool checkLayout(const T &I) {
-  if (I.getLayout() != NHWC && I.getLayout() != NTHWC) {
-    report("Glow Interpreter supports only NHWC and NTHWC");
+  if (I.getLayout() != NHWC && I.getLayout() != VTA_LAYOUT) {
+    report("VTAInterpreter supports only NHWC and VTA_LAYOUT");
     return false;
   }
   return true;
@@ -1031,9 +1030,9 @@ bool VTAInterpreter::verify(const Function &F, bool verbose) const {
   if (!F.verify(this)) {
     return false;
   }
-  if (!checkAllNodesSupported(F, verbose)) {
-    return false;
-  }
+  // if (!checkAllNodesSupported(F, verbose)) {
+  //   return false;
+  // }
   for (const Node &N : F.getNodes()) {
     if (!checkLayoutForNode(N)) {
       return false;
@@ -1061,6 +1060,7 @@ static bool checkLayoutForInstr(const Instruction &I) {
   }
 #define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
   switch (I.getKind()) {
+    DEF_INSTR(VTAInterpreterConvolutionInst, vtainterpreterconvolution)
 #include "glow/AutoGenInstr.def"
   default:
     llvm_unreachable("Invalid instruction.");
@@ -1080,11 +1080,6 @@ bool VTAInterpreter::verify(const IRFunction &IR) const {
         !checkNoFusionForInstr(I)) {
       return false;
     }
-
-    if (I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind) {
-      continue;
-    }
-
     if (!checkLayoutForInstr(I)) {
       return false;
     }
@@ -1094,13 +1089,15 @@ bool VTAInterpreter::verify(const IRFunction &IR) const {
 
 bool VTAInterpreter::shouldLower(const Node *N) const {
   switch (N->getKind()) {
+  case Kinded::Kind::VTAInterpreterConvolutionNodeKind:
+  case Kinded::Kind::ReluNodeKind:
+    return false;
   case Kinded::Kind::ConvolutionNodeKind:
   case Kinded::Kind::Convolution3DNodeKind:
   case Kinded::Kind::SparseLengthsSumNodeKind:
   case Kinded::Kind::FullyConnectedNodeKind:
   case Kinded::Kind::BatchNormalizationNodeKind:
   case Kinded::Kind::BucketizeNodeKind:
-  case Kinded::Kind::ReluNodeKind:
     return false;
   case Kinded::Kind::LayerNormalizationNodeKind:
     return interpreter::flags::LowerLayerNormalization;

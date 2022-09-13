@@ -37,10 +37,31 @@ class Tensor;
 class Constant;
 
 // Forward declare all of the classes.
-#define DEF_VALUE(CLASS, NAME) class CLASS;
 #define DEF_INSTR(CLASS, NAME) class CLASS;
-#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
-#include "glow/AutoGenInstr.def"
+#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME) class CLASS;
+DEF_INSTR(AllocActivationInst, allocactivation)
+DEF_INSTR(TensorViewInst, tensorview)
+DEF_INSTR(DeallocActivationInst, deallocactivation)
+DEF_INSTR(ConvolutionInst, convolution)
+DEF_INSTR(MaxPoolInst, maxpool)
+DEF_INSTR(AvgPoolInst, avgpool)
+DEF_INSTR(FullyConnectedInst, fullyconnected)
+DEF_INSTR(SoftMaxInst, softmax)
+DEF_INSTR(ElementAddInst, elementadd)
+DEF_INSTR(ElementSubInst, elementsub)
+DEF_INSTR(ElementDivInst, elementdiv)
+DEF_INSTR(ElementMaxInst, elementmax)
+DEF_INSTR(ElementSignInst, elementsign)
+DEF_INSTR(ReluInst, relu)
+DEF_INSTR(TransposeInst, transpose)
+DEF_INSTR(SplatInst, splat)
+DEF_INSTR(InsertTensorInst, inserttensor)
+DEF_INSTR(DebugPrintInst, debugprint)
+DEF_INSTR(QuantizeInst, quantize)
+DEF_INSTR(DequantizeInst, dequantize)
+DEF_BACKEND_SPECIFIC_INSTR(VTAConvolutionInst, vtaconvolution)
+#undef DEF_INSTR
+#undef DEF_BACKEND_SPECIFIC_INSTR
 
 /// Function "compiled" for execution by the VTA.
 class VTAFunction final : public CompiledFunction,
@@ -127,12 +148,31 @@ private:
   /// instructions.
   ///@{
 
-#define DEF_VALUE(CLASS, NAME)
 #define DEF_INSTR(CLASS, NAME) void fwd##CLASS(const CLASS *I);
-#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
-#include "glow/AutoGenInstr.def"
-
-  void fwdVTAConvolutionInst(const glow::Instruction *I);
+#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME) void fwd##CLASS(const CLASS *I);
+  DEF_INSTR(AllocActivationInst, allocactivation)
+  DEF_INSTR(TensorViewInst, tensorview)
+  DEF_INSTR(DeallocActivationInst, deallocactivation)
+  DEF_INSTR(ConvolutionInst, convolution)
+  DEF_INSTR(MaxPoolInst, maxpool)
+  DEF_INSTR(AvgPoolInst, avgpool)
+  DEF_INSTR(FullyConnectedInst, fullyconnected)
+  DEF_INSTR(SoftMaxInst, softmax)
+  DEF_INSTR(ElementAddInst, elementadd)
+  DEF_INSTR(ElementSubInst, elementsub)
+  DEF_INSTR(ElementDivInst, elementdiv)
+  DEF_INSTR(ElementMaxInst, elementmax)
+  DEF_INSTR(ElementSignInst, elementsign)
+  DEF_INSTR(ReluInst, relu)
+  DEF_INSTR(TransposeInst, transpose)
+  DEF_INSTR(SplatInst, splat)
+  DEF_INSTR(InsertTensorInst, inserttensor)
+  DEF_INSTR(DebugPrintInst, debugprint)
+  DEF_INSTR(QuantizeInst, quantize)
+  DEF_INSTR(DequantizeInst, dequantize)
+  DEF_BACKEND_SPECIFIC_INSTR(VTAConvolutionInst, vtaconvolution)
+#undef DEF_INSTR
+#undef DEF_BACKEND_SPECIFIC_INSTR
 
   template <typename ElemTy, typename AccumulatorTy,
             typename BiasElemTy = int32_t>

@@ -39,8 +39,29 @@ class Constant;
 // Forward declare all of the classes.
 #define DEF_VALUE(CLASS, NAME) class CLASS;
 #define DEF_INSTR(CLASS, NAME) class CLASS;
-#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
-#include "glow/AutoGenInstr.def"
+DEF_VALUE(WeightVar, weightvar)
+DEF_INSTR(AllocActivationInst, allocactivation)
+DEF_INSTR(TensorViewInst, tensorview)
+DEF_INSTR(DeallocActivationInst, deallocactivation)
+DEF_INSTR(CopyInst, copy)
+DEF_INSTR(ConvolutionInst, convolution)
+DEF_INSTR(MaxPoolInst, maxpool)
+DEF_INSTR(AvgPoolInst, avgpool)
+DEF_INSTR(FullyConnectedInst, fullyconnected)
+DEF_INSTR(LocalResponseNormalizationInst, localresponsenormalization)
+DEF_INSTR(SoftMaxInst, softmax)
+DEF_INSTR(ElementAddInst, elementadd)
+DEF_INSTR(ElementSubInst, elementsub)
+DEF_INSTR(ElementMulInst, elementmul)
+DEF_INSTR(ElementDivInst, elementdiv)
+DEF_INSTR(ReluInst, relu)
+DEF_INSTR(TransposeInst, transpose)
+DEF_INSTR(TouchInst, touch)
+DEF_INSTR(InsertTensorInst, inserttensor)
+DEF_INSTR(QuantizeInst, quantize)
+DEF_INSTR(DequantizeInst, dequantize)
+#undef DEF_VALUE
+#undef DEF_INSTR
 
 /// Function "compiled" for execution by the Relay.
 class RelayFunction final : public CompiledFunction,
@@ -129,385 +150,29 @@ private:
 
 #define DEF_VALUE(CLASS, NAME)
 #define DEF_INSTR(CLASS, NAME) void fwd##CLASS(const CLASS *I);
-#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
-#include "glow/AutoGenInstr.def"
-
-  template <typename ElemTy, typename AccumulatorTy,
-            typename BiasElemTy = int32_t>
-  void fwdConvolutionInstQuantizedImpl(Value *inV, Value *outV, Value *filterV,
-                                       Value *biasV,
-                                       llvm::ArrayRef<unsigned_t> kernelSizes,
-                                       llvm::ArrayRef<unsigned_t> strides,
-                                       llvm::ArrayRef<unsigned_t> pads,
-                                       size_t group,
-                                       llvm::ArrayRef<unsigned_t> dilation,
-                                       const int32_t fuseRelu);
-
-  void fwdVTAConvolutionInstQuantizedImpl(
-      Value *inV, Value *outV, Value *filterV, Value *biasV,
-      llvm::ArrayRef<unsigned_t> kernelSizes,
-      llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-      size_t group, llvm::ArrayRef<unsigned_t> dilation,
-      const int32_t fuseRelu);
-
-  template <typename ElemTy = float>
-  void fwdConvolutionInstFloatImpl(Value *inV, Value *outV, Value *filterV,
-                                   Value *biasV,
-                                   llvm::ArrayRef<unsigned_t> kernelSizes,
-                                   llvm::ArrayRef<unsigned_t> strides,
-                                   llvm::ArrayRef<unsigned_t> pads,
-                                   size_t group,
-                                   llvm::ArrayRef<unsigned_t> dilation);
-
-  template <typename ElemTy, typename AccumulatorTy,
-            typename BiasElemTy = int32_t>
-  void fwdConvolution3DInstQuantizedImpl(Value *inV, Value *outV,
-                                         Value *filterV, Value *biasV,
-                                         llvm::ArrayRef<unsigned_t> kernelSizes,
-                                         llvm::ArrayRef<unsigned_t> strides,
-                                         llvm::ArrayRef<unsigned_t> pads,
-                                         size_t group);
-
-  template <typename ElemTy = float>
-  void fwdConvolution3DInstFloatImpl(Value *inV, Value *outV, Value *filterV,
-                                     Value *biasV,
-                                     llvm::ArrayRef<unsigned_t> kernelSizes,
-                                     llvm::ArrayRef<unsigned_t> strides,
-                                     llvm::ArrayRef<unsigned_t> pads,
-                                     size_t group);
-
-  template <typename ElemTy = float>
-  void fwdConvTransposeInstFloatImpl(Value *inV, Value *outV, Value *filterV,
-                                     Value *biasV,
-                                     llvm::ArrayRef<unsigned_t> kernelSizes,
-                                     llvm::ArrayRef<unsigned_t> strides,
-                                     llvm::ArrayRef<unsigned_t> pads,
-                                     size_t group,
-                                     llvm::ArrayRef<unsigned_t> dilation);
-
-  template <typename ElemTy = float>
-  void fwdBatchNormalizationFloatImpl(const BatchNormalizationInst *I,
-                                      int numDims);
-  template <typename ParamTy = float16_t>
-  void fwdBatchNormalizationI8Impl(const BatchNormalizationInst *I,
-                                   int numDims);
-
-  template <typename ElemTy = float>
-  void
-  fwdLayerNormalizationInstFloatImpl(const glow::LayerNormalizationInst *I);
-
-  void fwdAvgPoolInstI8Impl(const AvgPoolInst *I);
-  template <typename ElemTy> void fwdAvgPoolInstFloatImpl(const AvgPoolInst *I);
-
-  void fwdAvgPool3DInstI8Impl(const AvgPoolInst *I);
-  template <typename ElemTy>
-  void fwdAvgPool3DInstFloatImpl(const AvgPoolInst *I);
-
-  void fwdAdaptiveAvgPoolInstI8Impl(const AdaptiveAvgPoolInst *I);
-  template <typename ElemTy>
-  void fwdAdaptiveAvgPoolInstFloatImpl(const AdaptiveAvgPoolInst *I);
-
-  template <typename ElemTy> void fwdSoftMaxInstImpl(const SoftMaxInst *I);
-  template <typename ElemTy>
-  void fwdLogSoftMaxInstImpl(const LogSoftMaxInst *I);
-
-  template <typename ElemTy, typename AccumulatorTy>
-  void fwdMatMulInstQuantizedImpl(const MatMulInst *I);
-  template <typename ElemTy> void fwdMatMulInstFloatImpl(const MatMulInst *I);
-
-  template <typename ElemTy>
-  void fwdBatchMatMulInstFloatImpl(const BatchMatMulInst *I);
-
-  template <typename ElemTy, typename AccumulatorTy,
-            typename BiasElemTy = int32_t>
-  void fwdFullyConnectedInstQuantizedImpl(const FullyConnectedInst *I);
-  template <typename ElemTy>
-  void fwdFullyConnectedInstFloatImpl(const FullyConnectedInst *I);
-
-  template <typename ElemTy, typename OutputTy, typename AccumulatorTy>
-  void fwdDynRowwiseQuantizedFullyConnectedInstImpl(
-      Handle<ElemTy> inW, Handle<OutputTy> &outW, dim_t baseRow,
-      Handle<ElemTy> weightsW, Handle<float> biasW, Handle<float> scalesW,
-      Handle<int32_t> offsetsW);
-
-  void fwdDynRowwiseQuantizedFullyConnectedInstPreimpl(
-      Tensor *inputTensor, Tensor *weightsTensor, Tensor *biasTensor,
-      Tensor *resultTensor, Tensor *wScaleTensor, Tensor *wOffsetTensor,
-      bool isSymmetric, bool isPerBatchElement);
-
-  template <typename ElemTy, typename AccumulatorTy,
-            typename BiasElemTy = int32_t>
-  void fwdRowwiseQuantizedFullyConnectedInstImpl(Value *inV, Value *outV,
-                                                 Value *weightsV, Value *biasV,
-                                                 Value *scalesV,
-                                                 Value *offsetsV);
-
-  template <typename ElemTy, typename AccumulatorTy,
-            typename BiasElemTy = int32_t>
-  void fwdChannelwiseQuantizedConv2DInstImpl(
-      const ChannelwiseQuantizedConvolutionInst *I);
-
-  template <typename ElemTy, typename AccumulatorTy,
-            typename BiasElemTy = int32_t>
-  void fwdChannelwiseQuantizedConv3DInstImpl(
-      const ChannelwiseQuantizedConvolutionInst *I);
-
-  void fwdElementAddInstI8Impl(const ElementAddInst *I);
-  template <typename ElemTy>
-  void fwdElementAddInstArithmeticImpl(const ElementAddInst *I);
-
-  void fwdElementMaxInstI8Impl(const ElementMaxInst *I);
-  template <typename ElemTy>
-  void fwdElementMaxInstArithmeticImpl(const ElementMaxInst *I);
-
-  template <typename ElemTy>
-  void fwdBatchedAddInstFloatImpl(const BatchedAddInst *I);
-
-  template <typename ElemTy, typename ElemOffsetTy, typename ElemScaleTy,
-            typename CmpTy = ElemTy>
-  void fwdElementCmpEQInstImpl(const ElementCmpEQInst *I);
-
-  template <typename ElemTy, typename ElemOffsetTy, typename ElemScaleTy,
-            typename CmpTy = ElemTy>
-  void fwdElementCmpNEQInstImpl(const ElementCmpNEQInst *I);
-
-  template <typename ElemTy>
-  void fwdBatchOneHotImpl(const glow::BatchOneHotInst *I);
-
-  template <typename ElemTy>
-  void fwdSpaceToDepthInstImpl(const glow::SpaceToDepthInst *I);
-
-  template <typename ElemTy>
-  void fwdResizeNearestInstImpl(const ResizeNearestInst *I);
-
-  template <typename ElemTy>
-  void fwdResizeBilinearInstImpl(const ResizeBilinearInst *I);
-
-  template <typename ElemTy> void fwdReluInstFloatImpl(const ReluInst *I);
-
-  void fwdVTAReluInstQuantizedImpl(Value *inV, Value *outV, float shift);
-
-  template <typename ElemTy> void fwdSigmoidInstFloatImpl(const SigmoidInst *I);
-
-  template <typename ElemTy> void fwdTanhInstFloatImpl(const TanhInst *I);
-
-  template <typename ElemTy>
-  void fwdSoftPlusInstFloatImpl(const SoftPlusInst *I);
-
-  template <typename ElemTy>
-  void fwdCrossEntropyLossInstFloatImpl(const CrossEntropyLossInst *I);
-
-  template <typename ElemTy>
-  void fwdLocalResponseNormalizationInstFloatImpl(
-      const glow::LocalResponseNormalizationInst *I);
-
-  template <typename ElemTy>
-  void fwdElementSubInstArithmeticImpl(const ElementSubInst *I);
-
-  template <typename ElemTy>
-  void fwdElementMulInstArithmeticImpl(const ElementMulInst *I);
-
-  template <typename ElemTy>
-  void fwdElementMinInstArithmeticImpl(const ElementMinInst *I);
-
-  template <typename ElemTy>
-  void fwdElementBitwiseOrInstImpl(const ElementBitwiseOrInst *I);
-
-  template <typename ElemTy>
-  void fwdElementBitwiseXorInstImpl(const ElementBitwiseXorInst *I);
-
-  template <typename ElemTy>
-  void fwdElementBitwiseAndInstImpl(const ElementBitwiseAndInst *I);
-
-  template <typename ElemTy, typename InstKind>
-  void fwdUnaryArithmeticImpl(const InstKind *I,
-                              std::function<float(float)> func);
-
-  template <typename ElemTy, typename ElemOffsetTy, typename ElemScaleTy,
-            typename CmpTy = ElemTy>
-  void fwdElementCmpLTEInstImpl(const ElementCmpLTEInst *I);
-
-  template <typename ElemTy, typename ElemOffsetTy, typename ElemScaleTy,
-            typename CmpTy = ElemTy>
-  void fwdElementCmpLTInstImpl(const ElementCmpLTInst *I);
-
-  template <typename ElemTy, typename ElemOffsetTy, typename ElemScaleTy,
-            typename CmpTy, typename InstCmpKind>
-  void
-  fwdElementCmpHelperImpl(const InstCmpKind *I,
-                          std::function<bool(CmpTy LHS, CmpTy RHS)> cmpHelper);
-
-  template <typename ElemTy>
-  void fwdElementPowInstFloatImpl(const ElementPowInst *I);
-
-  void fwdElementPowInstI8Impl(const ElementPowInst *I);
-
-  template <typename ElemTy>
-  void fwdElementIsNaNInstFloatImpl(const ElementIsNaNInst *I);
-
-  template <typename ElemTy>
-  void fwdElementLogInstFloatImpl(const ElementLogInst *I);
-
-  template <typename ElemTy>
-  void fwdElementExpInstFloatImpl(const ElementExpInst *I);
-
-  template <typename ElemTy>
-  void fwdElementSignInstFloatImpl(const ElementSignInst *I);
-
-  template <typename ElemTy> void fwdNonZeroInstImpl(const NonZeroInst *I);
-
-  template <typename ElemTy>
-  void fwdElementSelectInstFloatImpl(const ElementSelectInst *I);
-
-  template <typename ElemTy, typename InstKind>
-  void fwdUnaryTrigonometricImpl(const InstKind *I,
-                                 std::function<float(float)> func);
-  template <typename ElemTy>
-  void fwdBatchedReduceAddInstImpl(Value *batch, Value *dest, unsigned_t axis,
-                                   const ShapeVector &eBatchDims,
-                                   const ShapeVector &eDestDims);
-
-  template <typename ElemTy>
-  void fwdBatchedReduceMinInstImpl(Value *batch, Value *dest,
-                                   const ShapeVector &eBatchDims,
-                                   const ShapeVector &eDestDims, ElemTy max);
-
-  template <typename ElemTy>
-  void fwdBatchedReduceMaxInstImpl(Value *batch, Value *dest,
-                                   const ShapeVector &eBatchDims,
-                                   const ShapeVector &eDestDims, ElemTy min);
-
-  template <typename ElemTy>
-  void fwdBatchedReduceProdInstFloatImpl(Value *batch, Value *dest,
-                                         unsigned_t axis,
-                                         const ShapeVector &eBatchDims,
-                                         const ShapeVector &eDestDims);
-
-  template <typename ElemTy>
-  void fwdCumSumInstImpl(Value *input, Value *dest, int64_t dim, bool exclusive,
-                         bool reverse);
-
-  template <typename ElemTy>
-  void fwdLengthsSumInstFloatImpl(const LengthsSumInst *I);
-
-  template <typename ElemTy> void fwdGatherInstImpl(const GatherInst *I);
-  template <typename ElemTy> void fwdGatherNDInstImpl(const GatherNDInst *I);
-  template <typename IndexTy>
-  void fwdGatherElementsInstImpl(const GatherElementsInst *I);
-  template <typename ElemTy>
-  void fwdGatherRangesInstImpl(const GatherRangesInst *I);
-  template <typename ElemTy, typename IndicesElemTy>
-  void fwdScatterDataInstCopyImpl(const ScatterDataInst *I);
-  template <typename ElemTy, typename IndicesElemTy>
-  void fwdScatterDataInstAddFloatImpl(const ScatterDataInst *I);
-  template <typename ElemTy, typename IndicesElemTy>
-  void fwdScatterDataInstAddQuantizedImpl(const ScatterDataInst *I);
-
-  template <typename ElemTy>
-  void fwdSparseLengthsSumInstI8Impl(const SparseLengthsSumInst *I);
-  template <typename ElemTy, typename TI>
-  void fwdSparseLengthsSumInstFloatImpl(const SparseLengthsSumInst *I);
-
-  template <typename ElemTy>
-  void
-  fwdSparseLengthsWeightedSumInstI8Impl(const SparseLengthsWeightedSumInst *I);
-  template <typename ElemTy, typename TI>
-  void fwdSparseLengthsWeightedSumInstFloatImpl(
-      const SparseLengthsWeightedSumInst *I);
-
-  template <typename ElemTy>
-  void fwdEmbeddingInstImpl(Tensor *wtT, Tensor *indT, Tensor *outT,
-                            int64_t padIdx, bool sparse, bool scale,
-                            dim_t embedding_dim);
-
-  template <typename ElemTy, typename IndexTy>
-  void fwdEmbeddingBagInstFloatImpl(const EmbeddingBagInst *I);
-
-  template <typename ElemTy, typename IndexTy>
-  void fwdBatchSparseToDenseInstImpl1(const BatchSparseToDenseInst *I);
-
-  template <typename ElemTy, typename LengthsTy, typename IndicesTy>
-  void fwdBatchSparseToDenseInstImpl2(const BatchSparseToDenseInst *I);
-
-  template <typename ElemTy>
-  void
-  fwdFillExamplesWithIndicatorInstImpl1(const FillExamplesWithIndicatorInst *I);
-
-  template <typename ElemTy, typename IndicatorTy>
-  void
-  fwdFillExamplesWithIndicatorInstImpl2(const FillExamplesWithIndicatorInst *I);
-
-  template <class eTy>
-  void fwdRescaleQuantizedInstImpl(Value *src, Value *dest,
-                                   TensorQuantizationParams &srcQ,
-                                   TensorQuantizationParams &destQ);
-
-  template <typename ElemTy> void fwdModuloInstImpl(glow::ModuloInst const *I);
-
-  template <typename ElemTy>
-  void fwdCollectRpnProposalsInstImpl(const CollectRpnProposalsInst *I);
-
-  template <typename T, typename AccumT, typename TI>
-  void fwdRowwiseQuantizedSparseLengthsWeightedSumImpl(
-      const RowwiseQuantizedSparseLengthsWeightedSumInst *I);
-
-  template <typename T, typename AccumT, typename TI>
-  void fwdFusedRowwiseQuantizedSparseLengthsWeightedSumImpl(
-      const FusedRowwiseQuantizedSparseLengthsWeightedSumInst *I);
-
-  template <typename T>
-  void fwdNonMaxSuppressionInstImpl(glow::NonMaxSuppressionInst const *I);
-
-  void fwdAudioSpectrogramInstFloatImpl(glow::AudioSpectrogramInst const *I);
-
-  void fwdMFCCInstFloatImpl(glow::MFCCInst const *I);
-
-  template <typename T>
-  void fwdROIAlignInstFloatImpl(glow::ROIAlignInst const *I);
-
-  template <typename T>
-  void fwdBBoxTransformInstFloatImpl(glow::BBoxTransformInst const *I);
-
-  template <typename T, typename AccumT, typename IndexT>
-  void fwdEmbeddingBagByteRowwiseOffsetsImpl(
-      const EmbeddingBagByteRowwiseOffsetsInst *I);
-
-  template <typename ElemTy> void fwdFlipInstImpl(const FlipInst *I);
-
-  template <typename ElemTy>
-  void fwdBatchedPairwiseDotProductInstImpl(
-      const glow::BatchedPairwiseDotProductInst *I);
-
-  template <typename ElemTy>
-  void fwdBatchedPairwiseDotProductGradInstImpl(
-      const glow::BatchedPairwiseDotProductGradInst *I);
-  void fwdAvgPool2DGradInst(const AvgPoolGradInst *I);
-  void fwdAvgPool3DGradInst(const AvgPoolGradInst *I);
-
-  template <typename ElemTy, typename IndexTy>
-  void fwdBatchedUnaryEmbeddingsBagsInstImpl(
-      const BatchedUnaryEmbeddingsBagsInst *I);
-
-  template <typename IndexTy, typename OutputTy, typename WeightsOffsetTy>
-  void
-  fwdIntNBitSplitEmbeddingBagsInstImpl(const IntNBitSplitEmbeddingBagsInst *I);
-
-  template <typename IndexTy, typename OutputTy, typename WeightsOffsetTy>
-  void fwdIntNBitSplitEmbeddingWeightedBagsInstImpl(
-      const IntNBitSplitEmbeddingWeightedBagsInst *I);
-
-  template <typename IndexTy, typename OutputTy, typename WeightsOffsetTy,
-            typename IndiceWeightTy = float>
-  void fwdIntNBitSplitEmbeddingWeightedBagsImpl(
-      Tensor *out, Tensor *devWeights, Tensor *uvmWeights,
-      Tensor *weightsPlacements, Tensor *weightsTys, Tensor *dimOffsets,
-      Tensor *indices, Tensor *offsets, Tensor *weightsOffsets,
-      int64_t poolingMode, Tensor *indiceWeights, int64_t totalDims,
-      int64_t outputDType);
-
-  template <typename ElemTy>
-  void
-  fwdPermutedPooledEmbeddingsInstImpl(const PermutePooledEmbeddingsInst *I);
+  DEF_VALUE(WeightVar, weightvar)
+  DEF_INSTR(AllocActivationInst, allocactivation)
+  DEF_INSTR(TensorViewInst, tensorview)
+  DEF_INSTR(DeallocActivationInst, deallocactivation)
+  DEF_INSTR(CopyInst, copy)
+  DEF_INSTR(ConvolutionInst, convolution)
+  DEF_INSTR(MaxPoolInst, maxpool)
+  DEF_INSTR(AvgPoolInst, avgpool)
+  DEF_INSTR(FullyConnectedInst, fullyconnected)
+  DEF_INSTR(LocalResponseNormalizationInst, localresponsenormalization)
+  DEF_INSTR(SoftMaxInst, softmax)
+  DEF_INSTR(ElementAddInst, elementadd)
+  DEF_INSTR(ElementSubInst, elementsub)
+  DEF_INSTR(ElementMulInst, elementmul)
+  DEF_INSTR(ElementDivInst, elementdiv)
+  DEF_INSTR(ReluInst, relu)
+  DEF_INSTR(TransposeInst, transpose)
+  DEF_INSTR(TouchInst, touch)
+  DEF_INSTR(InsertTensorInst, inserttensor)
+  DEF_INSTR(QuantizeInst, quantize)
+  DEF_INSTR(DequantizeInst, dequantize)
+#undef DEF_VALUE
+#undef DEF_INSTR
 
   ///@}
 };

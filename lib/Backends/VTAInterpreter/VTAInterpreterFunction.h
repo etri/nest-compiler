@@ -40,6 +40,7 @@ class Constant;
 #define DEF_VALUE(CLASS, NAME) class CLASS;
 #define DEF_INSTR(CLASS, NAME) class CLASS;
 #define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
+DEF_INSTR(VTAInterpreterConvolutionInst, vtainterpreterconvolution)
 #include "glow/AutoGenInstr.def"
 
 /// Function "compiled" for execution by the VTAInterpreter.
@@ -133,8 +134,8 @@ private:
 #define DEF_VALUE(CLASS, NAME)
 #define DEF_INSTR(CLASS, NAME) void fwd##CLASS(const CLASS *I);
 #define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
+  DEF_INSTR(VTAInterpreterConvolutionInst, vtainterpreterconvolution)
 #include "glow/AutoGenInstr.def"
-  void fwdVTAInterpreterConvolutionInst(const glow::Instruction *I);
 
   int cpuvtaconvolution(int8_t *input, float inputScale, int32_t inputOffset,
                         int8_t *kernel, float kernelScale, int32_t kernelOffset,
@@ -364,9 +365,8 @@ private:
   template <typename ElemTy>
   void fwdElementExpInstFloatImpl(const ElementExpInst *I);
 
-  // template <typename ElemTy>
-  // void fwdElementSignInstFloatImpl(const ElementSignInst *I);
-  void fwdElementSignInstI8Impl(const ElementSignInst *I);
+  template <typename ElemTy>
+  void fwdElementSignInstFloatImpl(const ElementSignInst *I);
 
   template <typename ElemTy> void fwdNonZeroInstImpl(const NonZeroInst *I);
 

@@ -175,16 +175,16 @@ void Backend::autoInstrument(TraceInfo &traceInfo, IRFunction *IR) const {
 
 bool Backend::checkAllNodesSupported(const Function &F, bool verbose) const {
   bool allSupported = true;
-  //  for (const Node &N : F.getNodes()) {
-  //    if (!isOpSupported(N)) {
-  //      allSupported = false;
-  //      if (verbose) {
-  //        report("Unsupported node found while compiling Function " +
-  //               F.getName().str() + " for backend " + getBackendName() + ": "
-  //               + N.getDebugDesc());
-  //      }
-  //    }
-  //  }
+  for (const Node &N : F.getNodes()) {
+    if (!isOpSupported(N)) {
+      allSupported = false;
+      if (verbose) {
+        report("Unsupported node found while compiling Function " +
+               F.getName().str() + " for backend " + getBackendName() + ": " +
+               N.getDebugDesc());
+      }
+    }
+  }
   return allSupported;
 }
 

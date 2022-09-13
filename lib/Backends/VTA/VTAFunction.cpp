@@ -244,58 +244,40 @@ Error BoundVTAFunction::execute(IRFunction *F, ExecutionContext *context) {
       // glow::dbgs()<<I.getName() <<"    : ";
       // glow::dbgs()<<I.getKindName() <<"\n";
       switch (I.getKind()) {
-
-#define DEF_VALUE(CLASS, NAME)
 #define DEF_INSTR(CLASS, NAME)                                                 \
   case Kinded::Kind::CLASS##Kind: {                                            \
     fwd##CLASS(llvm::cast<CLASS>(&I));                                         \
     break;                                                                     \
   }
-#define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)
 #define DEF_BACKEND_SPECIFIC_INSTR(CLASS, NAME)                                \
   case Kinded::Kind::CLASS##Kind: {                                            \
     fwd##CLASS(llvm::cast<CLASS>(&I));                                         \
     break;                                                                     \
   }
-
-#ifndef DEF_INSTR
-#error The macro DEF_INSTR was not declared.
-#endif
-#ifndef DEF_VALUE
-#error The macro DEF_VALUE was not declared.
-#endif
-#ifndef DEF_BACKEND_SPECIFIC_INSTR
-#error The macro DEF_BACKEND_SPECIFIC_INSTR was not declared.
-#endif
-#ifndef DEF_INSTR_RANGE
-#define DEF_INSTR_RANGE(ID, FIRST, LAST)
-#endif
-        DEF_INSTR(ConvolutionInst, convolution)
         DEF_INSTR(AllocActivationInst, allocactivation)
-        DEF_INSTR(DeallocActivationInst, deallocactivation)
-        DEF_INSTR(MaxPoolInst, maxpool)
-        DEF_INSTR(QuantizeInst, quantize)
-        DEF_INSTR(DequantizeInst, dequantize)
-        DEF_INSTR(DebugPrintInst, debugprint)
-        DEF_INSTR(TransposeInst, transpose)
-        DEF_INSTR(SplatInst, splat)
-        DEF_INSTR(ElementMaxInst, elementmax)
-        DEF_INSTR(ElementAddInst, elementadd)
-        DEF_INSTR(AvgPoolInst, avgpool)
         DEF_INSTR(TensorViewInst, tensorview)
+        DEF_INSTR(DeallocActivationInst, deallocactivation)
+        DEF_INSTR(ConvolutionInst, convolution)
+        DEF_INSTR(MaxPoolInst, maxpool)
+        DEF_INSTR(AvgPoolInst, avgpool)
         DEF_INSTR(FullyConnectedInst, fullyconnected)
         DEF_INSTR(SoftMaxInst, softmax)
-        DEF_INSTR(InsertTensorInst, inserttensor)
+        DEF_INSTR(ElementAddInst, elementadd)
         DEF_INSTR(ElementSubInst, elementsub)
         DEF_INSTR(ElementDivInst, elementdiv)
-        DEF_INSTR(ReluInst, relu)
+        DEF_INSTR(ElementMaxInst, elementmax)
         DEF_INSTR(ElementSignInst, elementsign)
+        DEF_INSTR(ReluInst, relu)
+        DEF_INSTR(TransposeInst, transpose)
+        DEF_INSTR(SplatInst, splat)
+        DEF_INSTR(InsertTensorInst, inserttensor)
+        DEF_INSTR(DebugPrintInst, debugprint)
+        DEF_INSTR(QuantizeInst, quantize)
+        DEF_INSTR(DequantizeInst, dequantize)
         DEF_BACKEND_SPECIFIC_INSTR(VTAConvolutionInst, vtaconvolution)
-#undef DEF_INSTR_RANGE
 #undef DEF_INSTR
 #undef DEF_BACKEND_SPECIFIC_INSTR
-#undef DEF_VALUE
-        //#include "glow/AutoGenInstr.def"
+
       default:
         glow::errs() << "Invalid instruction: " << &I << "\n";
         llvm_unreachable("Invalid instruction.");
