@@ -251,28 +251,6 @@ void HostManager::cleanupAddNetwork(llvm::ArrayRef<std::string> names) {
   exportMemoryCounters();
 }
 
-#include <boost/algorithm/string.hpp>
-std::vector<DeviceInfo> HostManager::getDeviceInfoList() {
-  std::vector<DeviceInfo> deviceInfoList;
-
-  for (auto &device : devices_) {
-    DeviceInfo info = device.second->getDeviceInfo();
-    info.availableMemory = device.second->getAvailableMemory();
-    info.backendName = device.second->getBackendName();
-    info.nonSupportedNodes = device.second->getParamByName("nonSupportedNodes");
-    info.supportedNodes = device.second->getParamByName("supportedNodes");
-    info.deviceID = std::atol(device.second->getParamByName("deviceID").data());
-    info.pysicalUnitCount =
-        std::atol(device.second->getParamByName("pysicalUnitCount").data());
-    std::istringstream isDefaultDevice(
-        device.second->getParamByName("partitionDefaultDevice").data());
-    isDefaultDevice >> std::boolalpha >> info.partitionDefaultDevice;
-
-    deviceInfoList.push_back(info);
-  }
-  return deviceInfoList;
-}
-
 Error HostManager::addNetwork(std::unique_ptr<Module> module,
                               CompilationContext &cctx) {
 #ifdef FACEBOOK_INTERNAL
@@ -869,30 +847,31 @@ Error HostManager::addNetworkForNestPartition(
     }
   }
 
-  std::vector<DeviceInfo> deviceInfo = getDeviceInfoList();
-  for (auto &info : deviceInfo) {
-    // If p2p is enabled update the inputCount limit.
-    if (cctx.enableP2P) {
-      info.inputCountMax = P2PInputLimit;
+  std::vector<DeviceInfo> deviceInfo;
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    for (auto &device : availableDevices_) {
+      DeviceInfo info = devices_[device]->getDeviceInfo();
+      info.availableMemory = devices_[device]->getAvailableMemory();
+      info.backendName = devices_[device]->getBackendName().str();
+      info.nonSupportedNodes =
+          devices_[device]->getParamByName("nonSupportedNodes").str();
+      info.supportedNodes =
+          devices_[device]->getParamByName("supportedNodes").str();
+      // If p2p is enabled update the inputCount limit.
+      if (cctx.enableP2P) {
+        info.inputCountMax = P2PInputLimit;
+      }
+      info.deviceID =
+          std::atol(devices_[device]->getParamByName("deviceID").data());
+      info.pysicalUnitCount = std::atol(
+          devices_[device]->getParamByName("pysicalUnitCount").data());
+      std::istringstream isDefaultDevice(
+          devices_[device]->getParamByName("partitionDefaultDevice").data());
+      isDefaultDevice >> std::boolalpha >> info.partitionDefaultDevice;
+      deviceInfo.push_back(info);
     }
   }
-  // {
-  //   std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-  //   for (auto &device : availableDevices_) {
-  //     DeviceInfo info = devices_[device]->getDeviceInfo();
-  //     info.availableMemory = devices_[device]->getAvailableMemory();
-  //     info.backendName = devices_[device]->getBackendName().str();
-  //     info.nonSupportedNodes =
-  //         devices_[device]->getParamByName("nonSupportedNodes").str();
-  //     info.supportedNodes =
-  //         devices_[device]->getParamByName("supportedNodes").str();
-  //     // If p2p is enabled update the inputCount limit.
-  //     if (cctx.enableP2P) {
-  //       info.inputCountMax = P2PInputLimit;
-  //     }
-  //     deviceInfo.push_back(info);
-  //   }
-  // }
 
   // Optimize Functions only if we don't have any backendSpecificNodeInfo,
   // because if we do then the Functions were already optimized and Nodes had

@@ -217,7 +217,6 @@ public:
                                    std::string bundleDir,
                                    std::string quantFileName, int profileMode,
                                    int partitionExe);
-  std::vector<DeviceInfo> getDeviceInfoList();
   void setCompileOptions(PartitionerCompileOptions *compileOptions) {
     provisioner_->setCompileOptions(compileOptions);
   }
