@@ -54,12 +54,17 @@ public:
     std::string backendName_;
     std::set<CostNode*> outNodeSet_;
     std::vector<CostNode*> nodeList_;
-    bool isParallelBranch_ = false;
 
     int branchID_ = -1;
     bool partOfBranch_ = false;
     unsigned int level_ = 0;
     std::vector<NodeGroup*> inBranchList_;
+
+    //for deplay
+    bool parallelDeploy_ = false;
+    int vtaCount_ = 0;
+    bool isSinglePU = false;
+
 };
 
 /// Given a module, partitions each of the its functions into multiple ones
@@ -110,7 +115,7 @@ class NestPartitioner final : public PartitionerBase {
     /// The struct contain user-defined partition info.
     PartitionConfig partitionConfig_;
 
-    std::vector<NodeGroup*> nodeGroups_;
+    std::vector<NodeGroup*> partitionList_;
     std::set<std::string> backendSet_;
     std::string quantFileName_;
 
@@ -121,10 +126,9 @@ class NestPartitioner final : public PartitionerBase {
     std::set<std::string> profileKeySet_;
     std::string outputDir_;
     std::map<std::string, int>* puIdxMap_;
+    std::string defaultBackend_;
 
-//    bool preventFragmentation_ cnode->minCostPrevNodeMap_[backend->getName()] = nullptr;= true;
-
-  /// Initialization. Called in class constructor.
+    /// Initialization. Called in class constructor.
     void init();
 
     /// Verify the generated functions in module, and \returns error if any
@@ -176,11 +180,12 @@ public:
   Expected<DAGListTy> partition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe, std::map<std::string, int>* puIdxMap);
 
 
+  void outPartitionPlanMultiVTA(std::string funcName, std::string filename, bool isParallel);
   void outPartitionPlan(std::string funcName, std::string filename, bool isParallel);
   void outPartitionPlanCPUVTA(std::string funcName, std::string filename, bool isParallel);
-  void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallel);
-  void partitionBranchesCPUVTA(std::vector<NodeGroup*>* branchList, bool isParallel);
-  void partitionBranchesForRelay(std::vector<NodeGroup*>* branchList);
+  void partitionBranches(std::vector<NodeGroup*>* branchList, bool isParallelDeploy);
+  void partitionBranchesCPUVTA(std::vector<NodeGroup*>* branchList, bool isParallelDeploy);
+  void partitionBranches(std::vector<NodeGroup*>* branchList);
   void loadPerformProfileInfo(std::string pdir);
   void getMinCostOfSingleNode(CostNode *cnode, std::vector<Backend *> backends, CostNode* prevCNode = nullptr);
   void getMinCostOfFusedNode(CostNode* secondPrevCNode, CostNode* prevCNode, CostNode* curCNode);
@@ -195,21 +200,20 @@ public:
   void loadFuseOperatorsConfig(std::string fname);
   void allocateOptimalPUSingleNode(std::vector<NodeGroup*>* branchList);
   void generateApplicationCode(std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
-  void findParallelBranchesForMultiVTA(std::vector<NodeGroup*>* branchList, int cpuNum, int vtaNum);
+  void findParallelDeployBranchesForMultiVTA(std::vector<NodeGroup*>* branchList, int cpuNum, int vtaNum);
   void allocateVTAOps(std::vector<NodeGroup*>* branchList);
   void allocateRelayOps(std::vector<NodeGroup*>* branchList);
   bool isVTAConv(ConvolutionNode* convNode);
 
-  void generatePlanForVTAOps(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void generatePlanForVTAOps(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int VTANum = 1);
   void generatePlanForRelay(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void generateTestProfile(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+  void generatePlanForProfiling(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
+//  void generateOptimalPlanForSingleNodes(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
   void generateMinCostPlan(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int cpuNum = 0, int VTANum = 1);
   void generateMinCostPlanCPUVTA(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode, int cpuNum = 0, int VTANum = 1);
-  void generateOptimalPlanForParallelBranches(Function *function, std::string profilePath, std::string partitionPlanFile, int profileMode);
-  void findParallelBranchesForCPUVTA(std::vector<NodeGroup *> *branchList, int cpuNum, int vtaNum);
+  void findParallelDeployBranchesForCPUVTA(std::vector<NodeGroup *> *branchList, int cpuNum, int vtaNum);
 
-  void generateDAGStatistics(Function *function);
+//  void generateDAGStatistics(Function *function);
   Expected<DAGListTy> generatePartitionCode(CompilationContext &cctx, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe);
   void loadPartitionPlan(runtime::PartitionConfig* partitionConfig, std::string filename);
 
@@ -228,7 +232,6 @@ public:
   void setCost(std::vector<Backend *>* backends, CostNode* pnode, CostNode* cnode);
   void makeCostNode(Function* function, std::vector<std::vector<CostNode>>* cnodeBfs);
   bool isSupportedOpType(Kinded::Kind opType, std::string backendName, CostNode* cnode);
-  float getTotalCommCost(std::vector<NodeGroup*>* branchList);
   float getInCommCost(CostNode* cnode);
 
   void setOutputDir(std::string path) {

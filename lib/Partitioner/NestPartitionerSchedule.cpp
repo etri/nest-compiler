@@ -151,8 +151,7 @@ void NestPartitionerSchedule::generateYamlFile(string& wfilec, std::size_t parti
         auto func = funcList[nodeN];
 
         std::string key = addProfileKey(func, profileKeySet_, isFused);
-
-        //std::cout << "key: " << key << std::endl;
+//        std::cout << "key: " << key << std::endl;
 
         if (key.length() == 0) {
             keys = keys + "\"blank\", ";
@@ -878,11 +877,11 @@ void NestPartitionerSchedule::generateCMakeListsFile(std::size_t partitionNum, c
         cmakeFile.append("\n");
 
         cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-        cmakeFile.append("\t${CMAKE_SOURCE_DIR}/tests/partition_codegen/main_header_test.h\n");
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/main_header_test.h\n");
         cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_header_test.h\n\n");
 
         cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-        cmakeFile.append("\t${CMAKE_SOURCE_DIR}/tests/partition_codegen/main_template.h\n");
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/main_template.h\n");
         cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_template.h\n\n");
 
         bool vtaFlag = false, relayFlag = false;

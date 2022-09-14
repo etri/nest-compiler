@@ -254,6 +254,8 @@ std::vector<DeviceInfo> HostManager::getDeviceInfoList() {
     info.supportedNodes = device.second->getParamByName("supportedNodes");
     info.deviceID = std::atol(device.second->getParamByName("deviceID").data());
     info.pysicalUnitCount = std::atol(device.second->getParamByName("pysicalUnitCount").data());
+    std::istringstream isDefaultDevice(device.second->getParamByName("partitionDefaultDevice").data());
+    isDefaultDevice >>  std::boolalpha >> info.partitionDefaultDevice;
 
     deviceInfoList.push_back(info);
   }

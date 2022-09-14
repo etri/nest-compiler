@@ -75,6 +75,8 @@ struct DeviceInfo {
   float peakSramBw;
   /// Peak ingress/egress PCI-E bandwidth from device in bytes/second.
   float peakPCIeBw;
+  ///Default device of the Partitioner
+  bool partitionDefaultDevice;
 
   //for the NEST compiloer
   std::vector<std::string> fusionNodes;
