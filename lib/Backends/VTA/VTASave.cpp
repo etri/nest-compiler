@@ -3880,7 +3880,14 @@ void saveReluInst(const glow::ReluInst *Inst, std::string *bundle, VTASaveContex
     bundle->append(dest->getName());
     bundle->append(", ");
   }
-  bundle->append(std::to_string(srcDims[0] * srcDims[1] * srcDims[2] * srcDims[3]));
+
+  int src_size = 1;
+
+  
+  for(int i = 0; i < srcDims.size(); i++){
+    src_size *= srcDims[i];
+  }
+  bundle->append(std::to_string(src_size));
   if(inScale!=outScale){
     bundle->append(", ");
     bundle->append(std::to_string(inScale));
