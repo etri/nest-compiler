@@ -2,16 +2,33 @@ set(BNN_ONNX ${CMAKE_SOURCE_DIR}/vta/bundles/bnn)
 
 add_custom_command(
         OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/binarynet.yaml
         ${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx
         ${CMAKE_CURRENT_BINARY_DIR}/cat_3.png
-        COMMAND
-        aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/binarynet.yaml ${CMAKE_CURRENT_BINARY_DIR}/binarynet.yaml --no-sign-request
         COMMAND
         aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/binarynet.onnx ${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx --no-sign-request
         COMMAND
         aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/cat_3.png ${CMAKE_CURRENT_BINARY_DIR}/cat_3.png --no-sign-request
         )
+
+add_custom_command(
+        OUTPUT
+        ${CMAKE_CURRENT_BINARY_DIR}/binarynet.yaml
+        COMMAND
+        image-classifier ${CMAKE_CURRENT_BINARY_DIR}/cat_3.png
+        -m=${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx
+        -bnn
+        -model-input-name=input
+        -backend=VTAInterpreter
+        -dump-graph-DAG="opt.dot"
+        -image-layout=NCHW
+        -compute-softmax
+        -topk=5
+        -image-mode=0to1
+        -dump-profile=${CMAKE_CURRENT_BINARY_DIR}/binarynet.yaml
+        -onnx-define-symbol=batch_size,1
+        -quantization-precision-bias=Int32
+        DEPENDS image-classifier ${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx ${CMAKE_CURRENT_BINARY_DIR}/cat_3.png
+    )
 
 if(NESTC_USE_VTASIM)
     add_custom_target(vtaBinarynetBundleONNX
@@ -27,7 +44,7 @@ if(NESTC_USE_VTASIM)
 	    ${CMAKE_CURRENT_BINARY_DIR}/binarynet.h
 	    ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h
 	    COMMAND
-	    model-compiler -g    
+	    model-compiler -g
             -model=${CMAKE_CURRENT_BINARY_DIR}/binarynet.onnx
             -backend=VTA
             -assert-all-nodes-quantized
@@ -58,7 +75,7 @@ else()
 	    COMMAND
             aws s3 cp s3://nestc-data-pub/VTABundleTests/bnn/VTARuntime.h ${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h --no-sign-request
             )
-endif() 
+endif()
 
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 add_executable(vtaBinarynetBundle ${BNN_ONNX}/main.cpp ${CMAKE_CURRENT_BINARY_DIR}/binarynet.cpp)

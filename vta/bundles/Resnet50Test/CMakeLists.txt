@@ -1,11 +1,28 @@
 add_custom_command(
         OUTPUT
-        ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
         ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx
         COMMAND
-        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50_calib_2.yaml ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml --no-sign-request
-        COMMAND
         aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet50/resnet50.onnx ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx --no-sign-request
+)
+
+add_custom_command(
+        OUTPUT
+        ${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
+        COMMAND
+        image-classifier ${NESTC_ROOT_DIR}/glow/tests/images/imagenet/cat_285.png
+        -m=${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx
+        -model-input-name=gpu_0/data_0
+        -backend=VTAInterpreter
+        -dump-graph-DAG="opt.dot"
+        -image-layout=NCHW
+        -compute-softmax
+        -topk=5
+        -image-mode=0to1
+        -dump-profile=${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
+        -quantization-schema="symmetric_with_power2_scale"
+        DEPENDS
+        image-classifier
+        ${CMAKE_CURRENT_BINARY_DIR}/resnet50.onnx
 )
 
 add_custom_target(vtaCaffe2Resnet50BundleONNX
@@ -27,7 +44,7 @@ if(NESTC_USE_VTASIM)
             -backend=VTA
             -emit-bundle=${CMAKE_CURRENT_BINARY_DIR}
             -bundle-api=dynamic
-            -model-input-name=gpu_0/data_0,float,[1,3,224,224]
+            -model-input=gpu_0/data_0,float,[1,3,224,224]
             -dump-graph-DAG=opt.dot
             -load-profile=${CMAKE_CURRENT_BINARY_DIR}/resnet50_calib_2.yaml
             -quantization-schema=symmetric_with_power2_scale

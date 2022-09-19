@@ -4,7 +4,18 @@ add_custom_command(
         OUTPUT
         ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
         COMMAND
-        aws s3 cp s3://nestc-data-pub/VTABundleTests/Resnet18/mxnet_exported_resnet18_calib_1.yaml ${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml --no-sign-request
+        image-classifier ${NESTC_ROOT_DIR}/glow/tests/images/imagenet/cat_285.png
+        -m=${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
+        -model-input-name=data
+        -backend=VTAInterpreter
+        -dump-graph-DAG="opt.dot"
+        -image-layout=NHWC
+        -compute-softmax
+        -topk=5
+        -image-mode=0to255
+        -dump-profile=${CMAKE_CURRENT_BINARY_DIR}/mxnet_exported_resnet18_calib_1.yaml
+        -quantization-schema="symmetric_with_power2_scale"
+        DEPENDS image-classifier ${NESTC_BINARY_DIR}/models/mxnet_exported_resnet18.onnx
 )
 
 add_custom_target(singlevtaMxnetResnet18BundleONNX
