@@ -45,6 +45,8 @@ class NodeBuilder {
   /// expression that computes the type. For example "X->getType()". The second
   /// argument is the name of the return type. Format: (type, name)
   std::vector<std::pair<std::string, std::string>> nodeOutputs_;
+  /// A list of variable output members. Format: (type, name).
+  std::vector<std::pair<MemberTypeInfo, std::string>> variableOutputMembers_;
   /// A list of node members. Format: (type, name).
   std::vector<std::pair<MemberTypeInfo, std::string>> members_;
   /// The node enum cases.
@@ -120,6 +122,19 @@ public:
                          bool addSetter = false) {
     typeInfo.addSetter = addSetter;
     members_.push_back({typeInfo, name});
+    return *this;
+  }
+
+  /// Add a variable input to the node.
+  NodeBuilder &addVariableInput(const std::string &name) {
+    return addMember(MemberType::VectorNodeValue, name);
+  }
+
+  /// Add a variable result to the node.
+  NodeBuilder &addVariableResult(const std::string &name) {
+    MemberTypeInfo typeInfo = {MemberType::VectorNodeValue};
+    typeInfo.addSetter = false;
+    variableOutputMembers_.push_back({typeInfo, name});
     return *this;
   }
 
