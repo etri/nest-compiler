@@ -1,5 +1,5 @@
 add_library(HostManager
-        ${NESTC_ROOT_DIR}/lib/Runtime/HostManager/HostManager.cpp)
+              ${NESTC_ROOT_DIR}/lib/Runtime/HostManager/HostManager.cpp)
 
 target_link_libraries(HostManager
                       PRIVATE
@@ -15,17 +15,17 @@ target_link_libraries(HostManager
                         Runtime)
 
 add_library(HostManagerNestos
-        ${NESTC_ROOT_DIR}/lib/Runtime/HostManager/HostManager.cpp)
+              ${NESTC_ROOT_DIR}/lib/Runtime/HostManager/HostManager.cpp)
 
 target_link_libraries(HostManagerNestos
-        PRIVATE
-        Backends
-        Base
-        Executor
-        Exporter
-        Importer
-        Graph
-        GraphOptimizer
-        PartitionerNestos
-        Provisioner
-        Runtime)
+                      PRIVATE
+                        Backends
+                        Base
+                        Executor
+                        Exporter
+                        Importer
+                        Graph
+                        GraphOptimizer
+                        PartitionerNestos
+                        Provisioner
+                        Runtime)

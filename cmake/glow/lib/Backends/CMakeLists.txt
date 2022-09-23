@@ -39,17 +39,17 @@ endforeach()
 ExternalBackendsRegister()
 
 add_library(Backends
-        Backends.cpp
-        DeviceManagers.cpp)
+              Backends.cpp
+              DeviceManagers.cpp)
 
 target_link_libraries(Backends
-        PUBLIC
-        ExecutionContext
-        PRIVATE
-        Backend
-        Base
-        Graph
-        GraphOptimizerPipeline)
+                      PUBLIC
+                        ExecutionContext
+                      PRIVATE
+                        Backend
+                        Base
+                        Graph
+                        GraphOptimizerPipeline)
 
 FOREACH(backend ${linked_backends})
   message(STATUS "${backend} added")

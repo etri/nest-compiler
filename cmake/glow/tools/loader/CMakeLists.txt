@@ -81,9 +81,9 @@ target_link_libraries(nestos-partitioner
         GraphOptimizer
         Quantization
         LLVMSupport)
-                
+
 add_executable(image-classifier
-   ${NESTC_ROOT_DIR}/tools/loader/Loader.cpp
+  ${NESTC_ROOT_DIR}/tools/loader/Loader.cpp
   ImageClassifier.cpp
   ExecutorCore.cpp
   ExecutorCoreHelperFunctions.cpp)
