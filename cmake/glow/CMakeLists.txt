@@ -99,10 +99,19 @@ execute_process(COMMAND
   OUTPUT_VARIABLE GIT_DATE
   ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
 add_definitions("-DGIT_DATE=\"${GIT_DATE}\"")
+# Get the name of the most recent tag.
+execute_process(COMMAND
+  "${GIT_EXECUTABLE}" describe --tags --abbrev=0
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+  OUTPUT_VARIABLE GIT_TAG
+  ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+add_definitions("-DGIT_TAG=\"${GIT_TAG}\"")
 
 # Compile definition for Glow build date in Y-M-D format.
 string(TIMESTAMP GLOW_BUILD_DATE "%Y-%m-%d")
 add_definitions("-DGLOW_BUILD_DATE=\"${GLOW_BUILD_DATE}\"")
+add_definitions("-DGLOW_VERSION=\"${GIT_DATE} (${GIT_SHA1}) (${GIT_TAG})\"")
+
 if(GLOW_USE_PNG_IF_REQUIRED)
   find_package(PNG)
   if(PNG_FOUND)
@@ -113,6 +122,7 @@ endif()
 if(GLOW_WITH_LLVMIRCODEGEN)
   add_definitions(-DGLOW_WITH_LLVMIRCODEGEN=1)
 endif()
+
 if(GLOW_WITH_CPU)
   if(NOT GLOW_WITH_LLVMIRCODEGEN)
     message(FATAL_ERROR "Cannot use -DGLOW_WITH_CPU without -DGLOW_WITH_LLVMIRCODEGEN")
@@ -123,6 +133,29 @@ endif ()
 if (GLOW_WITH_OPENCL)
   add_definitions(-DGLOW_WITH_OPENCL=1)
   find_package(OpenCL REQUIRED)
+endif ()
+
+if(GLOW_WITH_NNPI)
+  add_definitions(-DGLOW_WITH_NNPI=1)
+endif()
+
+if (GLOW_WITH_HABANA)
+  add_definitions(-DGLOW_WITH_HABANA=1)
+
+  # Find habanalabs libraries.
+  list(APPEND CMAKE_PREFIX_PATH /usr/lib/habanalabs)
+  find_path(SYNAPSE_INCLUDE_DIR synapse.h)
+  find_library(SYNAPSE_LIB Synapse)
+  find_library(TPCSIM_SHARED_LIB tpcsim_shared)
+  find_library(HL_THUNK_LIB hl-thunk)
+
+  # Create interface library to encapsulate necessary .so's.
+  add_library(Synapse INTERFACE)
+  target_link_libraries(Synapse
+    INTERFACE
+    "${SYNAPSE_LIB}"
+    "${TPCSIM_SHARED_LIB}"
+    "${HL_THUNK_LIB}")
 endif ()
 
 set(LLVMCPURuntimeExtraFlags)
@@ -180,7 +213,6 @@ if(NOT EXISTS "${GLOW_THIRDPARTY_DIR}/fp16")
 else()
   include_directories(${GLOW_THIRDPARTY_DIR}/fp16/include)
 endif()
-
 if(NOT NESTC_EVTA_RUN_ON_ZCU102)
   if (MSVC)
       find_package(folly CONFIG REQUIRED)
@@ -252,8 +284,9 @@ if (GLOW_BUILD_TESTS AND NOT NESTC_EVTA_RUN_ON_ZCU102)
 
   # Fetch the dependencies for all the tests.
   get_property(GLOW_TEST_DEPENDS GLOBAL PROPERTY GLOW_TEST_DEPENDS)
+
   # All tests except expensive tests and stress tests.
-  add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} -LE EXPENSIVE\\|STRESS
+  add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -LE EXPENSIVE\\|STRESS
                       DEPENDS ${GLOW_TEST_DEPENDS} USES_TERMINAL)
 
   # All tests including expensive tests but not stress tests.
