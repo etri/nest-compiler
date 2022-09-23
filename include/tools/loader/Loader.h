@@ -19,6 +19,7 @@
 
 #include "glow/ExecutionEngine/ExecutionEngine.h"
 #include "glow/Importer/ProtobufLoader.h"
+#include "glow/Importer/TFLiteModelLoader.h"
 #include "glow/Quantization/Quantization.h"
 #include "glow/Runtime/HostManager/HostManager.h"
 
@@ -62,9 +63,14 @@ class ProtobufLoader;
 
 class LoaderExtension {
 public:
-  /// Called once after model loading.
+  /// Called once after ONNX or Caffe2 model loading.
+  virtual void postModelLoad(Loader &, PlaceholderBindings &, ProtobufLoader &,
+                             llvm::StringMap<Placeholder *> &,
+                             llvm::ArrayRef<TypeRef> inputImageType) = 0;
   virtual void postModelLoad(Loader &, PlaceholderBindings &,
-                             TypeRef inputImageType) = 0;
+                             TFLiteModelLoader &,
+                             llvm::StringMap<Placeholder *> &,
+                             llvm::ArrayRef<TypeRef> inputImageType) = 0;
   /// Called once at the beginning of the mini-batch inference.
   virtual void inferInitMiniBatch(Loader &, PlaceholderBindings &,
                                   size_t minibatchIndex,
@@ -169,7 +175,8 @@ public:
   /// then the model input is forced to have the given input type regardless of
   /// the actual command line options (this requires for the model to have only
   /// one input).
-  void loadModel(TypeRef inputType = nullptr);
+  void loadModel(PlaceholderBindings *bindings = nullptr,
+                 llvm::ArrayRef<TypeRef> inputType = {});
 
   /// \returns a map between the model input names and the input placeholders.
   /// The placeholder map is available once \ref loadModel() is called.
@@ -202,7 +209,8 @@ public:
   void compile(CompilationContext &cctx);
   void compileForNestPartition(CompilationContext &cctx, size_t exeType,
                                std::string profilePath,
-                               std::string partitionPlan, int profileMode);
+                               std::string partitionPlan, int profileMode,
+                               int partitionExe);
 
   /// Runs inference, unless emit bundle mode is enabled. \p bindings
   /// binds specific placeholders to concrete tensors. The concrete
@@ -217,7 +225,13 @@ public:
   /// Register a loader extension.
   Loader &registerExtension(std::unique_ptr<LoaderExtension> ext);
   /// Called once after model loading.
-  void postModelLoad(PlaceholderBindings &bindings, TypeRef inputImageType);
+  void postModelLoad(PlaceholderBindings &bindings, ProtobufLoader &protoLoader,
+                     llvm::StringMap<Placeholder *> &,
+                     llvm::ArrayRef<TypeRef> inputImageType);
+  void postModelLoad(PlaceholderBindings &bindings,
+                     TFLiteModelLoader &protoLoader,
+                     llvm::StringMap<Placeholder *> &,
+                     llvm::ArrayRef<TypeRef> inputImageType);
   /// Called at the beginning of each mini-batch inference.
   void inferInitMiniBatch(PlaceholderBindings &bindings, size_t minibatchIndex,
                           size_t minibatchSize);
