@@ -23,10 +23,17 @@
 #include "llvm/Support/YAMLTraits.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "folly/hash/SpookyHashV2.h"
+
+#include <atomic>
 #include <cctype>
 #include <cstdarg>
+#include <mutex>
+#include <shared_mutex>
 #include <sstream>
 #include <string>
+
+#include <unordered_map>
 
 namespace llvm {
 namespace yaml {
@@ -72,6 +79,35 @@ llvm::raw_ostream &errs() { return llvm::errs(); }
 
 llvm::raw_ostream &dbgs() { return llvm::dbgs(); }
 
+std::string separateString(const std::string &str, size_t length,
+                           const std::string &delimiter) {
+  assert(length > 0 && "Separation block length must be greater than 0!");
+  size_t inpSize = str.size();
+  size_t delSize = delimiter.size();
+  size_t numBlocks = (inpSize + length - 1) / length;
+  size_t outSize = inpSize + (numBlocks - 1) * delSize;
+  std::string sepStr;
+  sepStr.reserve(outSize);
+  for (size_t blockIdx = 0; blockIdx < numBlocks; blockIdx++) {
+    // Append substring block.
+    size_t blockStart = blockIdx * length;
+    size_t blockSize =
+        (inpSize - blockStart) >= length ? length : (inpSize - blockStart);
+    blockSize = (blockSize >= length) ? length : blockSize;
+    sepStr.append(str, blockStart, blockSize);
+    // Append delimiter.
+    if (blockIdx < numBlocks - 1) {
+      sepStr.append(delimiter);
+    }
+  }
+  assert(sepStr.size() == outSize && "Inconsistent string separation!");
+  return sepStr;
+}
+std::string separateString(llvm::StringRef str, size_t length,
+                           const std::string &delimiter) {
+  std::string str1 = str.str();
+  return separateString(str1, length, delimiter);
+}
 std::string escapeDottyString(const std::string &str) {
   std::string out;
   out.reserve(str.capacity());
@@ -162,7 +198,7 @@ const std::string &staticStrFormat(const char *format, ...) {
   return staticStrings.back();
 }
 
-std::string legalizeName(llvm::StringRef name) {
+std::string legalizeName(llvm::StringRef name, size_t maxLength) {
   std::string legalName;
 
   // Legalize the name.
@@ -176,7 +212,24 @@ std::string legalizeName(llvm::StringRef name) {
   if (legalName.empty() || isdigit(legalName[0])) {
     legalName = "A" + legalName;
   }
-  return legalName;
+
+  if (maxLength == 0 || legalName.size() <= maxLength) {
+    return legalName;
+  }
+
+  // Now we have to deal with long names.
+
+  // Assuming that having long names is a rare case,
+  // therefore using a good hash function can produce unique enough names.
+  std::string truncationSuffix{"_trunc_"};
+  truncationSuffix += std::to_string(
+      folly::hash::SpookyHashV2::Hash64(legalName.data(), legalName.size(), 0));
+
+  std::string truncatedName{legalName.data(),
+                            maxLength - truncationSuffix.size()};
+  truncatedName += truncationSuffix;
+
+  return truncatedName;
 }
 
 /// \returns the color based on \p index which is used in dot file.
@@ -194,7 +247,7 @@ const char *getDotFileNodeColor(size_t index) {
 
 template <typename T> static T deserializeFromYaml(llvm::StringRef fileName) {
   T result;
-  //  std::cout << "YAML: " << fileName.str() << std::endl;
+  llvm::outs() << "Deserialize from " << fileName << "\n";
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> text =
       llvm::MemoryBuffer::getFileAsStream(fileName);
   assert(!text.getError() && "Unable to open file");
@@ -226,6 +279,17 @@ Expected<int> getIntFromStr(llvm::StringRef input) {
   RETURN_ERR_IF_NOT(!(end == inputStr.data() || *end != '\0'),
                     "Integer was not properly specified: " + inputStr);
   return val;
+}
+
+Expected<float> getFloatFromStr(llvm::StringRef input) {
+  // StringRef not necessarily null terminated, so get a str from it.
+  const std::string inputStr = input.str();
+  char *end;
+  double val = std::strtod(inputStr.data(), &end);
+  RETURN_ERR_IF_NOT(!(end == inputStr.data() || *end != '\0'),
+                    "Floating point number was not properly specified: " +
+                        inputStr);
+  return (float)val;
 }
 
 } // namespace glow
