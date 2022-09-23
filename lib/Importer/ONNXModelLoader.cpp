@@ -18,6 +18,7 @@
 #include "glow/Importer/ONNXModelLoader.h"
 
 #include "glow/Base/Tensor.h"
+#include "glow/Flags/Flags.h"
 #include "glow/Graph/Graph.h"
 #include "glow/Graph/Nodes.h"
 #include "glow/Importer/Caffe2ModelLoader.h"
@@ -28,6 +29,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include "google/protobuf/io/coded_stream.h"
+#include "google/protobuf/io/tokenizer.h"
 #include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "google/protobuf/text_format.h"
 
@@ -43,6 +45,7 @@ using namespace glow::runtime;
 using llvm::cast;
 
 namespace {
+
 llvm::cl::OptionCategory onnxModelLoaderCat("ONNX Model Loader Options");
 
 llvm::cl::opt<int>
@@ -80,6 +83,11 @@ llvm::cl::opt<bool> onnxExportRnnStatesOpt(
         "each inference. Default is false."),
     llvm::cl::cat(onnxModelLoaderCat));
 
+llvm::cl::opt<unsigned> loopUnrollLimit(
+    "loop-unroll-limit",
+    llvm::cl::desc("Maximum unrollable iterations for the Loop operator"),
+    llvm::cl::Optional, llvm::cl::init(20), llvm::cl::cat(onnxModelLoaderCat));
+
 /// Parse the command line option and get the user defined map of symbols.
 /// The command line option has the format <symbol_name>,<symbol_value>.
 Expected<std::unordered_map<std::string, dim_t>> getSymbolMap() {
@@ -113,17 +121,19 @@ getProtoShape(const ONNX_NAMESPACE::TensorShapeProto &shapeProto) {
       auto symbolName = d.dim_param();
       std::unordered_map<std::string, dim_t> symbolMap;
       ASSIGN_VALUE_OR_RETURN_ERR(symbolMap, getSymbolMap());
-      if (symbolMap.count(symbolName)) {
+      if (symbolMap.count(symbolName) && symbolMap[symbolName] > 0) {
         dim.push_back(symbolMap[symbolName]);
       } else {
-        RETURN_ERR(strFormat(
+        return MAKE_ERR(strFormat(
             "ONNX model symbol '%s' is undefined. Define the symbol with the "
-            "following command line option: -onnx-define-symbol=%s,<value>.",
+            "following command line option: -onnx-define-symbol=%s,<value> and "
+            "each 'dim_value' of tensor shape proto must be greater than 0.",
             symbolName.c_str(), symbolName.c_str()));
       }
     } else {
       // Proto shape has no "dim_value" and no "dim_param" field.
-      RETURN_ERR("Tensor shape proto has no 'dim_value' or 'dim_param' field!");
+      return MAKE_ERR(
+          "Tensor shape proto has no 'dim_value' or 'dim_param' field!");
     }
   }
   return dim;
@@ -160,7 +170,7 @@ Error onnxTensorDataTypeToElemKind(int32_t onnxType, ElemKind *elemTy) {
     *elemTy = ElemKind::BoolTy;
     return Error::success();
   } else {
-    RETURN_ERR(strFormat(
+    return MAKE_ERR(strFormat(
         "Don't know how to convert ONNX tensor data type %d to ElemKind",
         onnxType));
   }
@@ -219,6 +229,27 @@ getQuantParamsFromDocString(const std::string &docStr) {
   int32_t offset;
   ASSIGN_VALUE_OR_RETURN_ERR(offset, getIntFromStr(offsetStr));
   return std::make_pair(scale, offset);
+}
+
+ShapeVector getStridesFromDocString(const std::string &docStr) {
+  ShapeVector strides;
+  std::string stridesStr;
+  auto stridesOrError = getAttrFromDocString(stridesSignifier, docStr);
+  if (ERR_TO_BOOL(stridesOrError.takeError(), /* log */ false)) {
+    return strides;
+  }
+  stridesStr = std::move(stridesOrError.get());
+  if (stridesStr.empty()) {
+    return strides;
+  }
+  // Parse comma-delimited stride values.
+  llvm::SmallVector<llvm::StringRef, max_tensor_dimensions> stridesStrSplit;
+  llvm::StringRef stridesStrRef = llvm::StringRef(stridesStr);
+  stridesStrRef.split(stridesStrSplit, ',');
+  for (const auto &stride : stridesStrSplit) {
+    strides.emplace_back(std::stoi(stride.str()));
+  }
+  return strides;
 }
 
 /// Used for retrieving an attribute of type \p T from \p attr. Some
@@ -315,12 +346,40 @@ template <> struct AttributeRetriever<false, FusedActivation> {
       return FusedActivation::NONE;
     } else if (str == "RELU") {
       return FusedActivation::RELU;
+    } else if (str == "CLIP") {
+      return FusedActivation::CLIP;
     } else if (str == "TANH") {
       return FusedActivation::TANH;
     } else if (str == "SIGMOID") {
       return FusedActivation::SIGMOID;
+    } else if (str == "LEAKY_RELU") {
+      return FusedActivation::LEAKY_RELU;
     } else {
       return MAKE_ERR("Invalid FusedActivation");
+    }
+  }
+};
+
+/// Specialization for FusedActivation.
+template <> struct AttributeRetriever<false, LUTOperator> {
+  static Expected<LUTOperator> get(const ONNX_NAMESPACE::AttributeProto *attr,
+                                   const ProtobufLoader & /* unused */) {
+    std::string str;
+    ASSIGN_VALUE_OR_RETURN_ERR(str, loadStr(attr));
+    if (str == "NONE") {
+      return LUTOperator::NONE;
+    } else if (str == "RELU") {
+      return LUTOperator::RELU;
+    } else if (str == "CLIP") {
+      return LUTOperator::CLIP;
+    } else if (str == "TANH") {
+      return LUTOperator::TANH;
+    } else if (str == "SIGMOID") {
+      return LUTOperator::SIGMOID;
+    } else if (str == "LEAKY_RELU") {
+      return LUTOperator::LEAKY_RELU;
+    } else {
+      return MAKE_ERR("Invalid LUTOperator");
     }
   }
 };
@@ -364,6 +423,48 @@ template <> struct AttributeRetriever<false, PaddingMode> {
   }
 };
 
+/// Specialization for SplitEmbeddingPoolingMode.
+template <> struct AttributeRetriever<false, SplitEmbeddingPoolingMode> {
+  static Expected<SplitEmbeddingPoolingMode>
+  get(const ONNX_NAMESPACE::AttributeProto *attr,
+      const ProtobufLoader & /* unused */) {
+    std::string poolingMode;
+    ASSIGN_VALUE_OR_RETURN_ERR(poolingMode, loadStr(attr));
+    if (poolingMode == "0") {
+      return SplitEmbeddingPoolingMode::EP_SUM;
+    } else if (poolingMode == "1") {
+      return SplitEmbeddingPoolingMode::EP_MEAN;
+    } else if (poolingMode == "2") {
+      return SplitEmbeddingPoolingMode::EP_NONE;
+    } else {
+      return MAKE_ERR("Invalid SplitEmbeddingPoolingMode");
+    }
+  }
+};
+
+/// Specialization for SplitEmbeddingSparseType.
+template <> struct AttributeRetriever<false, SplitEmbeddingSparseType> {
+  static Expected<SplitEmbeddingSparseType>
+  get(const ONNX_NAMESPACE::AttributeProto *attr,
+      const ProtobufLoader & /* unused */) {
+    std::string str;
+    ASSIGN_VALUE_OR_RETURN_ERR(str, loadStr(attr));
+    if (str == "0") {
+      return SplitEmbeddingSparseType::EST_FLOAT;
+    } else if (str == "1") {
+      return SplitEmbeddingSparseType::EST_FLOAT16;
+    } else if (str == "2") {
+      return SplitEmbeddingSparseType::EST_INT8;
+    } else if (str == "3") {
+      return SplitEmbeddingSparseType::EST_INT4;
+    } else if (str == "4") {
+      return SplitEmbeddingSparseType::EST_INT2;
+    } else {
+      return MAKE_ERR("Invalid SplitEmbeddingSparseType");
+    }
+  }
+};
+
 /// Specialization for float.
 template <> struct AttributeRetriever<false, float> {
   static Expected<float> get(const ONNX_NAMESPACE::AttributeProto *attr,
@@ -394,6 +495,25 @@ Expected<T> loadAttribute(const ONNX_NAMESPACE::AttributeProto *attr,
 using ArgumentDictionaryTy =
     std::unordered_map<std::string, const ONNX_NAMESPACE::AttributeProto *>;
 
+/// \returns a type based on \p ty, but using the provided \p strides.
+static Type getTypeWithCustomStrides(const Type &ty,
+                                     llvm::ArrayRef<dim_t> strides) {
+  if (strides.empty()) {
+    return ty;
+  }
+  return Type::newStrides(ty, strides);
+}
+
+/// \returns a type in module \p mod, based on \p ty, but using the provided \p
+/// strides.
+static TypeRef getTypeWithCustomStrides(glow::Module &mod, const TypeRef ty,
+                                        llvm::ArrayRef<dim_t> strides) {
+  if (strides.empty()) {
+    return ty;
+  }
+  return mod.uniqueTypeWithNewStrides(ty, ty->dims(), strides);
+}
+
 /// Given a docstring encoding \p str of a type and its dimension \p
 /// dims, parses the string and \returns a Glow Type from it or Error if
 /// parsing failed. Expected format of str is either elemKindSignifier or
@@ -404,6 +524,7 @@ Expected<Type> parseTypeFromDocString(const std::string &str,
   float scale = 1.0;
   int32_t offset = 0;
   ElemKind elemKind = ElemKind::FloatTy;
+  ShapeVector strides;
 
   if (useGlowCustomOps) {
     std::string elemKindStr;
@@ -417,6 +538,7 @@ Expected<Type> parseTypeFromDocString(const std::string &str,
                                  getQuantParamsFromDocString(str));
       std::tie(scale, offset) = scaleOffsetPair;
     }
+    strides = getStridesFromDocString(str);
   } else {
     size_t begin = 0;
 
@@ -456,11 +578,13 @@ Expected<Type> parseTypeFromDocString(const std::string &str,
     elemKind = Type::getElementKindFromName(elemKindStr);
   }
 
+  Type ty;
   if (isQuantizedElemKind(elemKind)) {
-    return Type(elemKind, dims, scale, offset);
+    ty = Type(elemKind, dims, scale, offset);
   } else {
-    return Type(elemKind, dims);
+    ty = Type(elemKind, dims);
   }
+  return getTypeWithCustomStrides(ty, strides);
 }
 
 /// Translates the protocol buffer node \p op into a random access map.
@@ -483,7 +607,11 @@ ONNX_NAMESPACE::GraphProto glow::parseOnnxFile(const std::string &fileName) {
   CHECK(inputFileStream) << "Can't find the input file for " << fileName;
   google::protobuf::io::IstreamInputStream protobufFileStream(&inputFileStream);
   google::protobuf::io::CodedInputStream codedStream(&protobufFileStream);
+#if GOOGLE_PROTOBUF_VERSION >= 3002000
+  codedStream.SetTotalBytesLimit(MAX_PROTO_SIZE);
+#else
   codedStream.SetTotalBytesLimit(MAX_PROTO_SIZE, MAX_PROTO_SIZE);
+#endif
   bool parsedSuccessfully = graphProto.ParseFromCodedStream(&codedStream);
   CHECK(parsedSuccessfully) << "Failed to parse GraphProto";
   return graphProto;
@@ -494,9 +622,12 @@ void glow::fillPlaceholders(const ONNX_NAMESPACE::GraphProto &inputGroup,
                             std::vector<Tensor> *partialTensorPayloads,
                             bool usingGlowCustomOps) {
   for (const auto &tensorProto : inputGroup.initializer()) {
+    const std::string glowLegalizedName =
+        glow::legalizeName(tensorProto.name());
     auto *tensor =
-        bindings->get(bindings->getPlaceholderByNameSlow(tensorProto.name()));
-    CHECK(tensor) << "Missing " << tensorProto.name();
+        bindings->get(bindings->getPlaceholderByNameSlow(glowLegalizedName));
+    CHECK(tensor) << "Missing " << tensorProto.name()
+                  << ", Glow legalized name " << glowLegalizedName;
     size_t fullSize = tensor->getSizeInBytes();
     const auto fullType = tensor->getType();
     auto error = loadTensor(tensorProto, tensor, usingGlowCustomOps);
@@ -505,8 +636,8 @@ void glow::fillPlaceholders(const ONNX_NAMESPACE::GraphProto &inputGroup,
     size_t loadedSize = tensor->getSizeInBytes();
     if (loadedSize != fullSize) {
       if (partialTensorPayloads) {
-        VLOG(1) << "Loading " << tensorProto.name()
-                << " as a partial tensor: partial size="
+        VLOG(1) << "Loading " << tensorProto.name() << ", Glow legalized name "
+                << glowLegalizedName << " as a partial tensor: partial size="
                 << tensor->getType().toString()
                 << " full size=" << fullType.toString();
         Tensor fullTensor(tensor->getUnsafePtr(), &fullType,
@@ -519,6 +650,7 @@ void glow::fillPlaceholders(const ONNX_NAMESPACE::GraphProto &inputGroup,
       } else {
         // pad with 0
         VLOG(1) << "Loading and padding " << tensorProto.name()
+                << ", Glow legalized name " << glowLegalizedName
                 << " as a partial tensor: partial size="
                 << tensor->getType().toString()
                 << " full size=" << fullType.toString();
@@ -544,14 +676,20 @@ void glow::fillPlaceholders(const std::string &fileName,
 
 /// Loads tensor \p T from the input \p in.
 Error glow::loadTensor(const ONNX_NAMESPACE::TensorProto &in, Tensor *T,
-                       bool useGlowCustomOps) {
+                       bool useGlowCustomOps, const std::string &data) {
   std::vector<dim_t> dim;
   for (auto d : in.dims()) {
     dim.push_back(d);
   }
 
+  ShapeVector strides;
+  if (in.has_doc_string()) {
+    strides = getStridesFromDocString(in.doc_string());
+  }
+
   if (in.data_type() == ONNX_NAMESPACE::TensorProto::FLOAT) {
-    T->reset(ElemKind::FloatTy, dim);
+    Type ty(ElemKind::FloatTy, dim);
+    T->reset(getTypeWithCustomStrides(ty, strides));
 
     if (in.float_data_size() > 0) {
       auto TH = T->getHandle<>();
@@ -559,33 +697,41 @@ Error glow::loadTensor(const ONNX_NAMESPACE::TensorProto &in, Tensor *T,
       for (auto f : in.float_data()) {
         TH.raw(i++) = f;
       }
-    } else if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * sizeof(float));
+    } else if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * sizeof(float));
     } else {
-      RETURN_ERR("Unsupported Tensor format for FLOAT, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      return MAKE_ERR("Unsupported Tensor format for FLOAT, name: " + in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::FLOAT16) {
-    T->reset(ElemKind::Float16Ty, dim);
-    if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * (sizeof(float) / 2));
+    Type ty(ElemKind::Float16Ty, dim);
+    T->reset(getTypeWithCustomStrides(ty, strides));
+    if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * (sizeof(float) / 2));
     } else {
-      RETURN_ERR("Unsupported Tensor format for FLOAT16, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      return MAKE_ERR("Unsupported Tensor format for FLOAT16, name: " +
+                          in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::BFLOAT16) {
-    T->reset(ElemKind::BFloat16Ty, dim);
-    if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * (sizeof(float) / 2));
+    Type ty(ElemKind::BFloat16Ty, dim);
+    T->reset(getTypeWithCustomStrides(ty, strides));
+    if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * (sizeof(float) / 2));
     } else {
-      RETURN_ERR("Unsupported Tensor format for BFLOAT16, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      return MAKE_ERR("Unsupported Tensor format for BFLOAT16, name: " +
+                          in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::INT64) {
-    T->reset(ElemKind::Int64ITy, dim);
+    Type ty(ElemKind::Int64ITy, dim);
+    T->reset(getTypeWithCustomStrides(ty, strides));
 
     if (in.int64_data_size() > 0) {
       auto TH = T->getHandle<int64_t>();
@@ -593,25 +739,36 @@ Error glow::loadTensor(const ONNX_NAMESPACE::TensorProto &in, Tensor *T,
       for (auto f : in.int64_data()) {
         TH.raw(i++) = f;
       }
-    } else if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * sizeof(int64_t));
+    } else if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * sizeof(int64_t));
     } else {
-      RETURN_ERR("Unsupported Tensor format for INT64, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      return MAKE_ERR("Unsupported Tensor format for INT64, name: " + in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::INT8) {
-    Type ty;
-    ASSIGN_VALUE_OR_RETURN_ERR(
-        ty, parseTypeFromDocString(in.doc_string(), dim, useGlowCustomOps));
-    T->reset(ty);
-
-    if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * sizeof(int8_t));
+    if (in.has_doc_string()) {
+      Type ty;
+      ASSIGN_VALUE_OR_RETURN_ERR(
+          ty, parseTypeFromDocString(in.doc_string(), dim, useGlowCustomOps));
+      T->reset(ty);
     } else {
-      RETURN_ERR("Unsupported Tensor format for INT8, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      // Onnx uses Int8 data type through operators like QuantizeLinear.
+      // Also data is passed through raw_data since TensorProto
+      // does not have data field for int8_t or uint8_t.
+      // scale is set to 1 and offset is set to 0 since both scale and offset
+      // themselves are operators inputs.
+      Type ty(ElemKind::Int8QTy, dim, 1 /* scale*/, 0 /* offset*/);
+      T->reset(getTypeWithCustomStrides(ty, strides));
+    }
+    if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * sizeof(int8_t));
+    } else {
+      return MAKE_ERR("Unsupported Tensor format for INT8, name: " + in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::INT16) {
     Type ty;
@@ -619,12 +776,13 @@ Error glow::loadTensor(const ONNX_NAMESPACE::TensorProto &in, Tensor *T,
         ty, parseTypeFromDocString(in.doc_string(), dim, useGlowCustomOps));
     T->reset(ty);
 
-    if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * sizeof(int16_t));
+    if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * sizeof(int16_t));
     } else {
-      RETURN_ERR("Unsupported Tensor format for INT16, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      return MAKE_ERR("Unsupported Tensor format for INT16, name: " + in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::INT32) {
     if (in.has_doc_string()) {
@@ -635,7 +793,8 @@ Error glow::loadTensor(const ONNX_NAMESPACE::TensorProto &in, Tensor *T,
     } else {
       // There are few cases when we will have int32 tensors. For example, the
       // second output of Concat from Caffe2 concat op is int32
-      T->reset(ElemKind::Int32ITy, dim);
+      Type ty(ElemKind::Int32ITy, dim);
+      T->reset(getTypeWithCustomStrides(ty, strides));
     }
 
     if (in.int32_data_size() > 0) {
@@ -644,31 +803,45 @@ Error glow::loadTensor(const ONNX_NAMESPACE::TensorProto &in, Tensor *T,
       for (auto f : in.int32_data()) {
         TH.raw(i++) = f;
       }
-    } else if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * sizeof(int32_t));
+    } else if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * sizeof(int32_t));
     } else {
-      RETURN_ERR("Unsupported Tensor format for INT32, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      return MAKE_ERR("Unsupported Tensor format for INT32, name: " + in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::UINT8) {
-    Type ty;
-    ASSIGN_VALUE_OR_RETURN_ERR(
-        ty, parseTypeFromDocString(in.doc_string(), dim, useGlowCustomOps));
-    T->reset(ty);
-
-    if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * sizeof(uint8_t));
+    if (in.has_doc_string()) {
+      Type ty;
+      ASSIGN_VALUE_OR_RETURN_ERR(
+          ty, parseTypeFromDocString(in.doc_string(), dim, useGlowCustomOps));
+      T->reset(ty);
     } else {
-      RETURN_ERR("Unsupported Tensor format for UINT8, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      // Onnx uses Int8 data type through operators like QuantizeLinear.
+      // Also data is passed through raw_data since TensorProto
+      // does not have data field for int8_t or uint8_t.
+      // scale is set to 1 and offset is set to 0 since both scale and offset
+      // themselves are operators inputs.
+      Type ty(ElemKind::UInt8QTy, dim, 1 /* scale*/, 0 /* offset*/);
+      T->reset(getTypeWithCustomStrides(ty, strides));
+    }
+
+    if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * sizeof(uint8_t));
+    } else {
+      return MAKE_ERR("Unsupported Tensor format for UINT8, name: " + in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else if (in.data_type() == ONNX_NAMESPACE::TensorProto::BOOL) {
-    T->reset(ElemKind::BoolTy, dim);
-    if (in.has_raw_data()) {
-      std::istringstream inStream(in.raw_data(), std::stringstream::binary);
-      inStream.read(T->getUnsafePtr(), T->size() * sizeof(bool));
+    Type ty(ElemKind::BoolTy, dim);
+    T->reset(getTypeWithCustomStrides(ty, strides));
+    if (in.has_raw_data() || !data.empty()) {
+      std::istringstream inStream(data.empty() ? in.raw_data() : data,
+                                  std::stringstream::binary);
+      inStream.read(T->getUnsafePtr(), T->actualSize() * sizeof(bool));
     } else if (in.int32_data_size() > 0) {
       // Some ONNX models use int32_data to initialize bool type (e.g., when
       // converted from Keras).
@@ -678,13 +851,13 @@ Error glow::loadTensor(const ONNX_NAMESPACE::TensorProto &in, Tensor *T,
         TH.raw(i++) = (bool)f;
       }
     } else {
-      RETURN_ERR("Unsupported Tensor format for BOOL, name: " + in.name(),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+      return MAKE_ERR("Unsupported Tensor format for BOOL, name: " + in.name(),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
     }
   } else {
-    RETURN_ERR(strFormat("Unsupported tensor data type: %u",
-                         static_cast<unsigned>(in.data_type())),
-               ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+    return MAKE_ERR(strFormat("Unsupported tensor data type: %u",
+                              static_cast<unsigned>(in.data_type())),
+                    ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
   }
   return Error::success();
 }
@@ -724,9 +897,9 @@ ONNXModelLoader::getTensorType(const ONNX_NAMESPACE::TensorProto &in) {
     return Type(ElemKind::BoolTy, dim);
 
   default:
-    RETURN_ERR(strFormat("Unsupported tensor data type: %u",
-                         static_cast<unsigned>(in.data_type())),
-               ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
+    return MAKE_ERR(strFormat("Unsupported tensor data type: %u",
+                              static_cast<unsigned>(in.data_type())),
+                    ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_DATATYPE);
   }
   llvm_unreachable("Unsupported tensor data type");
 }
@@ -741,6 +914,7 @@ ONNXModelLoader::getTensorType(const ONNX_NAMESPACE::ValueInfoProto &in) {
   ElemKind kind = ElemKind::FloatTy;
   float scale = 1.0;
   int32_t offset = 0;
+  ShapeVector strides;
   if (useGlowCustomOps_) {
     std::string elemKindStr;
     ASSIGN_VALUE_OR_RETURN_ERR(
@@ -752,6 +926,7 @@ ONNXModelLoader::getTensorType(const ONNX_NAMESPACE::ValueInfoProto &in) {
                                  getQuantParamsFromDocString(in.doc_string()));
       std::tie(scale, offset) = scaleOffsetPair;
     }
+    strides = getStridesFromDocString(in.doc_string());
   } else {
     // Retrieve the ElemKind from the ONNX type, including considerations for
     // whether the datatype is quantized.
@@ -764,9 +939,58 @@ ONNXModelLoader::getTensorType(const ONNX_NAMESPACE::ValueInfoProto &in) {
   if (isQuantizedElemKind(kind)) {
     assert(useGlowCustomOps_ &&
            "Quantized loading not fully supported without custom Glow ops.");
-    return Type(kind, dim, scale, offset);
+    return getTypeWithCustomStrides(Type(kind, dim, scale, offset), strides);
   }
-  return Type(kind, dim);
+  return getTypeWithCustomStrides(Type(kind, dim), strides);
+}
+
+Error ONNXModelLoader::getInputsNamesAndTypes(
+    std::vector<std::string> &inTensorNames, std::vector<Type> &inTypes,
+    const std::string &filename) {
+  // Creating GraphProto from modelfile
+  ONNX_NAMESPACE::ModelProto modelDef;
+
+  ASSIGN_VALUE_OR_RETURN_ERR(modelDef, loadProto(filename, false, nullptr));
+
+  ONNX_NAMESPACE::GraphProto graphDef = modelDef.graph();
+
+  // GraphDef.input can have both inputs and intermediate tensors whereas
+  // initializers have info about intermediate tensors. Thus the difference
+  // betweem two is taken
+  std::vector<std::string> inputs;
+  for (auto &in : graphDef.input()) {
+    inputs.push_back(in.name());
+  }
+
+  for (const auto &in : graphDef.initializer()) {
+    auto position = std::find(inputs.begin(), inputs.end(), in.name());
+    if (position != inputs.end()) {
+      inputs.erase(position);
+    }
+  }
+
+  for (const auto &finalIn : inputs) {
+    for (const auto &in : graphDef.input()) {
+      if (finalIn.compare(in.name()) != 0) {
+        continue;
+      }
+      inTensorNames.push_back(in.name());
+      const ONNX_NAMESPACE::ValueInfoProto &valueInfo = in;
+      auto type = valueInfo.type();
+
+      std::vector<dim_t> dim;
+      ASSIGN_VALUE_OR_RETURN_ERR(dim,
+                                 getProtoShape(type.tensor_type().shape()));
+
+      ElemKind kind = ElemKind::FloatTy;
+      RETURN_IF_ERR(
+          onnxTensorDataTypeToElemKind(type.tensor_type().elem_type(), &kind));
+
+      inTypes.emplace_back(kind, dim);
+    }
+  }
+
+  return Error::success();
 }
 
 Error ONNXModelLoader::verifyPreexistingStorage(const Storage *S,
@@ -848,6 +1072,11 @@ Error ONNXModelLoader::loadInputs(ONNX_NAMESPACE::GraphProto &net,
 
     // We must not have the input created yet, so do so.
     if (loadInputsAsPlaceholdersForOnnx) {
+      RETURN_ERR_IF_NOT(!clipQuantRangeToFP16_ || !ty.isQuantizedType() ||
+                            ty.isFusedQuantizedType(),
+                        "Do not support clipQuantRangeToFP16 with unfused "
+                        "quantized input Placeholders: " +
+                            in.name());
       Placeholder *inPH;
       ASSIGN_VALUE_OR_RETURN_ERR(
           inPH, createAndRegisterPlaceholder(in.name(), mod_.uniqueType(ty),
@@ -889,11 +1118,16 @@ bool ONNXModelLoader::hasMultidirectionalBroadcast(
     const llvm::StringRef typeName) {
   // Before opset 7, broadcasting was unidirectional.
   if (opsetVersion_ > 6) {
+    // List of ops that support multidirectional broadcast can be found at
+    // https://github.com/onnx/onnx/blob/master/docs/Broadcasting.md
     if ((typeName == "Add") || (typeName == "Sub") || (typeName == "Mul") ||
-        (typeName == "Div")) {
+        (typeName == "Div") || (typeName == "Equal") ||
+        (typeName == "Greater") || (typeName == "Less") ||
+        (typeName == "Max") || (typeName == "Mean") || (typeName == "Min") ||
+        (typeName == "Or") || (typeName == "Pow") || (typeName == "Sum") ||
+        (typeName == "Xor")) {
       return true;
     }
-    // TODO: some other operators also support multidirectional broadcasting.
   }
   return false;
 }
@@ -907,6 +1141,8 @@ Expected<ElemKind> ONNXModelLoader::convertTensorProtoDataType(
     return ElemKind::Float16Ty;
   case ONNX_NAMESPACE::TensorProto_DataType_BFLOAT16:
     return ElemKind::BFloat16Ty;
+  case ONNX_NAMESPACE::TensorProto_DataType_DOUBLE:
+    return ElemKind::Float64Ty;
   case ONNX_NAMESPACE::TensorProto_DataType_INT32:
     return ElemKind::Int32ITy;
   case ONNX_NAMESPACE::TensorProto_DataType_INT64:
@@ -915,7 +1151,7 @@ Expected<ElemKind> ONNXModelLoader::convertTensorProtoDataType(
     return ElemKind::BoolTy;
   default:;
   }
-  RETURN_ERR("Non supported ONNX type");
+  return MAKE_ERR("Non supported ONNX type");
 }
 
 Error ONNXModelLoader::setVersion(ONNX_NAMESPACE::ModelProto MP) {
@@ -942,7 +1178,11 @@ ONNXModelLoader::loadProto(google::protobuf::io::ZeroCopyInputStream &iStream) {
   google::protobuf::io::CodedInputStream codedStream(&iStream);
 
   // Don't warn about large file sizes.
+#if GOOGLE_PROTOBUF_VERSION >= 3002000
+  codedStream.SetTotalBytesLimit(MAX_PROTO_SIZE);
+#else
   codedStream.SetTotalBytesLimit(MAX_PROTO_SIZE, MAX_PROTO_SIZE);
+#endif
   ONNX_NAMESPACE::ModelProto MP;
   bool parseNet = MP.ParseFromCodedStream(&codedStream);
   RETURN_ERR_IF_NOT(parseNet, "Failed to parse ModelProto",
@@ -958,13 +1198,49 @@ ONNXModelLoader::loadProto(const void *onnxModel, size_t onnxModelSize) {
 }
 
 Expected<ONNX_NAMESPACE::ModelProto>
-ONNXModelLoader::loadProto(const std::string &filename, bool zipMode) {
+ONNXModelLoader::loadProto(const std::string &filename, bool zipMode,
+                           const std::string *inputStringPtr) {
+  /// A helper class to report parsing errors when loading model protos.
+  class OnnxTxtErrCollector : public google::protobuf::io::ErrorCollector {
+  public:
+    OnnxTxtErrCollector() = default;
+    ~OnnxTxtErrCollector() override = default;
+    void AddError(int line, int column, const std::string &message) override {
+      llvm::errs() << strFormat("ONNX parsing error at [%d, %d]: ", line,
+                                column)
+                   << message << "\n";
+    }
+    void AddWarning(int line, int column, const std::string &message) override {
+      llvm::errs() << strFormat("ONNX parsing warning at [%d, %d]: ", line,
+                                column)
+                   << message << "\n";
+    }
+  };
+
+  // Create a parser object and attach an error collector to it.
+  OnnxTxtErrCollector errorCollector;
+  google::protobuf::TextFormat::Parser parser;
+  parser.RecordErrorsTo(&errorCollector);
+  bool parseNet;
+  ONNX_NAMESPACE::ModelProto MP;
+
   if (zipMode) {
-    ONNX_NAMESPACE::ModelProto MP;
+    RETURN_ERR_IF_NOT(
+        inputStringPtr == nullptr,
+        "OnnxModelLoader load from string for zip mode not supported");
     ZipReader zip(filename);
-    std::string buffer;
-    buffer = zip.getRecord("model");
-    MP.ParseFromString(buffer);
+    std::string buffer = zip.getRecord("model");
+    // Try to parse as a protocol buffer first.
+    parseNet = MP.ParseFromString(buffer);
+    // Try to parse a textual representation first.
+    if (!parseNet) {
+      // If it is not a protocol buffer, try to parse as a text format.
+      parseNet = parser.ParseFromString(buffer, &MP);
+    }
+    if (!parseNet) {
+      RETURN_ERR_IF_NOT(false, "Failed to parse ModelProto",
+                        ErrorValue::ErrorCode::MODEL_LOADER_INVALID_PROTOBUF);
+    }
     size_t numWeights = 0;
     auto numWeightsStr = zip.getRecord("weights");
     numWeights = atoi(numWeightsStr.c_str());
@@ -979,26 +1255,42 @@ ONNXModelLoader::loadProto(const std::string &filename, bool zipMode) {
   }
 
   std::ifstream ff(filename, std::ios::in | std::ios::binary);
-  RETURN_ERR_IF_NOT(ff,
-                    strFormat("Can't find the model or network files for %s.",
-                              filename.c_str()),
-                    ErrorValue::ErrorCode::MODEL_LOADER_INVALID_PROTOBUF);
+  if (inputStringPtr == nullptr) {
+    RETURN_ERR_IF_NOT(ff,
+                      strFormat("Can't find the model or network files for %s.",
+                                filename.c_str()),
+                      ErrorValue::ErrorCode::MODEL_LOADER_INVALID_PROTOBUF);
+  }
 
   // TODO: intend to find a way to reuse the following function later
   // for the text format onnx model:
   // bool ONNXModelLoader::loadProto(ONNX_NAMESPACE::GraphProto &net,
   //  google::protobuf::io::ZeroCopyInputStream &iStream)
   if (filename.find(".onnxtxt") != std::string::npos) {
-    std::string str((std::istreambuf_iterator<char>(ff)),
-                    std::istreambuf_iterator<char>());
-    ONNX_NAMESPACE::ModelProto MP;
-    bool parseNet = google::protobuf::TextFormat::ParseFromString(str, &MP);
+    if (inputStringPtr == nullptr) {
+      // Reserve a reasonably big buffer to make sure that reading of models
+      // with serialized constants is fast enough.
+      const std::streamsize bufferSize = 1024 * 1024 * 16;
+      std::vector<char> buffer(bufferSize);
+      ff.rdbuf()->pubsetbuf(buffer.data(), bufferSize);
+      std::stringstream ss;
+      ss << ff.rdbuf();
+      std::string str = ss.str();
+      parseNet = parser.ParseFromString(str, &MP);
+    } else {
+      parseNet = parser.ParseFromString(*inputStringPtr, &MP);
+    }
 
     RETURN_ERR_IF_NOT(parseNet, "Failed to parse ModelProto",
                       ErrorValue::ErrorCode::MODEL_LOADER_INVALID_PROTOBUF);
     return MP;
   }
 
+  if (inputStringPtr != nullptr) {
+    std::istringstream iss(*inputStringPtr);
+    google::protobuf::io::IstreamInputStream stringStream(&iss);
+    return loadProto(stringStream);
+  }
   google::protobuf::io::IstreamInputStream fileStream(&ff);
   return loadProto(fileStream);
 }
@@ -1030,14 +1322,24 @@ Expected<Pads> getPads(ArgumentDictionaryTy &dict,
     }
     return getShape<unsigned_t>(dict["pads"]);
   }
+
+  // Set the default zero pads. Number of pads is dependent on input dims
+  auto zeroPads = [idim]() {
+    if (idim.size() == 3) {
+      return Pads({0, 0, 0, 0, 0, 0});
+    } else {
+      return Pads({0, 0, 0, 0});
+    }
+  };
+
   if (dict.count("auto_pad")) {
     std::string padStr;
     ASSIGN_VALUE_OR_RETURN_ERR(padStr, loadStr(dict.at("auto_pad")));
     if (padStr == "VALID") {
       // Return default value 0 for pads.
-      return Pads({0, 0, 0, 0});
+      return zeroPads();
     } else if (padStr == "SAME_UPPER" || padStr == "SAME_LOWER") {
-      unsigned_t top, left, bottom, right;
+      unsigned_t near, far, top, left, bottom, right;
       // From https://arxiv.org/pdf/1603.07285.pdf 2.4,
       // o = floor((i + 2*p - k)/s) + 1
       // Also, from https://github.com/onnx/onnx/blob/master/docs/Operators.md
@@ -1047,32 +1349,75 @@ Expected<Pads> getPads(ArgumentDictionaryTy &dict,
       //     (output_spatial_shape[i] - 1) * strides_spatial_shape[i]
       //         + kernel_spatial_shape[i] - input_spatial_shape[i]
       // Use the smallest padding possible out of the possible options.
-      llvm::SmallVector<unsigned_t, 2> pdim(2); // Total Paddding, HW.
       unsigned_t odim;
-      for (size_t i = 0, e = pdim.size(); i < e; i++) {
-        odim = ceil<unsigned_t>((float)idim[i] / (float)sdim[i]);
-        pdim[i] = sdim[i] * (odim - 1) + kdim[i] - idim[i];
-      }
-      if (padStr == "SAME_UPPER") {
-        // SAME_UPPPER: if odd number for pdim[i], use extra padding at the end.
-        top = pdim[0] / 2;
-        bottom = top + (pdim[0] & 0x1);
-        left = pdim[1] / 2;
-        right = left + (pdim[1] & 0x1);
+      if (idim.size() == 2) {
+        llvm::SmallVector<unsigned_t, 2> pdim(2); // Total Paddding, HW.
+        for (size_t i = 0, e = pdim.size(); i < e; i++) {
+          odim = ceil<unsigned_t>((float)idim[i] / (float)sdim[i]);
+          pdim[i] = sdim[i] * (odim - 1) + kdim[i] - idim[i];
+        }
+        if (padStr == "SAME_UPPER") {
+          // SAME_UPPPER: if odd number for pdim[i], use extra padding at the
+          // end.
+          top = pdim[0] / 2;
+          bottom = top + (pdim[0] & 0x1);
+          left = pdim[1] / 2;
+          right = left + (pdim[1] & 0x1);
+        } else {
+          // SAME_LOWER: if odd number for pdim[i], use extra padding at the
+          // beginning.
+          bottom = pdim[0] / 2;
+          top = bottom + (pdim[0] & 0x1);
+          right = pdim[1] / 2;
+          left = right + (pdim[1] & 0x1);
+        }
+        return Pads({top, left, bottom, right});
+      } else if (idim.size() == 3) {
+        llvm::SmallVector<unsigned_t, 3> pdim(3); // Total Paddding, HW.
+        for (size_t i = 0, e = pdim.size(); i < e; i++) {
+          odim = ceil<unsigned_t>((float)idim[i] / (float)sdim[i]);
+          pdim[i] = sdim[i] * (odim - 1) + kdim[i] - idim[i];
+        }
+        if (padStr == "SAME_UPPER") {
+          // SAME_UPPPER: if odd number for pdim[i], use extra padding at the
+          // end.
+          near = pdim[0] / 2;
+          far = near + (pdim[0] & 0x1);
+          top = pdim[1] / 2;
+          bottom = top + (pdim[1] & 0x1);
+          left = pdim[2] / 2;
+          right = left + (pdim[2] & 0x1);
+        } else {
+          // SAME_LOWER: if odd number for pdim[i], use extra padding at the
+          // beginning.
+          far = pdim[0] / 2;
+          near = far + (pdim[0] & 0x1);
+          bottom = pdim[1] / 2;
+          top = bottom + (pdim[1] & 0x1);
+          right = pdim[2] / 2;
+          left = right + (pdim[2] & 0x1);
+        }
+        return Pads({near, top, left, far, bottom, right});
       } else {
-        // SAME_LOWER: if odd number for pdim[i], use extra padding at the
-        // beginning.
-        bottom = pdim[0] / 2;
-        top = bottom + (pdim[0] & 0x1);
-        right = pdim[1] / 2;
-        left = right + (pdim[1] & 0x1);
+        return MAKE_ERR("getPads only works for 2D or 3D");
       }
-      return Pads({top, left, bottom, right});
+    } else if (padStr == "NOTSET") {
+      // We use explicit pads (if not given we assume its all zeros).
+      if (dict.count("pads")) {
+        if (dict.at("pads")->ints_size() == 2) { // For maxPool1D
+          return Pads({0, (unsigned_t)dict.at("pads")->ints(0), 0,
+                       (unsigned_t)dict.at("pads")->ints(1)});
+        }
+        return getShape<unsigned_t>(dict["pads"]);
+      } else {
+        return zeroPads();
+      }
     }
-    RETURN_ERR("only auto_pad==VALID, SAME_UPPER and SAME_LOWER are supported");
+    return MAKE_ERR("Only auto_pad==VALID, SAME_UPPER, SAME_LOWER and NOTSET "
+                    "are supported");
   }
   // Return default value 0 for pads.
-  return Pads({0, 0, 0, 0});
+  return zeroPads();
 }
 
 /// Get the Pads value based on setting for auto_pad.
@@ -1081,13 +1426,13 @@ Expected<Pads> getPads(ArgumentDictionaryTy &dict,
 /// \p idim: input sizes (HW)
 static Expected<Pads> getConvTransposePadsfromOutput(
     ArgumentDictionaryTy &dict, llvm::ArrayRef<unsigned_t> kdim,
-    llvm::ArrayRef<unsigned_t> sdim, unsigned_t dilation,
+    llvm::ArrayRef<unsigned_t> sdim, llvm::ArrayRef<unsigned_t> dilation,
     llvm::ArrayRef<unsigned_t> idim, llvm::ArrayRef<unsigned_t> odim) {
 
   llvm::SmallVector<unsigned_t, 2> pdim(2); // Total Paddding, HW.
   for (size_t i = 0, e = pdim.size(); i < e; i++) {
     pdim[i] = sdim[i] * (idim[i] - 1) /* + output_padding[0]*/ +
-              ((kdim[i] - 1) * dilation + 1) - odim[i];
+              ((kdim[i] - 1) * dilation[i] + 1) - odim[i];
   }
 
   unsigned_t top, left, bottom, right;
@@ -1190,6 +1535,81 @@ static void helperSetter(Constant *constT, std::vector<datatype> &vec) {
   }
 }
 
+template <typename T>
+Error ONNXModelLoader::getRange(const ONNX_NAMESPACE::NodeProto &op,
+                                Constant *constT) {
+  T start = constT->getPayload().getHandle<T>().raw(0);
+
+  ASSIGN_VALUE_OR_RETURN_ERR(constT, getConstantByName(op.input(1)));
+  T limit = constT->getPayload().getHandle<T>().raw(0);
+
+  ASSIGN_VALUE_OR_RETURN_ERR(constT, getConstantByName(op.input(2)));
+  T delta = constT->getPayload().getHandle<T>().raw(0);
+
+  std::vector<T> rangeValues;
+  if (limit > start) {
+    RETURN_ERR_IF_NOT(delta > 0, "delta should be positive");
+    auto i = start;
+    while (i < limit) {
+      rangeValues.push_back(i);
+      i += delta;
+    }
+  } else if (limit < start) {
+    RETURN_ERR_IF_NOT(delta < 0, "delta should be negative");
+    auto i = start;
+    while (i > limit) {
+      rangeValues.push_back(i);
+      i += delta;
+    }
+  } else {
+    return MAKE_ERR("limit and start value should be different");
+  }
+
+  Tensor rangeTensor(constT->getElementType(),
+                     {static_cast<unsigned int>(rangeValues.size())});
+  rangeTensor.getHandle<T>() = rangeValues;
+  RETURN_IF_ERR(
+      createAndRegisterConstant(op.output(0), std::move(rangeTensor)));
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadRange(const ONNX_NAMESPACE::NodeProto &op,
+                                 ArgumentDictionaryTy &dict) {
+  Constant *constT;
+  ASSIGN_VALUE_OR_RETURN_ERR(constT, getConstantByName(op.input(0)));
+  auto glowType = constT->getElementType();
+  if (glowType == ElemKind::Int64ITy) {
+    return getRange<int64_t>(op, constT);
+  } else if (glowType == ElemKind::Int32ITy) {
+    return getRange<int32_t>(op, constT);
+  } else if (glowType == ElemKind::FloatTy) {
+    return getRange<float>(op, constT);
+  } else {
+    return MAKE_ERR("Data type not supported");
+  }
+}
+
+Error ONNXModelLoader::loadPRelu(const ONNX_NAMESPACE::NodeProto &op,
+                                 ArgumentDictionaryTy &dict) {
+  const std::string &opName = loadOperatorName(op);
+
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+
+  NodeValue slope;
+  ASSIGN_VALUE_OR_RETURN_ERR(slope, getNodeValueByName(op.input(1)));
+
+  // Do broadcasting.
+  auto targetDim = in.dims();
+  // Sets the axis of each inputs so that the trailing-most dimensions of
+  // input tensors and the target shape are aligned.
+  int axis = targetDim.size() - slope.dims().size();
+  auto *finalSlope = G_->createBroadcast(opName, slope, targetDim, axis);
+  auto *R = G_->createPRELU(opName, in, finalSlope);
+  RETURN_IF_ERR(addNodeAsOutput(op, R));
+  return Error::success();
+}
+
 Error ONNXModelLoader::loadSlice(const ONNX_NAMESPACE::NodeProto &op,
                                  ArgumentDictionaryTy &dict) {
   const std::string &opName = loadOperatorName(op);
@@ -1237,7 +1657,7 @@ Error ONNXModelLoader::loadSlice(const ONNX_NAMESPACE::NodeProto &op,
     if (op.input_size() > 3) {
       Constant *axesC = getConstantByNameOrNull(op.input(3));
 
-      RETURN_ERR_IF_NOT(startsC, opErrMsg(op, "Axes Tensor is not Constant."));
+      RETURN_ERR_IF_NOT(axesC, opErrMsg(op, "Axes Tensor is not Constant."));
 
       if (axesC->getElementType() == ElemKind::Int64ITy) {
         helperSetter<int64_t>(axesC, axes);
@@ -1252,11 +1672,31 @@ Error ONNXModelLoader::loadSlice(const ONNX_NAMESPACE::NodeProto &op,
                           axesC->getType()->getElementName().str().c_str())));
       }
 
-      RETURN_ERR_IF_NOT(
-          op.input_size() == 5,
-          opErrMsg(op, strFormat("Steps is not currently supported."
-                                 " but found stepo step size %d ",
-                                 op.input_size())));
+      if (op.input_size() > 4) {
+        std::vector<ssize_t> step;
+        Constant *stepC = getConstantByNameOrNull(op.input(4));
+
+        RETURN_ERR_IF_NOT(stepC, opErrMsg(op, "Step tensor is not Constant."));
+
+        if (stepC->getElementType() == ElemKind::Int64ITy) {
+          helperSetter<int64_t>(stepC, step);
+        } else if (stepC->getElementType() == ElemKind::Int32ITy) {
+          helperSetter<int32_t>(stepC, step);
+        } else {
+          RETURN_ERR_IF_NOT(
+              false,
+              opErrMsg(
+                  op,
+                  strFormat("Step Tensor has unsupported type '%s'",
+                            stepC->getType()->getElementName().str().c_str())));
+        }
+
+        // Step is interpreted 1 as default.
+        for (size_t i = 0; i < step.size(); i++) {
+          RETURN_ERR_IF_NOT(step[i] == 1,
+                            opErrMsg(op, "step!=1 is currently not supported"));
+        }
+      }
     }
   } else {
     // Attributes 'starts' and 'ends' are mandatory and must be consistent.
@@ -1304,10 +1744,6 @@ Error ONNXModelLoader::loadSlice(const ONNX_NAMESPACE::NodeProto &op,
                     opErrMsg(op, strFormat("'axes' %zu and 'starts' %zu must"
                                            "be the same size.",
                                            axes.size(), starts.size())));
-  RETURN_ERR_IF_NOT(starts.size() == ends.size(),
-                    opErrMsg(op, strFormat("'starts' %zu and 'ends' %zu must"
-                                           "be the same size.",
-                                           starts.size(), ends.size())));
   for (size_t i = 0; i < axes.size(); i++) {
     ssize_t newStart = starts[i];
     ssize_t newEnd = ends[i];
@@ -1376,6 +1812,36 @@ Error ONNXModelLoader::loadTrigonometricOps(const std::string &typeName,
   return Error::success();
 }
 
+Error ONNXModelLoader::loadErf(const ONNX_NAMESPACE::NodeProto &op,
+                               const ArgumentDictionaryTy &dict) {
+  const std::string &opName = loadOperatorName(op);
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+  Node *N = G_->createErf(opName, in);
+  RETURN_IF_ERR(addNodeAsOutput(op, N));
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadConv(const ONNX_NAMESPACE::NodeProto &op,
+                                ArgumentDictionaryTy &dict) {
+  // Load the inputs
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+
+  if (in.dims().size() == 3) {
+    return loadConv1D(op, dict);
+  } else if (in.dims().size() == 4) {
+    return loadConv2D(op, dict);
+  } else if (in.dims().size() == 5) {
+    return loadConv3D(op, dict);
+  } else {
+    return MAKE_ERR(strFormat(
+        "Only 1D (3 dims), 2D (4 dims) and 3D (5 dims) convolution are "
+        "supported by the ONNX loader but there are %zu input dims.",
+        in.dims().size()));
+  }
+}
+
 Error ONNXModelLoader::loadConv1D(const ONNX_NAMESPACE::NodeProto &op,
                                   ArgumentDictionaryTy &dict) {
   const std::string &opName = loadOperatorName(op);
@@ -1390,8 +1856,13 @@ Error ONNXModelLoader::loadConv1D(const ONNX_NAMESPACE::NodeProto &op,
     ASSIGN_VALUE_OR_RETURN_ERR(group, loadInt(dict.at("group")));
   }
 
-  unsigned_t dilation =
-      dict.count("dilations") ? dict.at("dilations")->ints(0) : 1;
+  std::vector<unsigned_t> dilations;
+  ASSIGN_VALUE_OR_RETURN_ERR(dilations,
+                             getDilations(dict, std::vector<unsigned_t>{1, 1}));
+  // Expand dilations to length 2 since Glow treat conv1D as conv2D
+  if (dilations.size() == 1) {
+    dilations.push_back(dilations[0]);
+  }
 
   // Load the inputs
   NodeValue in;
@@ -1415,20 +1886,20 @@ Error ONNXModelLoader::loadConv1D(const ONNX_NAMESPACE::NodeProto &op,
   dim_t depth = filterTransposedValue.dims()[0];
 
   // Construct the Bias field.
-  Constant *bias = nullptr;
-
+  NodeValue B;
   // Check if we have a serialized bias vector.
   if (op.input_size() > 2) {
     auto &biasTensorName = op.input(2);
-    // Load the serialized bias vector.
-    ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(biasTensorName));
+    // Load the serialized bias vector as NodeValue.
+    ASSIGN_VALUE_OR_RETURN_ERR(B, getNodeValueByName(biasTensorName));
   }
 
   // If a serialized bias wasn't found then create a zero bias.
-  if (!bias) {
-    Tensor biasTensor(ElemKind::FloatTy, {depth});
+  if (op.input_size() == 2) {
+    auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth});
+    Tensor biasTensor(biasTy);
     biasTensor.zero();
-    bias = mod_.createConstant("conv.bias", std::move(biasTensor));
+    B = mod_.createConstant("conv.bias", std::move(biasTensor));
   }
 
   // ONNX passes the input as NCHW, and we expect the input to be NHWC.
@@ -1448,11 +1919,11 @@ Error ONNXModelLoader::loadConv1D(const ONNX_NAMESPACE::NodeProto &op,
 
   ASSIGN_VALUE_OR_RETURN_ERR(pads, getPads(dict, kernelShape, strides, idimHW));
   auto outSz = calculateConvPoolOutputDims(idim.h, idim.w, kernelShape, strides,
-                                           pads, dilation);
+                                           pads, dilations);
   std::array<dim_t, 4> outDims = {{idim.n, outSz.first, outSz.second, depth}};
-  auto outTy = mod_.uniqueType(ElemKind::FloatTy, outDims);
-  auto *node = G_->createConv(opName, tr, filterTransposeNode, bias, outTy,
-                              kernelShape, strides, pads, group, dilation);
+  auto outTy = mod_.uniqueTypeWithNewShape(in.getType(), outDims);
+  auto *node = G_->createConv(opName, tr, filterTransposeNode, B, outTy,
+                              kernelShape, strides, pads, group, dilations);
 
   auto *N = G_->createSqueeze(opName, node, 1 /*axes*/);
   // Transpose the output back
@@ -1461,17 +1932,13 @@ Error ONNXModelLoader::loadConv1D(const ONNX_NAMESPACE::NodeProto &op,
   return Error::success();
 }
 
-Error ONNXModelLoader::loadConv(const ONNX_NAMESPACE::NodeProto &op,
-                                ArgumentDictionaryTy &dict) {
+Error ONNXModelLoader::loadConv2D(const ONNX_NAMESPACE::NodeProto &op,
+                                  ArgumentDictionaryTy &dict) {
   const std::string &opName = loadOperatorName(op);
 
   // Load the inputs
   NodeValue in;
   ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
-
-  if (in.dims().size() == 3) {
-    return loadConv1D(op, dict);
-  }
 
   NodeValue filterValue;
   ASSIGN_VALUE_OR_RETURN_ERR(filterValue, getNodeValueByName(op.input(1)));
@@ -1486,60 +1953,36 @@ Error ONNXModelLoader::loadConv(const ONNX_NAMESPACE::NodeProto &op,
     ASSIGN_VALUE_OR_RETURN_ERR(group, loadInt(dict.at("group")));
   }
 
-  unsigned_t dilation = 1;
-  if (dict.count("dilations")) {
-    std::vector<unsigned_t> dilations(2, 1);
-    ASSIGN_VALUE_OR_RETURN_ERR(dilations,
-                               getShape<unsigned_t>(dict["dilations"]));
-    RETURN_ERR_IF_NOT(
-        dilations.size() == 2,
-        opErrMsg(op, strFormat("Conv dilations must be specified for 2 axes "
-                               " found axes %zu",
-                               dilations.size())));
-    RETURN_ERR_IF_NOT(
-        dilations[1] == dilations[0],
-        opErrMsg(op,
-                 strFormat("Conv different dilation values %u and %u "
-                           " along different axes are not supported currently."
-                           " values must be same.",
-                           dilations[0], dilations[1])));
-    dilation = dilations[0];
-  }
+  std::vector<unsigned_t> dilations;
+  ASSIGN_VALUE_OR_RETURN_ERR(dilations,
+                             getDilations(dict, std::vector<unsigned_t>{1, 1}));
+  RETURN_ERR_IF_NOT(
+      dilations.size() == 2,
+      opErrMsg(op, strFormat("2D Conv dilations must be specified for 2 axes "
+                             " found axes %zu",
+                             dilations.size())));
 
   // jeman 20210701
   dim_t depth1 = filterValue.dims()[0];
 
   // Construct the Bias field.
-  // Constant *bias= nullptr;
   NodeValue bias;
-
   // Check if we have a serialized bias vector.
   if (op.input_size() > 2) {
     auto &biasTensorName = op.input(2);
-    // Load the serialized bias vector.
-    ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(biasTensorName));
+    // Load the serialized bias vector as NodeValue.
+    ASSIGN_VALUE_OR_RETURN_ERR(bias, getNodeValueByName(biasTensorName));
   }
 
   // If a serialized bias wasn't found then create a zero bias.
-  if (!bias) {
-    Tensor biasTensor(ElemKind::FloatTy, {depth1});
+  if (op.input_size() == 2) {
+    auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth1});
+    Tensor biasTensor(biasTy);
     biasTensor.zero();
     bias = mod_.createConstant("conv.bias", std::move(biasTensor));
   }
 
-  //    Tensor biasTensor1(ElemKind::FloatTy, {depth1});
-  //    biasTensor1 = bias->getPayload().getData();
-  //    std::cout << "!!!! " << bias->payload_.data_[0] << std::endl;
-
   // jeman 20210622 - channel padding 16X
-  // group
-  //    auto pOpName =  opName.data();
-  //    if (group >1){
-  //        printf("%s\n",pOpName);
-  //        //printf("%s (nGroup=%d)\n",pOpName,group);
-  //    }
-  // std::cout << "!!!! " << group << std::endl;
-
   if (npuConvFitting > 0) {
     int vta_conv_value = npuConvFitting;
     // printf("mooyaaho %d", vta_conv_value);
@@ -1712,22 +2155,22 @@ Error ONNXModelLoader::loadConv(const ONNX_NAMESPACE::NodeProto &op,
     (void)kernelShapeAttribute; // Avoids compilation warning in release mode.
   }
 
-  //  // Construct the Bias field.
-  //  Constant *bias = nullptr;
-  //
-  //  // Check if we have a serialized bias vector.
-  //  if (op.input_size() > 2) {
-  //    auto &biasTensorName = op.input(2);
-  //    // Load the serialized bias vector.
-  //    ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(biasTensorName));
-  //  }
-  //
-  //  // If a serialized bias wasn't found then create a zero bias.
-  //  if (!bias) {
-  //    Tensor biasTensor(ElemKind::FloatTy, {depth});
-  //    biasTensor.zero();
-  //    bias = mod_.createConstant("conv.bias", std::move(biasTensor));
-  //  }
+  // // Construct the Bias field.
+  // NodeValue B;
+  // // Check if we have a serialized bias vector.
+  // if (op.input_size() > 2) {
+  //   auto &biasTensorName = op.input(2);
+  //   // Load the serialized bias vector as NodeValue.
+  //   ASSIGN_VALUE_OR_RETURN_ERR(B, getNodeValueByName(biasTensorName));
+  // }
+
+  // // If a serialized bias wasn't found then create a zero bias.
+  // if (op.input_size() == 2) {
+  //   auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth});
+  //   Tensor biasTensor(biasTy);
+  //   biasTensor.zero();
+  //   B = mod_.createConstant("conv.bias", std::move(biasTensor));
+  // }
 
   // ONNX passes the input as NCHW, and we expect the input to be NHWC.
   auto *tr = G_->createTranspose(opName, in, NCHW2NHWC);
@@ -1744,15 +2187,150 @@ Error ONNXModelLoader::loadConv(const ONNX_NAMESPACE::NodeProto &op,
   ASSIGN_VALUE_OR_RETURN_ERR(pads, getPads(dict, kernelShape, strides, idimHW));
 
   auto outSz = calculateConvPoolOutputDims(idim.h, idim.w, kernelShape, strides,
-                                           pads, dilation);
+                                           pads, dilations);
   std::array<dim_t, 4> outDims = {{idim.n, outSz.first, outSz.second, depth}};
-  auto outTy = mod_.uniqueType(ElemKind::FloatTy, outDims);
+  auto outTy = mod_.uniqueTypeWithNewShape(in.getType(), outDims);
 
-  auto *node = G_->createConv(opName, tr, filterTransposeNode, bias, outTy,
-                              kernelShape, strides, pads, group, dilation);
+  auto *node = G_->createConv(opName, tr, filterTransposedValue, bias, outTy,
+                              kernelShape, strides, pads, group, dilations);
 
   // Transpose the output back.
   auto *N = G_->createTranspose(opName, node, NHWC2NCHW);
+
+  RETURN_IF_ERR(addNodeAsOutput(op, N));
+
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadConv3D(const ONNX_NAMESPACE::NodeProto &op,
+                                  ArgumentDictionaryTy &dict) {
+  const std::string &opName = loadOperatorName(op);
+
+  // Load the inputs
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+
+  NodeValue filterValue;
+  ASSIGN_VALUE_OR_RETURN_ERR(filterValue, getNodeValueByName(op.input(1)));
+
+  // Load the attributes
+  std::vector<unsigned_t> strides(3, 1);
+  if (dict.count("strides")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(strides, getShape<unsigned_t>(dict["strides"]));
+  }
+  unsigned_t group = 1;
+  if (dict.count("group")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(group, loadInt(dict.at("group")));
+  }
+
+  std::vector<unsigned_t> dilations(3, 1);
+  if (dict.count("dilations")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(
+        dilations, getDilations(dict, std::vector<unsigned_t>{1, 1, 1}));
+    RETURN_ERR_IF_NOT(
+        dilations.size() == 3,
+        opErrMsg(op, strFormat("3D Conv dilations must be specified for 3 axes "
+                               "found %zu axes",
+                               dilations.size())));
+    RETURN_ERR_IF_NOT(
+        dilations[0] == 1 && dilations[1] == 1 && dilations[2] == 1,
+        opErrMsg(op, strFormat("3D Conv dilations currently only support "
+                               "the default value of [1, 1, 1] but the model "
+                               "contains [%u, %u, %u]",
+                               dilations[0], dilations[1], dilations[2])));
+  }
+
+  // Transpose the filter to the right format. Glow expects to read the
+  // weights in the format CRSK. ONNX stores the operators as KCRS.
+  // C - output_depth, R - filter_height, S - filter_width, K - input_depth.
+  TransposeNode *filterTransposeNode =
+      G_->createTranspose(opName, filterValue, NCTHW2NTHWC);
+
+  // The structure of the conv weights is: CRSK. We take the C, which is the
+  // number of filters. We use this value to calculate the size of the bias
+  // if it is not specified.
+  const NodeValue filterTransposedValue = filterTransposeNode->getResult();
+  dim_t depth = filterTransposedValue.dims()[0];
+
+  // Get the kernel shape from the input.
+  llvm::SmallVector<unsigned_t, 3> kernelShape(3);
+  kernelShape[0] = filterTransposedValue.dims()[1];
+  kernelShape[1] = filterTransposedValue.dims()[2];
+  kernelShape[2] = filterTransposedValue.dims()[3];
+
+  // Extra check when the 'kernel_shape' attribute exists.
+  // The 'kernel_shape' attribute is redundant not mandatory.
+  if (dict.count("kernel_shape")) {
+    std::vector<unsigned_t> kernelShapeAttribute;
+    ASSIGN_VALUE_OR_RETURN_ERR(kernelShapeAttribute,
+                               getShape<unsigned_t>(dict["kernel_shape"]));
+    RETURN_ERR_IF_NOT(
+        (kernelShape[0] == kernelShapeAttribute[0] &&
+         kernelShape[1] == kernelShapeAttribute[1] &&
+         kernelShape[2] == kernelShapeAttribute[2]),
+        opErrMsg(
+            op,
+            strFormat(
+                "The 'kernel_shape' attribute [%d, %d, %d] is not consistent "
+                "with the actual convolution kernel shape [%d, %d, %d].",
+                kernelShapeAttribute[0], kernelShapeAttribute[1],
+                kernelShapeAttribute[2], kernelShape[0], kernelShape[1],
+                kernelShape[2])));
+    (void)kernelShapeAttribute; // Avoids compilation warning in release mode.
+  }
+
+  // Construct the Bias field.
+  NodeValue B;
+  // Check if we have a serialized bias vector.
+  if (op.input_size() > 2) {
+    auto &biasTensorName = op.input(2);
+    // Load the serialized bias vector as NodeValue.
+    ASSIGN_VALUE_OR_RETURN_ERR(B, getNodeValueByName(biasTensorName));
+  }
+
+  // If a serialized bias wasn't found then create a zero bias.
+  if (op.input_size() == 2) {
+    auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth});
+    Tensor biasTensor(biasTy);
+    biasTensor.zero();
+    B = mod_.createConstant("conv.bias", std::move(biasTensor));
+  }
+
+  // ONNX passes the input as NCTHW, and we expect the input to be NTHWC.
+  auto *tr = G_->createTranspose(opName, in, NCTHW2NTHWC);
+
+  // Calculate the size and allocate the output buffer.
+  ShapeNTHWC idim(tr->getResult().dims());
+
+  llvm::SmallVector<unsigned_t, 3> idimTHW(3);
+  idimTHW = {static_cast<glow::unsigned_t>(idim.t),
+             static_cast<glow::unsigned_t>(idim.h),
+             static_cast<glow::unsigned_t>(idim.w)};
+
+  // Pads : {pad_near, pad_top, pad_left, pad_far, pad_bottom, pad_right}
+  Pads tmpPads;
+  ASSIGN_VALUE_OR_RETURN_ERR(tmpPads,
+                             getPads(dict, kernelShape, strides, idimTHW));
+
+  // Transpose padding from NTLFBR, which is the ONNX specified layout, to
+  // NFTBLR, which is the glow internal layout per the interpreter
+  // implementation.
+
+  Pads pads = {tmpPads[0], tmpPads[3], tmpPads[1],
+               tmpPads[4], tmpPads[2], tmpPads[5]};
+
+  auto outSz = calculate3DConvPoolOutputDims(idim.t, idim.h, idim.w,
+                                             kernelShape, strides, pads);
+  std::array<dim_t, 5> outDims = {
+      {idim.n, outSz.temporal_frames, outSz.height, outSz.width, depth}};
+  auto outTy = mod_.uniqueTypeWithNewShape(in.getType(), outDims);
+
+  auto *node = G_->createConv3D(opName, tr, filterTransposeNode, B, outTy,
+                                kernelShape, strides, pads, group);
+
+  // Transpose the output back.
+  auto *N = G_->createTranspose(opName, node, NTHWC2NCTHW);
+
   RETURN_IF_ERR(addNodeAsOutput(op, N));
 
   return Error::success();
@@ -1824,10 +2402,9 @@ Error ONNXModelLoader::loadChannelwiseQuantizedConvolution(
   unsigned_t group;
   ASSIGN_VALUE_OR_RETURN_ERR(group, loadInt(dict.at("group")));
 
-  unsigned_t dilation = 1;
-  if (dict.count("dilation")) {
-    ASSIGN_VALUE_OR_RETURN_ERR(dilation, loadInt(dict.at("dilation")));
-  }
+  std::vector<unsigned_t> dilations;
+  ASSIGN_VALUE_OR_RETURN_ERR(dilations,
+                             getDilations(dict, std::vector<unsigned_t>{1, 1}));
 
   float outScale;
   ASSIGN_VALUE_OR_RETURN_ERR(outScale, loadFloat(dict.at("out_scale")));
@@ -1847,7 +2424,7 @@ Error ONNXModelLoader::loadChannelwiseQuantizedConvolution(
   auto *node = G_->createChannelwiseQuantizedConv(
       opName, input, filterValue, biasValue, scalesValue, offsetsValue,
       /* biasScales */ nullptr, /* biasOffsets */ nullptr, outTy, kernels,
-      strides, pads, group, dilation, /* quantizeFilter */ true,
+      strides, pads, group, dilations, /* quantizeFilter */ true,
       /* quantizeBias */ false);
 
   return addNodeAsOutput(op, node);
@@ -1866,25 +2443,13 @@ Error ONNXModelLoader::loadConvTranspose(const ONNX_NAMESPACE::NodeProto &op,
     ASSIGN_VALUE_OR_RETURN_ERR(group, loadInt(dict.at("group")));
   }
 
-  unsigned_t dilation = 1;
-  if (dict.count("dilations")) {
-    std::vector<unsigned_t> dilations;
-    ASSIGN_VALUE_OR_RETURN_ERR(dilations,
-                               getShape<unsigned_t>(dict["dilations"]));
-    RETURN_ERR_IF_NOT(dilations.size() == 2,
-                      opErrMsg(op, strFormat("ConvTranspose dilations must be "
-                                             "specified for 2 axes, found %zu ",
-                                             dilations.size())));
-    ;
-    RETURN_ERR_IF_NOT(
-        dilations[1] == dilations[0],
-        opErrMsg(op,
-                 strFormat("ConvTranspose different dilation values %u and %u "
-                           "along different axes "
-                           "are not supported currently. values must be same.",
-                           dilations[0], dilations[1])));
-    dilation = dilations[0];
-  }
+  std::vector<unsigned_t> dilations;
+  ASSIGN_VALUE_OR_RETURN_ERR(dilations,
+                             getDilations(dict, std::vector<unsigned_t>{1, 1}));
+  RETURN_ERR_IF_NOT(dilations.size() == 2,
+                    opErrMsg(op, strFormat("ConvTranspose dilations must be "
+                                           "specified for 2 axes, found %zu ",
+                                           dilations.size())));
 
   // Load the inputs
   NodeValue in;
@@ -1926,20 +2491,20 @@ Error ONNXModelLoader::loadConvTranspose(const ONNX_NAMESPACE::NodeProto &op,
   }
 
   // Construct the Bias field.
-  Constant *bias = nullptr;
-
+  NodeValue B;
   // Check if we have a serialized bias vector.
   if (op.input_size() > 2) {
     auto &biasTensorName = op.input(2);
-    // Load the serialized bias vector.
-    bias = getConstantByNameOrNull(biasTensorName);
+    // Load the serialized bias vector as constant or NodeValue.
+    ASSIGN_VALUE_OR_RETURN_ERR(B, getNodeValueByName(biasTensorName));
   }
 
   // If a serialized bias wasn't found then create a zero bias.
-  if (!bias) {
-    Tensor biasTensor(ElemKind::FloatTy, {depth});
+  if (op.input_size() == 2) {
+    auto biasTy = mod_.uniqueTypeWithNewShape(in.getType(), {depth});
+    Tensor biasTensor(biasTy);
     biasTensor.zero();
-    bias = mod_.createConstant("conv.bias", std::move(biasTensor));
+    B = mod_.createConstant("conv.bias", std::move(biasTensor));
   }
 
   // ONNX passes the input as NCHW, and we expect the input to be NHWC.
@@ -1964,12 +2529,12 @@ Error ONNXModelLoader::loadConvTranspose(const ONNX_NAMESPACE::NodeProto &op,
     ASSIGN_VALUE_OR_RETURN_ERR(outShape,
                                getShape<unsigned_t>(dict["output_shape"]));
     ASSIGN_VALUE_OR_RETURN_ERR(
-        pads, getConvTransposePadsfromOutput(dict, kernels, strides, dilation,
+        pads, getConvTransposePadsfromOutput(dict, kernels, strides, dilations,
                                              idimHW, outShape));
     outSz = {outShape[0], outShape[1]};
 
     std::pair<dim_t, dim_t> outSzTest = calculateConvTransposeOutputDims(
-        idim.h, idim.w, kernels, strides, pads, dilation);
+        idim.h, idim.w, kernels, strides, pads, dilations);
     RETURN_ERR_IF_NOT(
         (outShape[0] == outSzTest.first),
         opErrMsg(op, strFormat("ConvTranspose Expected %d /calculated %d "
@@ -1993,14 +2558,14 @@ Error ONNXModelLoader::loadConvTranspose(const ONNX_NAMESPACE::NodeProto &op,
     }
     ASSIGN_VALUE_OR_RETURN_ERR(pads, getPads(dict, kernels, strides, idimHW));
     outSz = calculateConvTransposeOutputDims(idim.h, idim.w, kernels, strides,
-                                             pads, dilation);
+                                             pads, dilations);
   }
   std::array<dim_t, 4> outDims = {{idim.n, outSz.first, outSz.second, depth}};
-  auto outTy = mod_.uniqueType(ElemKind::FloatTy, outDims);
+  auto outTy = mod_.uniqueTypeWithNewShape(in.getType(), outDims);
 
   auto *node =
-      G_->createConvTranspose(opName, tr, filterTransposeNode, bias, outTy,
-                              kernels, strides, pads, group, dilation);
+      G_->createConvTranspose(opName, tr, filterTransposeNode, B, outTy,
+                              kernels, strides, pads, group, dilations);
 
   // Transpose the output back.
   auto *N = G_->createTranspose(opName, node, NHWC2NCHW);
@@ -2038,10 +2603,11 @@ Error ONNXModelLoader::loadPool(const ONNX_NAMESPACE::NodeProto &op,
   if (inDim == 3) {
     in = G_->createExpandDims(opName, in, 2);
     if (kerDim != 1) {
-      RETURN_ERR(opErrMsg(op, strFormat("Glow handles 1D pooling with kernel "
-                                        "dimenstion size 1, but found %d ",
-                                        int(kerDim))),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_SHAPE);
+      return MAKE_ERR(
+          opErrMsg(op, strFormat("Glow handles 1D pooling with kernel "
+                                 "dimenstion size 1, but found %d ",
+                                 int(kerDim))),
+          ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_SHAPE);
     } else {
       if (dict.count("strides")) {
         strides[1] = dict.at("strides")->ints(0);
@@ -2060,8 +2626,8 @@ Error ONNXModelLoader::loadPool(const ONNX_NAMESPACE::NodeProto &op,
 
   if (in.dims().size() != 4 || kernels.size() != 2) {
     // Glow only handles 2D pooling currently.
-    RETURN_ERR(opErrMsg(op, "Glow only handles 2D pooling currently."),
-               ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_SHAPE);
+    return MAKE_ERR(opErrMsg(op, "Glow only handles 2D pooling currently."),
+                    ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_SHAPE);
   }
 
   auto *tr = G_->createTranspose(opName, in, NCHW2NHWC);
@@ -2085,7 +2651,7 @@ Error ONNXModelLoader::loadPool(const ONNX_NAMESPACE::NodeProto &op,
   Node *node = nullptr;
   if (op.output_size() > 1) {
     if (typeName != "MaxPool") {
-      RETURN_ERR(
+      return MAKE_ERR(
           opErrMsg(op, "Pool Argmax output is only supported for MaxPool!"),
           ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_OPERATOR);
     }
@@ -2135,7 +2701,7 @@ Error ONNXModelLoader::loadTensorwiseQuantizedPool(
 
   if (in.dims().size() != 4 || kernels.size() != 2) {
     // Glow only handles 2D pooling currently.
-    RETURN_ERR(
+    return MAKE_ERR(
         opErrMsg(op, strFormat("TensorwiseQuantizedPool Glow only handles 2D "
                                "pooling currently, but found kernel %zu ",
                                kernels.size())),
@@ -2156,9 +2722,10 @@ Error ONNXModelLoader::loadTensorwiseQuantizedPool(
 
   if (op.output_size() > 1) {
     if (typeName != "MaxPool") {
-      RETURN_ERR(opErrMsg(op, "TensorwiseQuantizedPool Argmax output is only "
-                              "supported for MaxPool!"),
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_OPERATOR);
+      return MAKE_ERR(opErrMsg(op,
+                               "TensorwiseQuantizedPool Argmax output is only "
+                               "supported for MaxPool!"),
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_OPERATOR);
     }
 
     Node *maxpool = G_->createMaxPool(opName, in, kernels, strides, pads);
@@ -2227,7 +2794,6 @@ Error ONNXModelLoader::loadUpsample(const ONNX_NAMESPACE::NodeProto &op,
                     opErrMsg(op, strFormat("UpSample Operator has nearest mode "
                                            "support only, found mode '%s' ",
                                            mode.c_str())));
-  ;
 
   /// Scale is always float as per onnx documentation
   std::vector<float> scales;
@@ -2238,8 +2804,9 @@ Error ONNXModelLoader::loadUpsample(const ONNX_NAMESPACE::NodeProto &op,
       /// and if not present then onnx.checker.check_model file check to fail
       ASSIGN_VALUE_OR_RETURN_ERR(scales, getFloats(dict["scales"]));
     } else {
-      RETURN_ERR(opErrMsg(op, "UpSample Scales field is not present, expected "
-                              "for Upsample opset_version==7"));
+      return MAKE_ERR(opErrMsg(op,
+                               "UpSample Scales field is not present, expected "
+                               "for Upsample opset_version==7"));
     }
   }
 
@@ -2247,8 +2814,9 @@ Error ONNXModelLoader::loadUpsample(const ONNX_NAMESPACE::NodeProto &op,
     Constant *scale;
     ASSIGN_VALUE_OR_RETURN_ERR(scale, getConstantByName(op.input(1)));
     if (scale->getElementType() != ElemKind::FloatTy) {
-      RETURN_ERR(opErrMsg(op, "UpSample Scales Tensor should have float type "
-                              "for opset_version > 7"));
+      return MAKE_ERR(opErrMsg(op,
+                               "UpSample Scales Tensor should have float type "
+                               "for opset_version > 7"));
     }
     auto constH = scale->getPayload().getHandle<float>();
     for (dim_t i = 0; i < constH.size(); ++i) {
@@ -2256,12 +2824,15 @@ Error ONNXModelLoader::loadUpsample(const ONNX_NAMESPACE::NodeProto &op,
     }
   }
 
-  /// NCHW2NHWC. scales tensor format is NHWC.
+  /// Scales tensor format is NHWC for supported modes other than nearest.
+  /// For nearest mode scale can be 4D or 5D.
   RETURN_ERR_IF_NOT(
-      scales.size() == 4,
-      opErrMsg(op,
-               strFormat("UpSample Scales dimension should be 4, but found %zu",
-                         scales.size())));
+      (scales.size() >= 4 && scales.size() <= 5 && mode == "nearest") ||
+          scales.size() == 4,
+      opErrMsg(
+          op, strFormat(
+                  "UpSample Scales dimension invalid. Mode: %s Scale Size: %zu",
+                  mode.c_str(), scales.size())));
 
   for (auto &val : scales) {
     RETURN_ERR_IF_NOT(
@@ -2271,13 +2842,28 @@ Error ONNXModelLoader::loadUpsample(const ONNX_NAMESPACE::NodeProto &op,
                                int(val))));
   }
 
-  vectorReorder(scales, {NHWC2NCHW});
+  switch (scales.size()) {
+  case 4: {
+    vectorReorder(scales, {NHWC2NCHW});
+    auto *intr = G_->createTranspose(opName, in, NCHW2NHWC);
+    auto *node = G_->createResizeNearest(opName, intr, scales);
+    auto *N = G_->createTranspose(opName, node, NHWC2NCHW);
+    RETURN_IF_ERR(addNodeAsOutput(op, N));
+    return Error::success();
+  }
+  case 5: {
+    vectorReorder(scales, {NTHWC2NCTHW});
 
-  auto *intr = G_->createTranspose(opName, in, NCHW2NHWC);
-  auto *node = G_->createResizeNearest(opName, intr, scales);
-  auto *N = G_->createTranspose(opName, node, NHWC2NCHW);
-  RETURN_IF_ERR(addNodeAsOutput(op, N));
-  return Error::success();
+    auto *intr = G_->createTranspose(opName, in, NCTHW2NTHWC);
+    auto *node = G_->createResizeNearest(opName, intr, scales);
+    auto *N = G_->createTranspose(opName, node, NTHWC2NCTHW);
+    RETURN_IF_ERR(addNodeAsOutput(op, N));
+    return Error::success();
+  }
+  default:
+    RETURN_ERR_IF_NOT(
+        false, opErrMsg(op, strFormat("UpSample Scales dimension invalid")));
+  }
 }
 
 Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
@@ -2304,7 +2890,7 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
       opErrMsg(op, strFormat("Resize Scales Tensor '%s' is not Constant.",
                              op.input(scalesIdx).c_str())));
   if (scalesC->getElementType() != ElemKind::FloatTy) {
-    RETURN_ERR(opErrMsg(
+    return MAKE_ERR(opErrMsg(
         op, strFormat(
                 "Resize Scales Tensor should have float type, but found '%s' ",
                 scalesC->getType()->getElementName().str().c_str())));
@@ -2343,9 +2929,10 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
       ASSIGN_VALUE_OR_RETURN_ERR(nearestMode, loadStr(dict.at("nearest_mode")));
     }
     if (modeStr == "nearest" && nearestMode != "floor") {
-      RETURN_ERR(opErrMsg(op, strFormat("Resize 'floor' and 'nearest' mode "
-                                        "supported only, but found mode '%s' ",
-                                        modeStr.c_str())));
+      return MAKE_ERR(
+          opErrMsg(op, strFormat("Resize 'floor' and 'nearest' mode "
+                                 "supported only, but found mode '%s' ",
+                                 modeStr.c_str())));
     }
     // attribute: coordinate_transformation_mode.
     std::string coordTransformMode = "half_pixel";
@@ -2354,10 +2941,11 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
           coordTransformMode,
           loadStr(dict.at("coordinate_transformation_mode")));
     }
-    RETURN_ERR_IF_NOT(coordTransformMode == "asymmetric",
-                      opErrMsg(op,
-                               "Resize 'asymmetric' coordinate transformation "
-                               "mode supported only."));
+    RETURN_ERR_IF_NOT(
+        coordTransformMode == "asymmetric",
+        opErrMsg(op, strFormat("Resize 'asymmetric' coordinate transformation "
+                               "mode supported only, but found %s",
+                               coordTransformMode.c_str())));
 
     // If no scales tensor, sizes tensor should be valid.
     if (scalesC->getPayload().getHandle().size() == 0) {
@@ -2393,7 +2981,6 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
       for (dim_t i = 0; i < sizesH.size(); ++i) {
         outDims.push_back(sizesH.at({i}));
       }
-      vectorReorder(outDims, {NHWC2NCHW});
     } else {
       RETURN_ERR_IF_NOT(
           op.input_size() == 3,
@@ -2401,9 +2988,7 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
     }
   } // v11 processing.
 
-  auto *intr = G_->createTranspose(opName, in, NCHW2NHWC);
-
-  Node *RN = nullptr;
+  NodeValue outtr = nullptr;
   auto scalesH = scalesC->getPayload().getHandle();
 
   // Check is scales is not empty - if yes, use it.
@@ -2412,12 +2997,15 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
       scales.push_back(scalesH.at({i}));
     }
 
-    /// NCHW2NHWC. scales tensor format is NHWC.
+    // Scales tensor format is NHWC for supported modes other than nearest.
+    // For nearest mode scale can be 3D, 4D, 5D, or 6D.
     RETURN_ERR_IF_NOT(
-        scales.size() == 4,
-        opErrMsg(op,
-                 strFormat("Resize Scales dimension should be 4, but found %zu",
-                           scales.size())));
+        (scales.size() >= 3 && scales.size() <= 6 && modeStr == "nearest") ||
+            scales.size() == 4,
+        opErrMsg(
+            op, strFormat(
+                    "Resize Scales dimension invalid. Mode: %s Scale Size: %zu",
+                    modeStr.c_str(), scales.size())));
 
     for (auto &val : scales) {
       RETURN_ERR_IF_NOT(
@@ -2429,28 +3017,34 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
                   int(val))));
     }
 
-    vectorReorder(scales, {NHWC2NCHW});
-
     if (modeStr == "nearest") {
-      RN = G_->createResizeNearest(opName, intr, scales);
+      outtr = G_->createResizeNearest(opName, in, scales);
     } else if (modeStr == "bilinear" || modeStr == "linear") {
-      RN = G_->createResizeBilinear(opName, intr, scales);
+      vectorReorder(scales, {NHWC2NCHW});
+      auto *intr = G_->createTranspose(opName, in, NCHW2NHWC);
+      auto RN = G_->createResizeBilinear(opName, intr, scales);
+      outtr = G_->createTranspose(opName, RN, NHWC2NCHW);
     } else {
-      RETURN_ERR(
+      return MAKE_ERR(
           opErrMsg(op, strFormat("Resize Supports nearest or bilinear "
                                  "interpolation only, but found mode as '%s' ",
                                  modeStr.c_str())),
           ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
     }
   } else if (outDims.size()) {
-    auto outTy = G_->getParent()->uniqueTypeWithNewShape(
-        intr->getResult().getType(), llvm::ArrayRef<dim_t>(outDims));
     if (modeStr == "nearest") {
-      RN = G_->createResizeNearest(opName, intr, outTy);
+      auto outTy = G_->getParent()->uniqueTypeWithNewShape(
+          in.getType(), llvm::ArrayRef<dim_t>(outDims));
+      outtr = G_->createResizeNearest(opName, in, outTy);
     } else if (modeStr == "bilinear" || modeStr == "linear") {
-      RN = G_->createResizeBilinear(opName, intr, outTy);
+      vectorReorder(outDims, {NHWC2NCHW});
+      auto outTy = G_->getParent()->uniqueTypeWithNewShape(
+          in.getType(), llvm::ArrayRef<dim_t>(outDims));
+      auto *intr = G_->createTranspose(opName, in, NCHW2NHWC);
+      auto RN = G_->createResizeBilinear(opName, intr, outTy);
+      outtr = G_->createTranspose(opName, RN, NHWC2NCHW);
     } else {
-      RETURN_ERR(
+      return MAKE_ERR(
           opErrMsg(op, strFormat(
                            "Supporting nearest or (bi)linear interpolation only"
                            " but found mode '%s' ",
@@ -2458,11 +3052,9 @@ Error ONNXModelLoader::loadResize(const ONNX_NAMESPACE::NodeProto &op,
           ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
     }
   } else {
-    RETURN_ERR(opErrMsg(op, "Resize Neither scales or sizes are set."),
-               ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
+    return MAKE_ERR(opErrMsg(op, "Resize Neither scales or sizes are set."),
+                    ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
   }
-
-  auto *outtr = G_->createTranspose(opName, RN, NHWC2NCHW);
 
   RETURN_IF_ERR(addNodeAsOutput(op, outtr));
   return Error::success();
@@ -2541,22 +3133,22 @@ Error ONNXModelLoader::loadBatchNormalization(
 
   NodeValue in;
   ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
-  Constant *scale;
-  ASSIGN_VALUE_OR_RETURN_ERR(scale, getConstantByName(op.input(1)));
-  Constant *bias;
-  ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(op.input(2)));
-  Constant *mean;
-  ASSIGN_VALUE_OR_RETURN_ERR(mean, getConstantByName(op.input(3)));
-  Constant *var;
-  ASSIGN_VALUE_OR_RETURN_ERR(var, getConstantByName(op.input(4)));
+  NodeValue scale;
+  ASSIGN_VALUE_OR_RETURN_ERR(scale, getNodeValueByName(op.input(1)));
+  NodeValue bias;
+  ASSIGN_VALUE_OR_RETURN_ERR(bias, getNodeValueByName(op.input(2)));
+  NodeValue mean;
+  ASSIGN_VALUE_OR_RETURN_ERR(mean, getNodeValueByName(op.input(3)));
+  NodeValue var;
+  ASSIGN_VALUE_OR_RETURN_ERR(var, getNodeValueByName(op.input(4)));
   float epsilon = 1e-5f; // default
   auto epsilonIt = dict.find("epsilon");
   if (epsilonIt != dict.end()) {
     ASSIGN_VALUE_OR_RETURN_ERR(epsilon, loadFloat(epsilonIt->second));
   }
 
-  auto *node = G_->createBatchNormalization(opName, in, bias, scale, mean, var,
-                                            1, epsilon);
+  auto *node = G_->createBatchNormalization(opName, in.getType(), in, bias,
+                                            scale, mean, var, 1, epsilon);
 
   // BatchNormalization has 4 optional outputs that are not supported by glow.
   // Then: 1/ In case the optional outputs are present and used by other
@@ -2564,6 +3156,30 @@ Error ONNXModelLoader::loadBatchNormalization(
   // optional outputs are declared but not used, the import should succeed. By
   // registering only the mandatory output, we make sure the import will fail if
   // the non supported features are actually requested by the ONNX model.
+  RETURN_IF_ERR(addNodeAsOutput(op, node, 1));
+
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadInstanceNormalization(
+    const ONNX_NAMESPACE::NodeProto &op, ArgumentDictionaryTy &dict) {
+  const std::string &opName = loadOperatorName(op);
+
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+  NodeValue scale;
+  ASSIGN_VALUE_OR_RETURN_ERR(scale, getNodeValueByName(op.input(1)));
+  NodeValue bias;
+  ASSIGN_VALUE_OR_RETURN_ERR(bias, getNodeValueByName(op.input(2)));
+
+  float epsilon = 1e-5f; // default
+  auto epsilonIt = dict.find("epsilon");
+  if (epsilonIt != dict.end()) {
+    ASSIGN_VALUE_OR_RETURN_ERR(epsilon, loadFloat(epsilonIt->second));
+  }
+
+  auto *node =
+      G_->createInstanceNormalization(opName, in, bias, scale, 1, epsilon);
   RETURN_IF_ERR(addNodeAsOutput(op, node, 1));
 
   return Error::success();
@@ -2604,7 +3220,7 @@ Error ONNXModelLoader::loadFCTransposed(const ONNX_NAMESPACE::NodeProto &op,
       ASSIGN_VALUE_OR_RETURN_ERR(
           axis, loadAxis<size_t>(dict.at("axis"), in.dims().size()));
     }
-    in = G_->createFlatten("fc.in", in, axis);
+    in = G_->createFlatten(opName + ".fc.in", in, axis);
   }
 
   unsigned_t axis_w = 1;
@@ -2680,14 +3296,48 @@ Error ONNXModelLoader::loadMatMul(const ONNX_NAMESPACE::NodeProto &op,
   NodeValue RHS;
   ASSIGN_VALUE_OR_RETURN_ERR(RHS, getNodeValueByName(op.input(1)));
 
-  /// For dimension size equal to 3 use batchedMatMul
-  if (LHS.dims().size() == 3) {
+  /// For dimension greater than 2 use batchedMatMul
+  if (LHS.dims().size() > 2) {
     Node *node = G_->createBatchMatMul(opName, LHS, RHS);
+    const size_t numDimsLHS = LHS.dims().size();
+    if (numDimsLHS > 3) {
+      const size_t numDimsRHS = RHS.dims().size();
+      std::vector<dim_t> finalShape;
+      for (auto d : LHS.dims()) {
+        finalShape.push_back(d);
+      }
+      finalShape[numDimsLHS - 1] = RHS.dims()[numDimsRHS - 1];
+      node = G_->createReshape(opName, node, finalShape);
+    }
     RETURN_IF_ERR(addNodeAsOutput(op, node));
   } else {
     Node *node = G_->createMatMul(opName, LHS, RHS);
     RETURN_IF_ERR(addNodeAsOutput(op, node));
   }
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadHardSigmoid(const ONNX_NAMESPACE::NodeProto &op,
+                                       ArgumentDictionaryTy &dict) {
+  const std::string &opName = loadOperatorName(op);
+
+  // Input Type.
+  NodeValue input;
+  ASSIGN_VALUE_OR_RETURN_ERR(input, getNodeValueByName(op.input(0)));
+
+  float alphaVal = 0.2f;
+  if (dict.count("alpha")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(alphaVal, loadFloat(dict.at("alpha")));
+  }
+  float betaVal = 0.5f;
+  if (dict.count("beta")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(betaVal, loadFloat(dict.at("beta")));
+  }
+
+  // Create the node.
+  Node *N = G_->createHardSigmoid(opName, input, alphaVal, betaVal);
+  RETURN_IF_ERR(addNodeAsOutput(op, N));
+
   return Error::success();
 }
 
@@ -2698,12 +3348,6 @@ Error ONNXModelLoader::loadLeakyRelu(const ONNX_NAMESPACE::NodeProto &op,
   // Input Type.
   NodeValue input;
   ASSIGN_VALUE_OR_RETURN_ERR(input, getNodeValueByName(op.input(0)));
-  ElemKind inputType = input.getType()->getElementType();
-
-  // Only supports float types.
-  RETURN_ERR_IF_NOT(isFloatElemKind(inputType),
-                    opErrMsg(op, "LeakyRelu: Unsupported Type for LeakyRelu "
-                                 "(Supports only Float types)"));
 
   // ONNX spec says default is 0.01, but doesn't explicitly say it's optional.
   // like for others. The default example just omits alpha.
@@ -2726,8 +3370,8 @@ Error ONNXModelLoader::loadPad(const ONNX_NAMESPACE::NodeProto &op,
   // Input
   NodeValue input;
   ASSIGN_VALUE_OR_RETURN_ERR(input, getNodeValueByName(op.input(0)));
-  auto DataDims = input.dims();
-  auto numDims = DataDims.size();
+  auto inputDims = input.dims();
+  auto numDims = inputDims.size();
 
   // Padding properties.
   unsigned_t mode = PaddingMode::CONSTANT; // default is constant.
@@ -2741,30 +3385,57 @@ Error ONNXModelLoader::loadPad(const ONNX_NAMESPACE::NodeProto &op,
     } else if (modeStr == "edge") {
       mode = PaddingMode::EDGE;
     } else {
-      RETURN_ERR("Pad: Invalid mode",
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
+      return MAKE_ERR(
+          "Pad: Invalid mode",
+          ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
     }
   }
-  float value = 0.f; // Default
-  if (dict.count("value")) {
-    ASSIGN_VALUE_OR_RETURN_ERR(value, loadFloat(dict.at("value")));
+
+  std::vector<int> pads;
+
+  if (this->opsetVersion_ > 10) {
+    // Get pads through input(1) from opset v11.
+    RETURN_ERR_IF_NOT(
+        op.input_size() > 1,
+        "Pad: The 'pads' is mandatory as input(1) from opsetv11.");
+    Constant *padC;
+    ASSIGN_VALUE_OR_RETURN_ERR(padC, getConstantByName(op.input(1)));
+    RETURN_ERR_IF_NOT(padC, "Support only constant pad");
+    helperSetter<int64_t, int>(padC, pads);
+  } else {
+    RETURN_ERR_IF_NOT(dict.count("pads"),
+                      "Pad: The 'pads' property is mandatory");
+    ASSIGN_VALUE_OR_RETURN_ERR(pads, getShape<int>(dict["pads"]));
   }
 
-  // Pads are mandatory.
-  std::vector<int> pads;
-  ASSIGN_VALUE_OR_RETURN_ERR(pads, getShape<int>(dict["pads"]));
   RETURN_ERR_IF_NOT(
       (pads.size() == 2 * numDims),
       opErrMsg(op, " The 'pads' array must contain 2 values per dimensions"));
 
+  float value = 0.f;
+  if (this->opsetVersion_ > 10) {
+    if (op.input_size() > 2) {
+      Constant *valueC;
+      ASSIGN_VALUE_OR_RETURN_ERR(valueC, getConstantByName(op.input(2)));
+      RETURN_ERR_IF_NOT(valueC, "Support only constant value in Pad");
+      RETURN_ERR_IF_NOT(valueC->getElementType() == ElemKind::FloatTy,
+                        "Value in Pad should be float type.");
+      value = valueC->getPayload().getHandle().raw(0);
+    }
+  } else {
+    if (dict.count("value")) {
+      ASSIGN_VALUE_OR_RETURN_ERR(value, loadFloat(dict.at("value")));
+    }
+  }
+
   // Compute the output type.
   std::vector<dim_t> outDims(numDims);
   for (unsigned_t i = 0; i < numDims; i++) {
-    auto data_new_channel_size = DataDims[i] + pads[i] + pads[i + numDims];
+    auto new_dim = inputDims[i] + pads[i] + pads[i + numDims];
     RETURN_ERR_IF_NOT(
-        data_new_channel_size > 0,
+        new_dim > 0,
         opErrMsg(op, "The padding can't remove all elements of a dimension"));
-    outDims[i] = data_new_channel_size;
+    outDims[i] = new_dim;
   }
   auto outTy = mod_.uniqueType(ElemKind::FloatTy, outDims);
 
@@ -2811,6 +3482,38 @@ Error ONNXModelLoader::loadCast(const ONNX_NAMESPACE::NodeProto &op,
   return Error::success();
 }
 
+Error ONNXModelLoader::loadDepthToSpace(const ONNX_NAMESPACE::NodeProto &op,
+                                        const ArgumentDictionaryTy &dict) {
+  NodeValue input;
+  ASSIGN_VALUE_OR_RETURN_ERR(input, getNodeValueByName(op.input(0)));
+
+  dim_t blockSize = 0;
+  if (dict.count("blocksize")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(blockSize, loadInt(dict.at("blocksize")));
+  } else {
+    return MAKE_ERR("DepthToSpace: missing 'blocksize' attribute");
+  }
+
+  std::string mode = "DCR";
+  if (dict.count("mode")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(mode, loadStr(dict.at("mode")));
+  }
+
+  auto inputDim = input.dims();
+  RETURN_ERR_IF_NOT(inputDim.size() == 4,
+                    "DepthToSpace: dimension size of 4 is expected.");
+  RETURN_ERR_IF_NOT(inputDim[1] % blockSize == 0,
+                    "DepthToSpace: depth should be divisible by block size.");
+
+  std::string opName = loadOperatorName(op);
+  auto *TR1 = G_->createTranspose(opName, input, NCHW2NHWC);
+  auto *D2S = G_->createDepthToSpace(opName, TR1, blockSize, mode == "CRD");
+  auto *TR2 = G_->createTranspose(opName, D2S, NHWC2NCHW);
+
+  RETURN_IF_ERR(addNodeAsOutput(op, TR2));
+  return Error::success();
+}
+
 Error ONNXModelLoader::loadSpaceToDepth(const ONNX_NAMESPACE::NodeProto &op,
                                         ArgumentDictionaryTy &dict) {
 
@@ -2822,7 +3525,8 @@ Error ONNXModelLoader::loadSpaceToDepth(const ONNX_NAMESPACE::NodeProto &op,
   if (dict.count("blocksize")) {
     ASSIGN_VALUE_OR_RETURN_ERR(blockSize, loadInt(dict.at("blocksize")));
   } else {
-    RETURN_ERR(opErrMsg(op, "SpaceToDepth: missing 'blocksize' attribute"));
+    return MAKE_ERR(
+        opErrMsg(op, "SpaceToDepth: missing 'blocksize' attribute"));
   }
 
   // Create the node.
@@ -2852,8 +3556,8 @@ Error ONNXModelLoader::loadReduceL2(const ONNX_NAMESPACE::NodeProto &op,
     if (shapeAxes.size() > 1) {
       auto it = std::unique(shapeAxes.begin(), shapeAxes.end());
       if (it != shapeAxes.end())
-        RETURN_ERR(opErrMsg(op, "ReduceL2 Axes values are not unique."),
-                   ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_SHAPE);
+        return MAKE_ERR(opErrMsg(op, "ReduceL2 Axes values are not unique."),
+                        ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_SHAPE);
     }
   } else {
     shapeAxes.resize(in.dims().size());
@@ -2965,16 +3669,16 @@ Error ONNXModelLoader::loadTile(const ONNX_NAMESPACE::NodeProto &op,
   ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
   ASSIGN_VALUE_OR_RETURN_ERR(repeats, getNodeValueByName(op.input(1)));
   if (!llvm::isa<Constant>(repeats)) {
-    RETURN_ERR(opErrMsg(op, "Tile Only constant Repeats is supported!"));
+    return MAKE_ERR(opErrMsg(op, "Tile Only constant Repeats is supported!"));
   }
 
   if (repeats.dims().size() != 1) {
-    RETURN_ERR(
+    return MAKE_ERR(
         opErrMsg(op, "Tile Repeats must be a single-dimensional tensor!"));
   }
 
   if (repeats.dims()[0] != in.dims().size()) {
-    RETURN_ERR(opErrMsg(
+    return MAKE_ERR(opErrMsg(
         op, "Tile Repeats should have one value for each dimension of input!"));
   }
   auto rh = llvm::cast<Constant>(repeats)->getPayload().getHandle<int64_t>();
@@ -2999,12 +3703,12 @@ Error ONNXModelLoader::loadExpand(const ONNX_NAMESPACE::NodeProto &op,
   ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
   ASSIGN_VALUE_OR_RETURN_ERR(repeats, getConstantByName(op.input(1)));
 
-  std::vector<int64_t> tiles;
-  helperSetter<int64_t, int64_t>(repeats, tiles);
-  auto DataDimsize = (size_t)in.dims().size();
+  std::vector<dim_t> tiles;
+  helperSetter<int64_t, dim_t>(repeats, tiles);
+  auto inputDimSize = (size_t)in.dims().size();
   auto repeatSize = (size_t)tiles.size();
-  if (repeatSize > DataDimsize) {
-    for (size_t i = 0, e = repeatSize - DataDimsize; i < e; i++) {
+  if (repeatSize > inputDimSize) {
+    for (size_t i = 0, e = repeatSize - inputDimSize; i < e; i++) {
       in = G_->createExpandDims(opName + "_" + std::to_string(i), in, i);
     }
   }
@@ -3014,7 +3718,7 @@ Error ONNXModelLoader::loadExpand(const ONNX_NAMESPACE::NodeProto &op,
     // Two corresponding dimension must have the same value,
     // or one of them is equal to 1.
     if (in.dims()[i] != 1 && tiles[i] != in.dims()[i] && tiles[i] != 1) {
-      RETURN_ERR(opErrMsg(op, "Expand Invalid repeat value"));
+      return MAKE_ERR(opErrMsg(op, "Expand Invalid repeat value"));
     }
     if (tiles[i] != in.dims()[i] && tiles[i] != 1) {
       std::string name = opName + "_" + std::to_string(i);
@@ -3097,8 +3801,9 @@ getRnnDirection(const ONNX_NAMESPACE::NodeProto &op,
     } else if (directionStr == "bidirectional") {
       direction = Function::RnnDirection::Bidirectional;
     } else {
-      RETURN_ERR("ONNX " + op.op_type() + " 'direction' attribute is invalid!",
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
+      return MAKE_ERR(
+          "ONNX " + op.op_type() + " 'direction' attribute is invalid!",
+          ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
     }
   }
   return direction;
@@ -3162,9 +3867,10 @@ getRnnActivations(const ONNX_NAMESPACE::NodeProto &op,
       } else if (actStr == "Sigmoid") {
         activations[actIdx] = RnnActivationSigmoid(*F);
       } else {
-        RETURN_ERR("ONNX " + op.op_type() + " activation '" + actStr +
-                       "' not supported!",
-                   ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
+        return MAKE_ERR(
+            "ONNX " + op.op_type() + " activation '" + actStr +
+                "' not supported!",
+            ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_ATTRIBUTE);
       }
     }
   }
@@ -3232,10 +3938,9 @@ Error ONNXModelLoader::loadRNN(const ONNX_NAMESPACE::NodeProto &op,
   }
 
   // Input4: sequence_lens (Optional).
-  if (numInputs > 4) {
-    RETURN_ERR_IF_NOT(
-        op.input(4).empty(),
-        opErrMsg(op, "ONNX RNN 'sequence_lens' attribute not supported!"));
+  if (numInputs > 4 && !op.input(4).empty()) {
+    LOG(WARNING) << "sequence_lens ignored, will be inferred from shape of "
+                    "ONNX RNN input.";
   }
 
   // Input5: initial_h (Optional).
@@ -3292,9 +3997,9 @@ Error ONNXModelLoader::loadRNN(const ONNX_NAMESPACE::NodeProto &op,
   } else if (numOutputs == 2) {
     RETURN_IF_ERR(assignNodeOutputs(op, {Y, Y_h}));
   } else {
-    RETURN_ERR(opErrMsg(op, strFormat("ONNX RNN should have minimum 1 and "
-                                      "maximum 2 outputs, but found %d ",
-                                      numOutputs)));
+    return MAKE_ERR(opErrMsg(op, strFormat("ONNX RNN should have minimum 1 and "
+                                           "maximum 2 outputs, but found %d ",
+                                           numOutputs)));
   }
   return Error::success();
 }
@@ -3369,10 +4074,9 @@ Error ONNXModelLoader::loadGRU(const ONNX_NAMESPACE::NodeProto &op,
   }
 
   // Input4: sequence_lens (Optional).
-  if (numInputs > 4) {
-    RETURN_ERR_IF_NOT(
-        op.input(4).empty(),
-        opErrMsg(op, "ONNX GRU 'sequence_lens' attribute not supported!"));
+  if (numInputs > 4 && !op.input(4).empty()) {
+    LOG(WARNING) << "sequence_lens ignored, will be inferred from shape of "
+                    "ONNX GRU input.";
   }
 
   // Input5: initial_h (Optional).
@@ -3429,9 +4133,9 @@ Error ONNXModelLoader::loadGRU(const ONNX_NAMESPACE::NodeProto &op,
   } else if (numOutputs == 2) {
     RETURN_IF_ERR(assignNodeOutputs(op, {Y, Y_h}));
   } else {
-    RETURN_ERR(opErrMsg(op, strFormat("ONNX GRU should have minimum 1 and "
-                                      "maximum 2 outputs, but found %d ",
-                                      numOutputs)));
+    return MAKE_ERR(opErrMsg(op, strFormat("ONNX GRU should have minimum 1 and "
+                                           "maximum 2 outputs, but found %d ",
+                                           numOutputs)));
   }
   return Error::success();
 }
@@ -3507,10 +4211,9 @@ Error ONNXModelLoader::loadLSTM(const ONNX_NAMESPACE::NodeProto &op,
   }
 
   // Input4: sequence_lens (Optional).
-  if (numInputs > 4) {
-    RETURN_ERR_IF_NOT(
-        op.input(4).empty(),
-        opErrMsg(op, "ONNX LSTM 'sequence_lens' attribute not supported!"));
+  if (numInputs > 4 && !op.input(4).empty()) {
+    LOG(WARNING) << "sequence_lens ignored, will be inferred from shape of "
+                    "ONNX LSTM input.";
   }
 
   // Input5: initial_h (Optional).
@@ -3594,9 +4297,10 @@ Error ONNXModelLoader::loadLSTM(const ONNX_NAMESPACE::NodeProto &op,
   } else if (numOutputs == 3) {
     RETURN_IF_ERR(assignNodeOutputs(op, {Y, Y_h, Y_c}));
   } else {
-    RETURN_ERR(opErrMsg(op, strFormat("ONNX LSTM should have minimum 1 and "
-                                      "maximum 3 outputs, but found %d ",
-                                      numOutputs)));
+    return MAKE_ERR(
+        opErrMsg(op, strFormat("ONNX LSTM should have minimum 1 and "
+                               "maximum 3 outputs, but found %d ",
+                               numOutputs)));
   }
   return Error::success();
 }
@@ -3607,7 +4311,8 @@ Error ONNXModelLoader::loadClip(const ONNX_NAMESPACE::NodeProto &op,
   ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
 
   float cmin = std::numeric_limits<float>::lowest();
-  if (opsetVersion_ > 10 && op.input_size() > 1) {
+  if (opsetVersion_ > 10 && op.input_size() > 1 && !op.input(1).empty()) {
+    // min value is optional and might not be supplied.
     Constant *minC = getConstantByNameOrNull(op.input(1));
     RETURN_ERR_IF_NOT(minC, "Expect constant for min value in Clip operator.");
     cmin = minC->getPayload().getHandle().raw(0);
@@ -3618,7 +4323,8 @@ Error ONNXModelLoader::loadClip(const ONNX_NAMESPACE::NodeProto &op,
   // Windows headers define `max` macro, so have to wrap the function name in
   // parenthesis to avoid compilation error.
   float cmax = (std::numeric_limits<float>::max)();
-  if (opsetVersion_ > 10 && op.input_size() > 2) {
+  if (opsetVersion_ > 10 && op.input_size() > 2 && !op.input(2).empty()) {
+    // max value is optional and might not be supplied.
     Constant *maxC = getConstantByNameOrNull(op.input(2));
     RETURN_ERR_IF_NOT(maxC, "Expect constant for max value in Clip operator.");
     cmax = maxC->getPayload().getHandle().raw(0);
@@ -3798,9 +4504,9 @@ Error ONNXModelLoader::loadNonZero(const ONNX_NAMESPACE::NodeProto &op,
   } else if (C->getElementType() == ElemKind::Int32ITy) {
     RETURN_IF_ERR(foldNonZero((int32_t)0));
   } else {
-    RETURN_ERR(opErrMsg(op,
-                        "NonZero: Unsupported input type for NonZero operator."
-                        "(Supports Float, Int32 and Int64)"));
+    return MAKE_ERR(
+        opErrMsg(op, "NonZero: Unsupported input type for NonZero operator."
+                     "(Supports Float, Int32 and Int64)"));
   }
 
   Constant *outC = G_->getParent()->createConstant("nonZero", std::move(outT));
@@ -3824,6 +4530,76 @@ Error ONNXModelLoader::loadQuantize(const ONNX_NAMESPACE::NodeProto &op,
 
   auto outDims = in.getType()->dims();
   auto outTy = mod_.uniqueType(elemKind, outDims, scale, offset);
+  Node *N = G_->createQuantize(loadOperatorName(op), in, outTy);
+
+  RETURN_IF_ERR(addNodeAsOutput(op, N));
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadQuantizeLinear(const ONNX_NAMESPACE::NodeProto &op,
+                                          ArgumentDictionaryTy &dict) {
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+
+  // Onnx documentation expects input to be Float or Int32.
+  if (!(in.getElementType() == ElemKind::FloatTy ||
+        in.getElementType() == ElemKind::Int32ITy)) {
+    return MAKE_ERR(
+        opErrMsg(op, "QuantizeLinear supports input to be Float or Int32."));
+  }
+
+  // Only scale with constant is supported.
+  Constant *scale;
+  ASSIGN_VALUE_OR_RETURN_ERR(scale, getConstantByName(op.input(1)));
+
+  // Glow supports only per layer scale.
+  if (!((scale->getType()->dims().size() == 1 &&
+         scale->getType()->dims()[0] == 1) ||
+        scale->getType()->dims().size() == 0)) {
+    return MAKE_ERR(opErrMsg(op, "QuantizeLinear: y_scale scalar value is only"
+                                 " supported."));
+  }
+
+  float scaleValue = scale->getPayload().getHandle<float>().raw(0);
+
+  // Default values as per Onnx documentation.
+  int32_t offsetValue = 0;
+  auto type = ElemKind::UInt8QTy;
+
+  // Check if we have a offset vector.
+  if (op.input_size() > 2) {
+    auto &offsetTensorName = op.input(2);
+    // Only offset with constant is supported.
+    Constant *offset = nullptr;
+    // Load the serialized offset vector.
+    ASSIGN_VALUE_OR_RETURN_ERR(offset, getConstantByName(offsetTensorName));
+    if (!((offset->getType()->dims().size() == 1 &&
+           offset->getType()->dims()[0] == 1) ||
+          offset->getType()->dims().size() == 0)) {
+      return MAKE_ERR(
+          opErrMsg(op, "QuantizeLinear: y_zero_point scalar value is only"
+                       " supported."));
+    }
+
+    type = offset->getElementType();
+    // Only uint8 and int8 values are supported as per onnx.
+    if (type == ElemKind::UInt8QTy) {
+      offsetValue = static_cast<int32_t>(
+          offset->getPayload().getHandle<uint8_t>().raw(0));
+    } else if (type == ElemKind::Int8QTy) {
+      offsetValue =
+          static_cast<int32_t>(offset->getPayload().getHandle<int8_t>().raw(0));
+    } else {
+      // This condition is hit when there is onnx graph creation issue or
+      // constant is not created correctly.
+      return MAKE_ERR(
+          opErrMsg(op, "QuantizeLinear: Supports only uint8 or int8 data in"
+                       " y_zero_point"));
+    }
+  }
+
+  auto outDims = in.getType()->dims();
+  auto outTy = mod_.uniqueType(type, outDims, scaleValue, offsetValue);
   Node *N = G_->createQuantize(loadOperatorName(op), in, outTy);
 
   RETURN_IF_ERR(addNodeAsOutput(op, N));
@@ -3904,7 +4680,7 @@ Error ONNXModelLoader::loadCumSum(const ONNX_NAMESPACE::NodeProto &op,
         RETURN_ERR_IF_NOT(AC->getHandle<int32_t>().at(0) == 0,
                           opErrMsg(op, "CumSum only supports axis == 0"));
       } else {
-        RETURN_ERR(opErrMsg(op, "Axis must be Constant"));
+        return MAKE_ERR(opErrMsg(op, "Axis must be Constant"));
       }
 
       // Axis default is 0, which is fine.
@@ -3923,7 +4699,9 @@ Error ONNXModelLoader::loadCumSum(const ONNX_NAMESPACE::NodeProto &op,
     ASSIGN_VALUE_OR_RETURN_ERR(reverse, loadInt(dict.at("reverse")));
   }
 
-  Node *N = G_->createCumSum(loadOperatorName(op), input, exclusive, reverse);
+  // TODO: add axis/dim support
+  Node *N =
+      G_->createCumSum(loadOperatorName(op), input, 0, exclusive, reverse);
   RETURN_IF_ERR(addNodeAsOutput(op, N));
   return Error::success();
 }
@@ -3948,16 +4726,34 @@ Error ONNXModelLoader::loadIntLookupTable(const ONNX_NAMESPACE::NodeProto &op,
   NodeValue in;
   ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
 
-  std::vector<int8_t> values;
-  ASSIGN_VALUE_OR_RETURN_ERR(values, getShape<int8_t>(dict["values"]));
-  std::vector<dim_t> shape;
-  ASSIGN_VALUE_OR_RETURN_ERR(shape, getShape<dim_t>(dict["shape"]));
+  if (in.getType()->getElementType() == ElemKind::Int8QTy) {
+    std::vector<int8_t> values;
+    ASSIGN_VALUE_OR_RETURN_ERR(values, getShape<int8_t>(dict["values"]));
+    std::vector<dim_t> shape;
+    ASSIGN_VALUE_OR_RETURN_ERR(shape, getShape<dim_t>(dict["shape"]));
 
-  auto outTy = mod_.uniqueType(in.getElementType(), shape);
-  Node *N = G_->createIntLookupTable(loadOperatorName(op), in, values, outTy);
+    auto outTy = mod_.uniqueType(in.getElementType(), shape);
+    Node *N = G_->createIntLookupTable<int8_t>(loadOperatorName(op), in, values,
+                                               outTy);
 
-  RETURN_IF_ERR(addNodeAsOutput(op, N));
-  return Error::success();
+    RETURN_IF_ERR(addNodeAsOutput(op, N));
+    return Error::success();
+  } else if (in.getType()->getElementType() == ElemKind::Int16QTy) {
+    std::vector<int16_t> values;
+    ASSIGN_VALUE_OR_RETURN_ERR(values, getShape<int16_t>(dict["values"]));
+    std::vector<dim_t> shape;
+    ASSIGN_VALUE_OR_RETURN_ERR(shape, getShape<dim_t>(dict["shape"]));
+
+    auto outTy = mod_.uniqueType(in.getElementType(), shape);
+    Node *N = G_->createIntLookupTable<int16_t>(loadOperatorName(op), in,
+                                                values, outTy);
+
+    RETURN_IF_ERR(addNodeAsOutput(op, N));
+    return Error::success();
+  } else {
+    return MAKE_ERR(strFormat("Lookup table type '%s' not supported!",
+                              in.getType()->getElementName().str().c_str()));
+  }
 }
 
 Error ONNXModelLoader::loadLengthsRangeFill(const ONNX_NAMESPACE::NodeProto &op,
@@ -4063,13 +4859,10 @@ Error ONNXModelLoader::loadFullyConnected(const ONNX_NAMESPACE::NodeProto &op,
                                           ArgumentDictionaryTy &dict) {
   NodeValue in;
   ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
-  Constant *W;
-  ASSIGN_VALUE_OR_RETURN_ERR(W, getConstantByName(op.input(1)));
-  Constant *B = getConstantByNameOrNull(op.input(2));
+  NodeValue w;
+  ASSIGN_VALUE_OR_RETURN_ERR(w, getNodeValueByName(op.input(1)));
   NodeValue b;
-  if (!B) {
-    ASSIGN_VALUE_OR_RETURN_ERR(b, getNodeValueByName(op.input(2)));
-  }
+  ASSIGN_VALUE_OR_RETURN_ERR(b, getNodeValueByName(op.input(2)));
 
   unsigned_t axis = 1;
   if (dict.count("axis")) {
@@ -4077,8 +4870,7 @@ Error ONNXModelLoader::loadFullyConnected(const ONNX_NAMESPACE::NodeProto &op,
         axis, loadAxis<unsigned_t>(dict.at("axis"), in.dims().size()));
   }
 
-  Node *N =
-      G_->createFullyConnected(loadOperatorName(op), in, W, B ? B : b, axis);
+  Node *N = G_->createFullyConnected(loadOperatorName(op), in, w, b, axis);
 
   RETURN_IF_ERR(addNodeAsOutput(op, N));
   return Error::success();
@@ -4115,7 +4907,8 @@ Error ONNXModelLoader::loadRowwiseQuantizedFullyConnected(
                       outScale, outOffset);
 
   Node *N = G_->createRowwiseQuantizedFullyConnected(
-      "rowwise_quantized_fc", input, weightsC, scalesC, offsetsC, biasC, outTy);
+      loadOperatorName(op) + ".rowwise_quantized_fc", input, weightsC, scalesC,
+      offsetsC, biasC, outTy);
 
   return addNodeAsOutput(op, N);
 }
@@ -4127,9 +4920,40 @@ Error ONNXModelLoader::loadNonMaxSuppression(
   ASSIGN_VALUE_OR_RETURN_ERR(boxesNV, getNodeValueByName(op.input(0)));
   NodeValue scoresNV;
   ASSIGN_VALUE_OR_RETURN_ERR(scoresNV, getNodeValueByName(op.input(1)));
-  Constant *maxOutputBoxesPerClassC = getConstantByNameOrNull(op.input(2));
-  Constant *iouThresholdC = getConstantByNameOrNull(op.input(3));
-  Constant *scoreThresholdC = getConstantByNameOrNull(op.input(4));
+  unsigned maxOutputBoxesPerClass = 0;
+  Constant *maxOutputBoxesPerClassC = nullptr;
+  if (op.input_size() > 2 && !op.input(2).empty()) {
+    maxOutputBoxesPerClassC = getConstantByNameOrNull(op.input(2));
+    RETURN_ERR_IF_NOT(maxOutputBoxesPerClassC,
+                      "NMS: maxOutputBoxesPerClass is not a constant tensor.");
+    if (maxOutputBoxesPerClassC->getPayload().getElementType() ==
+        ElemKind::Int64ITy) {
+      maxOutputBoxesPerClass =
+          maxOutputBoxesPerClassC->getPayload().getHandle<int64_t>().raw(0);
+    } else if (maxOutputBoxesPerClassC->getPayload().getElementType() ==
+               ElemKind::Int32ITy) {
+      maxOutputBoxesPerClass =
+          maxOutputBoxesPerClassC->getPayload().getHandle<int32_t>().raw(0);
+    } else {
+      return MAKE_ERR("NMS: Unsupported type for maxoutputboxesperclass.");
+    }
+  }
+  float iouThreshold = 0.0f;
+  Constant *iouThresholdC = nullptr;
+  if (op.input_size() > 3 && !op.input(3).empty()) {
+    iouThresholdC = getConstantByNameOrNull(op.input(3));
+    RETURN_ERR_IF_NOT(iouThresholdC,
+                      "NMS: iouThreshold is not a constant tensor.");
+    iouThreshold = iouThresholdC->getPayload().getHandle<float>().raw(0);
+  }
+  float scoreThreshold = 0.0f;
+  Constant *scoreThresholdC = nullptr;
+  if (op.input_size() > 4 && !op.input(4).empty()) {
+    scoreThresholdC = getConstantByNameOrNull(op.input(4));
+    RETURN_ERR_IF_NOT(scoreThresholdC,
+                      "NMS: scoreThreshold is not a constant tensor.");
+    scoreThreshold = scoreThresholdC->getPayload().getHandle<float>().raw(0);
+  }
 
   // Defaults to 0 which is the same representation as TF.
   unsigned centerPointBox = 0;
@@ -4150,40 +4974,6 @@ Error ONNXModelLoader::loadNonMaxSuppression(
     RETURN_ERR_IF_NOT(
         padToMaxOutputSize == 1,
         opErrMsg(op, "NonMaxSuppressionV4 does not support non-padding mode."));
-  }
-
-  unsigned maxOutputBoxesPerClass = 0;
-  float iouThreshold = 0.0f;
-  float scoreThreshold = 0.0f;
-
-  if (maxOutputBoxesPerClassC) {
-    if (maxOutputBoxesPerClassC->getPayload().getElementType() ==
-        ElemKind::Int64ITy) {
-      maxOutputBoxesPerClass =
-          maxOutputBoxesPerClassC->getPayload().getHandle<int64_t>().raw(0);
-    } else if (maxOutputBoxesPerClassC->getPayload().getElementType() ==
-               ElemKind::Int32ITy) {
-      maxOutputBoxesPerClass =
-          maxOutputBoxesPerClassC->getPayload().getHandle<int32_t>().raw(0);
-    } else {
-      RETURN_ERR(
-          opErrMsg(op, "NMS Unsupported type for maxoutputboxesperclass."));
-    }
-  } else {
-    RETURN_ERR(
-        opErrMsg(op, "NMS maxOutputBoxesPerClass is not a contant tensor."));
-  }
-
-  if (iouThresholdC) {
-    iouThreshold = iouThresholdC->getPayload().getHandle<float>().raw(0);
-  } else {
-    RETURN_ERR(opErrMsg(op, "NMS iouThreshold is not a contant tensor."));
-  }
-
-  if (scoreThresholdC) {
-    scoreThreshold = scoreThresholdC->getPayload().getHandle<float>().raw(0);
-  } else {
-    RETURN_ERR(opErrMsg(op, "NMS scoreThrehold is not a contant tensor."));
   }
 
   // Create Node.
@@ -4276,7 +5066,7 @@ Error ONNXModelLoader::loadFlip(const ONNX_NAMESPACE::NodeProto &op,
         axis, loadAxis<unsigned_t>(dict.at("axis"), input.dims().size()));
   }
 
-  Node *N = G_->createFlip("flip", input, axis);
+  Node *N = G_->createFlip(loadOperatorName(op) + ".flip", input, axis);
 
   RETURN_IF_ERR(addNodeAsOutput(op, N));
   return Error::success();
@@ -4370,9 +5160,9 @@ Error ONNXModelLoader::loadROIAlign(const ONNX_NAMESPACE::NodeProto &op,
 
   const std::string &opName = loadOperatorName(op);
   featureMap = G_->createTranspose(opName, featureMap, NCHW2NHWC);
-  Node *N = G_->createROIAlign(
-      loadOperatorName(op), featureMap, boxes, batchIndices, outputHeight,
-      outputWidth, samplingRatio, spatialScale, aligned, rotated, mode);
+  Node *N = G_->createROIAlign(opName, featureMap, boxes, batchIndices,
+                               outputHeight, outputWidth, samplingRatio,
+                               spatialScale, aligned, rotated, mode);
   N = G_->createTranspose(opName, N, NHWC2NCHW);
   RETURN_IF_ERR(addNodeAsOutput(op, N));
   return Error::success();
@@ -4469,35 +5259,508 @@ Error ONNXModelLoader::loadSign(const ONNX_NAMESPACE::NodeProto &op,
   return Error::success();
 }
 
-Expected<TypeRef>
-ONNXModelLoader::loadTypeFromAttributes(unsigned resNo,
-                                        ArgumentDictionaryTy &dict) {
+Error ONNXModelLoader::loadSoftmax(const ONNX_NAMESPACE::NodeProto &op,
+                                   const ArgumentDictionaryTy &dict) {
+
+  const std::string &opName = loadOperatorName(op);
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+
+  RETURN_ERR_IF_NOT(in.dims().size() >= 2, "SoftMax input dims must be >= 2");
+
+  // Create a constant to store labels to be used in SoftMaxGradNode.
+  auto selected =
+      mod_.createConstant(ElemKind::Int64ITy, {in.dims()[0], 1}, "selected");
+
+  if (opsetVersion_ == 13) {
+    int axis = in.dims().size() - 1;
+    if (dict.count("axis")) {
+      ASSIGN_VALUE_OR_RETURN_ERR(
+          axis, loadAxis<int>(dict.at("axis"), in.dims().size()));
+    }
+    RETURN_ERR_IF_NOT(in.dims().size() == 4, "SoftMax 13 input dims must be 4");
+    // Compute the shuffle layout  based on axis input.
+    std::vector<unsigned_t> shuffle;
+    std::vector<unsigned_t> shuffleBack;
+    switch (axis) {
+    case 0:
+      shuffle = {1u, 2u, 3u, 0u};
+      shuffleBack = {3u, 0u, 1u, 2u};
+      break;
+
+    case 1:
+      shuffle = {0u, 2u, 3u, 1u};
+      shuffleBack = {0u, 3u, 1u, 2u};
+      break;
+
+    case 2:
+      shuffle = {0u, 1u, 3u, 2u};
+      shuffleBack = {0u, 1u, 3u, 2u};
+      break;
+
+    case 3:
+      shuffle = {0u, 1u, 2u, 3u};
+      shuffleBack = {0u, 1u, 2u, 3u};
+      break;
+
+    default:
+      return MAKE_ERR("SoftMax Axis must be <=3");
+      break;
+    }
+    auto *NH = G_->createTranspose(opName, in, shuffle);
+    auto *FN = G_->createFlattenV1("reshapeInput", NH, axis);
+    auto *SM = G_->createSoftMax(opName, FN, selected);
+
+    // The output should have the same shape as the original input.
+    auto origInDims = NH->getResult().dims();
+    auto *RN = G_->createReshape("reshapeOutput", SM, origInDims);
+    auto *NC = G_->createTranspose(opName, RN, shuffleBack);
+    RETURN_IF_ERR(addNodeAsOutput(op, NC));
+  } else {
+    // ONNX allows shapes like <N x 10 x 1 x 1 >. Flatten the inputs to the
+    // softmax function. This is basimilar to a bitcast operation.
+    int axis = 1;
+    if (dict.count("axis")) {
+      ASSIGN_VALUE_OR_RETURN_ERR(
+          axis, loadAxis<int>(dict.at("axis"), in.dims().size()));
+    }
+    auto *FN = G_->createFlatten("reshapeInput", in, axis);
+    auto *SM = G_->createSoftMax(opName, FN, selected);
+
+    // The output should have the same shape as the original input.
+    auto origInDims = in.getType()->dims();
+    auto *RN = G_->createReshape("reshapeOutput", SM, origInDims);
+    RETURN_IF_ERR(addNodeAsOutput(op, RN));
+  }
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadLogSoftmax(const ONNX_NAMESPACE::NodeProto &op,
+                                      const ArgumentDictionaryTy &dict) {
+
+  const std::string &opName = loadOperatorName(op);
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+
+  RETURN_ERR_IF_NOT(in.dims().size() >= 2,
+                    "LogSoftMax input dims must be >= 2");
+
+  // Create a constant to store labels to be used in SoftMaxGradNode.
+  auto selected =
+      mod_.createConstant(ElemKind::Int64ITy, {in.dims()[0], 1}, "selected");
+
+  if (opsetVersion_ == 13) {
+    int axis = in.dims().size() - 1;
+    if (dict.count("axis")) {
+      ASSIGN_VALUE_OR_RETURN_ERR(
+          axis, loadAxis<int>(dict.at("axis"), in.dims().size()));
+    }
+    RETURN_ERR_IF_NOT(in.dims().size() == 4,
+                      "LogSoftMax 13 input dims must be 4");
+    // Compute the shuffle layout  based on axis input.
+    std::vector<unsigned_t> shuffle;
+    std::vector<unsigned_t> shuffleBack;
+    switch (axis) {
+    case 0:
+      shuffle = {1u, 2u, 3u, 0u};
+      shuffleBack = {3u, 0u, 1u, 2u};
+      break;
+
+    case 1:
+      shuffle = {0u, 2u, 3u, 1u};
+      shuffleBack = {0u, 3u, 1u, 2u};
+      break;
+
+    case 2:
+      shuffle = {0u, 1u, 3u, 2u};
+      shuffleBack = {0u, 1u, 3u, 2u};
+      break;
+
+    case 3:
+      shuffle = {0u, 1u, 2u, 3u};
+      shuffleBack = {0u, 1u, 2u, 3u};
+      break;
+
+    default:
+      return MAKE_ERR("LogSoftMax Axis must be <=3");
+      break;
+    }
+    auto *NH = G_->createTranspose(opName, in, shuffle);
+    auto *FN = G_->createFlattenV1("reshapeInput", NH, axis);
+    auto *SM = G_->createLogSoftMax(opName, FN, selected);
+
+    // The output should have the same shape as the original input.
+    auto origInDims = NH->getResult().dims();
+    auto *RN = G_->createReshape("reshapeOutput", SM, origInDims);
+    auto *NC = G_->createTranspose(opName, RN, shuffleBack);
+    RETURN_IF_ERR(addNodeAsOutput(op, NC));
+  } else {
+    // ONNX allows shapes like <N x 10 x 1 x 1 >. Flatten the inputs to the
+    // logsoftmax function. This is basimilar to a bitcast operation.
+    int axis = 1;
+    if (dict.count("axis")) {
+      ASSIGN_VALUE_OR_RETURN_ERR(
+          axis, loadAxis<int>(dict.at("axis"), in.dims().size()));
+    }
+    auto *FN = G_->createFlatten("reshapeInput", in, axis);
+    auto *SM = G_->createLogSoftMax(opName, FN, selected);
+
+    // The output should have the same shape as the original input.
+    auto origInDims = in.getType()->dims();
+    auto *RN = G_->createReshape("reshapeOutput", SM, origInDims);
+    RETURN_IF_ERR(addNodeAsOutput(op, RN));
+  }
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadScatterData(const ONNX_NAMESPACE::NodeProto &op,
+                                       const ArgumentDictionaryTy &dict) {
+
+  const std::string &opName = loadOperatorName(op);
+  NodeValue data;
+  ASSIGN_VALUE_OR_RETURN_ERR(data, getNodeValueByName(op.input(0)));
+  NodeValue indices;
+  ASSIGN_VALUE_OR_RETURN_ERR(indices, getNodeValueByName(op.input(1)));
+  NodeValue values;
+  ASSIGN_VALUE_OR_RETURN_ERR(values, getNodeValueByName(op.input(2)));
+
+  RETURN_ERR_IF_NOT(indices.dims().size() == 2,
+                    opErrMsg(op, "Indices must be a 2D tensor!"));
+  RETURN_ERR_IF_NOT(indices.dims()[0] == values.dims()[0],
+                    opErrMsg(op, "Indices and values must have same lengths!"));
+
+  bool cumulative = false;
+  if (dict.count("cumulative")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(cumulative, loadInt(dict.at("cumulative")));
+  }
+
+  Node *node = G_->createScatterData(opName, data, indices, values, cumulative);
+  RETURN_IF_ERR(addNodeAsOutput(op, node));
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadTopK(const ONNX_NAMESPACE::NodeProto &op,
+                                ArgumentDictionaryTy &dict) {
+  const std::string &opName = loadOperatorName(op);
+  NodeValue in;
+  ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
+  RETURN_ERR_IF_NOT(
+      op.input_size() <= 2,
+      opErrMsg(
+          op,
+          strFormat(
+              "TopK: Maximum number of inputs is 2, but found input size %d ",
+              op.input_size())));
+  unsigned_t k = 0;
+  if (op.input_size() > 1) {
+    Constant *kConst = getConstantByNameOrNull(op.input(1));
+    RETURN_ERR_IF_NOT(
+        kConst, opErrMsg(op, "TopK: Non-constant k is not supported by Glow."));
+    RETURN_ERR_IF_NOT(
+        kConst->getElementType() == ElemKind::Int64ITy,
+        opErrMsg(op,
+                 strFormat("TopK: k input must be of type Int64, but found "
+                           "input type '%s' ",
+                           kConst->getType()->getElementName().str().c_str())));
+    auto constH = kConst->getPayload().getHandle<int64_t>();
+    k = constH.at({0});
+  } else {
+    ASSIGN_VALUE_OR_RETURN_ERR(k, loadInt(dict["k"]));
+  }
+
+  int lastDim = in.dims().size() - 1;
+  int axis = lastDim;
+  if (dict.count("axis")) {
+    ASSIGN_VALUE_OR_RETURN_ERR(axis,
+                               loadAxis<int>(dict["axis"], in.dims().size()));
+  }
+
+  RETURN_ERR_IF_NOT(
+      axis == lastDim,
+      opErrMsg(
+          op,
+          strFormat(
+              "TopK: Currently only support axis %d being last dimension %d ",
+              axis, lastDim)));
+
+  auto *R = G_->createTopK(opName, in, k);
+  RETURN_IF_ERR(addNodeAsOutput(op, R));
+  return Error::success();
+}
+
+Error ONNXModelLoader::loadLoop(const ONNX_NAMESPACE::NodeProto &op,
+                                const ArgumentDictionaryTy &dict) {
+  int64_t maxTripCount;
+  bool ignoreMaxTripCount = op.input(0).empty();
+  if (!ignoreMaxTripCount) {
+    Constant *M = getConstantByNameOrNull(op.input(0));
+    RETURN_ERR_IF_NOT(M, "Loop operator M input must be a constant.");
+    RETURN_ERR_IF_NOT(M->getElementType() == ElemKind::Int64ITy,
+                      "Loop operator M input must be int64.");
+    maxTripCount = (M->getPayload().getHandle<int64_t>()).raw(0);
+
+    RETURN_ERR_IF_NOT(
+        maxTripCount >= 0,
+        strFormat("Loop operator trip count (%ld) must be positive",
+                  maxTripCount));
+  }
+
+  bool condOrig = false;
+  bool ignoreCond = op.input(1).empty();
+  if (!ignoreCond) {
+    Constant *cond = getConstantByNameOrNull(op.input(1));
+    RETURN_ERR_IF_NOT(cond, "Loop operator cond input must be a constant.");
+    RETURN_ERR_IF_NOT(cond->getElementType() == ElemKind::BoolTy,
+                      "Loop operator cond input must be bool.");
+    condOrig = (cond->getPayload().getHandle<bool>()).raw(0);
+  }
+
+  RETURN_ERR_IF_NOT(dict.count("body"), "Loop body not found.");
+  auto body = dict.at("body")->g();
+
+  // 2 + N (i.e., maximum trip-count, cond, and N)
+  const int numLoopInputs = op.input_size();
+  // N + K (final N loop carried dependency values then K scan_outputs)
+  const int numLoopOutputs = op.output_size();
+  // 2 + N (i.e., iteration_num, condition, and N loop carried dependencies)
+  const int numBodyInputs = body.input_size();
+  // 1 + N + K (i.e., condition, N loop carried dependencies, and K
+  // scan_outputs)
+  const int numBodyOutputs = body.output_size();
+
+  RETURN_ERR_IF_NOT(numLoopInputs >= 2 && numLoopInputs == numBodyInputs &&
+                        numLoopOutputs == numBodyOutputs - 1 &&
+                        numLoopOutputs >= 1,
+                    "Mismatched inputs/outputs of Loop and subgraph.");
+
+  const int numK = numBodyOutputs - numBodyInputs + 1;
+  const int numN = numLoopInputs - 2;
+
+  CHECK_GE(numN, 0) << "Invalid number of v_initial in Loop operator : "
+                    << numN;
+  CHECK_GE(numK, 0) << "Invalid number of scan_outputs in Loop operator : "
+                    << numK;
+
+  // Handle a loop with no iterations.
+  if ((!ignoreMaxTripCount && maxTripCount == 0) ||
+      (!ignoreCond && !condOrig)) {
+    // No need to load the subgraph, just connect loop's N v_initial to
+    // N v_final and empty Tensor for K scan_outputs.
+    llvm::SmallVector<NodeValue, 4> outputs;
+    outputs.reserve(numLoopOutputs);
+    // Connect N v_initial to N v_final.
+    for (int i = 0; i < numN; ++i) {
+      NodeValue in;
+      ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(i + 2)));
+      outputs.push_back(in);
+    }
+    // Connect empty Tensors for K scan_outputs.
+    for (int k = 0; k < numK; ++k) {
+      int ki = (body.input_size() - 1) + k;
+      auto scan_output = body.output(ki);
+      Type ty;
+      ASSIGN_VALUE_OR_RETURN_ERR(ty, getTensorType(scan_output));
+      Tensor T(ty);
+      T.zero();
+      Constant *c = G_->getParent()->createConstant("empty", std::move(T));
+      outputs.push_back(G_->createExpandDims("unsqueeze_K", c, {0}));
+    }
+    RETURN_IF_ERR(assignNodeOutputs(op, outputs));
+    return Error::success();
+  }
+
+  // Now, there is at least one iteration.
+  llvm::SmallVector<NodeValue, 4> inputs;
+  inputs.reserve(numBodyInputs);
+
+  // Collect names of N loop carried dependencies from Loop op. It will be used
+  // to connect Loop's inputs with subgraph's inputs for the first iteration.
+  llvm::SmallVector<llvm::StringRef, 4> namesOfLoopNs;
+  namesOfLoopNs.reserve(numN);
+  for (int i = 0; i < numN; ++i) {
+    namesOfLoopNs.push_back(op.input(i + 2));
+  }
+
+  // Collect output node names for the next iteration. It will be used when
+  // connecting subgraph's outputs with subgraph's input between iteration. Add
+  // names just for N loop carried dependencies. No need to add names for K
+  // scan_outputs because they are not input of subgraph.
+  llvm::SmallVector<llvm::StringRef, 4> namesOfBodyOutputNs;
+  namesOfBodyOutputNs.reserve(numN);
+  for (int i = 0; i < numN; ++i) {
+    namesOfBodyOutputNs.push_back(body.output(i + 1).name());
+  }
+
+  // Collect names of K scan_outputs.
+  llvm::SmallVector<llvm::SmallVector<NodeValue, 2>, 2> scanOutputKs;
+  scanOutputKs.reserve(numK);
+  for (int k = 0; k < numK; ++k) {
+    llvm::SmallVector<NodeValue, 2> scanOutputIter;
+    scanOutputIter.reserve(loopUnrollLimit);
+    scanOutputKs.push_back(scanOutputIter);
+  }
+
+  auto getDummyCond = [&]() -> Expected<NodeValue> {
+    RETURN_ERR_IF_NOT(ignoreCond, "Unexpected empty name in cond in Loop");
+    Tensor dummyCondT(ElemKind::BoolTy, {1});
+    dummyCondT.zero();
+    Constant *dummyCondNode =
+        G_->getParent()->createConstant("dumpCond", std::move(dummyCondT));
+    return dummyCondNode->getOutput();
+  };
+
+  auto getIterationNumConst = [&](int64_t val) -> Constant * {
+    Tensor T(ElemKind::Int64ITy, {1});
+    T.getHandle<int64_t>() = {val};
+    Constant *C = G_->getParent()->createConstant("const", std::move(T));
+    return C;
+  };
+
+  auto prepareNextIteration =
+      [&](int64_t iterationNum, NodeValue condNode,
+          llvm::ArrayRef<llvm::StringRef> outputNames) -> Error {
+    inputs.clear();
+    // Set iteration_num.
+    inputs.push_back(getIterationNumConst(iterationNum));
+    // Set condition.
+    inputs.push_back(condNode);
+    // Set N loop carried dependencies.
+    for (auto oName : outputNames) {
+      NodeValue in;
+      ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(oName));
+      inputs.push_back(in);
+    }
+    RETURN_IF_ERR(assignGraphInputs(body, inputs));
+    return Error::success();
+  };
+
+  auto accumulateScanOutputs = [&]() -> Error {
+    // Accumulate scan-outputs values.
+    for (int k = 0; k < numK; ++k) {
+      int ki = (body.input_size() - 1) + k;
+      auto scan_output = body.output(ki);
+      NodeValue outK;
+      ASSIGN_VALUE_OR_RETURN_ERR(outK, getNodeValueByName(scan_output.name()));
+      Node *unsqueezedOutK = G_->createExpandDims("unsqueezed_K", outK, {0});
+      scanOutputKs[k].push_back(unsqueezedOutK);
+    }
+    return Error::success();
+  };
+
+  auto loadSubgraph = [&](ONNX_NAMESPACE::GraphProto &graphDef) -> Error {
+    RETURN_IF_ERR(loadInitializers(graphDef));
+    RETURN_IF_ERR(loadNetwork(graphDef, false));
+    return Error::success();
+  };
+
+  auto canUnrollNextIter = [&](int64_t iterNum) -> Expected<bool> {
+    if (!ignoreMaxTripCount && iterNum >= maxTripCount) {
+      return false;
+    }
+    Constant *condOut = getConstantByNameOrNull(body.output(0).name());
+    RETURN_ERR_IF_NOT(condOut,
+                      "Loop exit condition is unpredictable to be unrolled.");
+    bool cond = (condOut->getPayload().getHandle<bool>()).raw(0) || ignoreCond;
+    if (!cond) {
+      return false;
+    }
+    RETURN_ERR_IF_NOT(
+        iterNum < loopUnrollLimit,
+        strFormat("Exceed the unroll limit (%u) while unrolling Loop operator.",
+                  loopUnrollLimit.getValue()));
+    return cond;
+  };
+
+  // Unroll the first iteration by connecting Loop's inputs to subgraph's
+  // inputs.
+  int64_t iterNum = 0;
+  NodeValue condNode;
+  ASSIGN_VALUE_OR_RETURN_ERR(condNode, op.input(1).empty()
+                                           ? getDummyCond()
+                                           : getNodeValueByName(op.input(1)));
+  RETURN_IF_ERR(prepareNextIteration(iterNum, condNode, namesOfLoopNs));
+  RETURN_IF_ERR(loadSubgraph(body));
+  RETURN_IF_ERR(accumulateScanOutputs());
+  ++iterNum;
+  auto condCheck = canUnrollNextIter(iterNum);
+
+  RETURN_ERR_IF_NOT(condCheck, ERR_TO_STRING(condCheck.takeError()));
+
+  // Unroll remaining iterations by connecting outputs of previous iteration
+  // with inputs of current iteration.
+  while (condCheck && condCheck.get()) {
+    NodeValue condOutNode;
+    ASSIGN_VALUE_OR_RETURN_ERR(condOutNode,
+                               getNodeValueByName(body.output(0).name()));
+    RETURN_IF_ERR(
+        prepareNextIteration(iterNum, condOutNode, namesOfBodyOutputNs));
+    RETURN_IF_ERR(loadSubgraph(body));
+    RETURN_IF_ERR(accumulateScanOutputs());
+    ++iterNum;
+    condCheck = canUnrollNextIter(iterNum);
+    RETURN_ERR_IF_NOT(condCheck, ERR_TO_STRING(condCheck.takeError()));
+  }
+
+  // Hook final subgraph outputs to loop outputs.
+  llvm::SmallVector<NodeValue, 4> outputs;
+  outputs.reserve(numLoopOutputs);
+  // Set outputs for N loop carried dependency values.
+  for (int i = 0; i < numN; ++i) {
+    NodeValue bodyout;
+    ASSIGN_VALUE_OR_RETURN_ERR(bodyout,
+                               getNodeValueByName(body.output(i + 1).name()));
+    outputs.push_back(bodyout);
+  }
+  // Set outputs for K scan_outputs.
+  for (int k = 0; k < numK; ++k) {
+    outputs.push_back(G_->createConcat("concat", scanOutputKs[k], 0));
+  }
+  RETURN_IF_ERR(assignNodeOutputs(op, outputs));
+  return Error::success();
+}
+
+Expected<TypeRef> ONNXModelLoader::loadTypeFromAttributes(
+    unsigned resNo, ArgumentDictionaryTy &dict, const std::string &addPrefix) {
   // Load ElemKind.
   std::string elemKindStr;
   ASSIGN_VALUE_OR_RETURN_ERR(
-      elemKindStr, loadStr(dict[getTypeAttrID(resNo, elemKindSignifier)]));
+      elemKindStr,
+      loadStr(dict[getTypeAttrID(resNo, elemKindSignifier, false, addPrefix)]));
   const ElemKind k = Type::getElementKindFromName(elemKindStr);
 
   // Load Shape. Note that we allow for empty shapes here because 0 dimensional
   // shapes are allowed (representing scalars).
   std::vector<dim_t> shape;
   ASSIGN_VALUE_OR_RETURN_ERR(
-      shape, getShape<dim_t>(dict[getTypeAttrID(resNo, shapeSignifier)],
-                             /* allowEmptyShape */ true));
+      shape, getShape<dim_t>(
+                 dict[getTypeAttrID(resNo, shapeSignifier, false, addPrefix)],
+                 /* allowEmptyShape */ true));
+
+  // Load strides. Note that we allow for empty strides here because 0
+  // dimensional shapes are allowed (representing scalars).
+  std::vector<dim_t> strides;
+  auto stridesKey = getTypeAttrID(resNo, stridesSignifier);
+  if (dict.count(stridesKey)) {
+    ASSIGN_VALUE_OR_RETURN_ERR(strides,
+                               getShape<dim_t>(dict[stridesKey],
+                                               /* allowEmptyShape */ true));
+  }
 
   // Create and return uniqued non-quantized Type.
   if (!isQuantizedElemKind(k)) {
-    return mod_.uniqueType(k, shape);
+    return getTypeWithCustomStrides(mod_, mod_.uniqueType(k, shape), strides);
   }
 
   // Must be quantized kind, so get scale/offset and create and return uniqued
   // quantized Type.
   float scale;
   ASSIGN_VALUE_OR_RETURN_ERR(
-      scale, loadFloat(dict[getTypeAttrID(resNo, qScaleSignifier)]));
+      scale,
+      loadFloat(dict[getTypeAttrID(resNo, qScaleSignifier, false, addPrefix)]));
   int32_t offset;
   ASSIGN_VALUE_OR_RETURN_ERR(
-      offset, loadInt(dict[getTypeAttrID(resNo, qOffsetSignifier)]));
+      offset,
+      loadInt(dict[getTypeAttrID(resNo, qOffsetSignifier, false, addPrefix)]));
 
   // If we have a scale of dummyScale, then this must be a dummy pair of
   // scale/offset. Look up the actual scale/offset to use as previously loaded,
@@ -4511,7 +5774,8 @@ ONNXModelLoader::loadTypeFromAttributes(unsigned resNo,
     offset = TQP.offset;
   }
 
-  return mod_.uniqueType(k, shape, scale, offset);
+  return getTypeWithCustomStrides(
+      mod_, mod_.uniqueType(k, shape, scale, offset), strides);
 }
 
 Expected<Node *>
@@ -4560,6 +5824,50 @@ static Error loadPerNodeOptions(const Node *loadedNode,
   return Error::success();
 }
 
+Error ONNXModelLoader::loadIf(const ONNX_NAMESPACE::NodeProto &op,
+                              const ArgumentDictionaryTy &dict) {
+  Constant *condition = getConstantByNameOrNull(op.input(0));
+  RETURN_ERR_IF_NOT(condition, "Only constant condition is supported!");
+  RETURN_ERR_IF_NOT(condition->getElementType() == ElemKind::BoolTy,
+                    "Condition must be boolean!");
+
+  RETURN_ERR_IF_NOT(dict.count("then_branch"), "Then branch not found!");
+  RETURN_ERR_IF_NOT(dict.count("else_branch"), "Else branch not found!");
+  RETURN_ERR_IF_NOT(dict.at("then_branch")->type() ==
+                        ONNX_NAMESPACE::AttributeProto::GRAPH,
+                    "Only Subgraph branches are supported.");
+  RETURN_ERR_IF_NOT(dict.at("else_branch")->type() ==
+                        ONNX_NAMESPACE::AttributeProto::GRAPH,
+                    "Only Subgraph branches are supported.");
+
+  auto loadSubgraph = [&](ONNX_NAMESPACE::GraphProto &graphDef) -> Error {
+    RETURN_IF_ERR(loadInitializers(graphDef));
+    RETURN_IF_ERR(loadNetwork(graphDef, false));
+    return Error::success();
+  };
+
+  if (condition->getPayload().getHandle<bool>().isZero()) {
+    auto ifFalse = dict.at("else_branch")->g();
+    RETURN_ERR_IF_NOT(ifFalse.output_size() == 1,
+                      "Only single output 'else' subgraph is supported.");
+    RETURN_IF_ERR(loadSubgraph(ifFalse));
+    NodeValue ifFalseVal;
+    ASSIGN_VALUE_OR_RETURN_ERR(ifFalseVal,
+                               getNodeValueByName(ifFalse.output(0).name()));
+    RETURN_IF_ERR(addNodeAsOutput(op, ifFalseVal));
+  } else {
+    auto ifTrue = dict.at("then_branch")->g();
+    RETURN_ERR_IF_NOT(ifTrue.output_size() == 1,
+                      "Only single output 'then' subgraph is supported.");
+    RETURN_IF_ERR(loadSubgraph(ifTrue));
+    NodeValue ifTrueVal;
+    ASSIGN_VALUE_OR_RETURN_ERR(ifTrueVal,
+                               getNodeValueByName(ifTrue.output(0).name()));
+    RETURN_IF_ERR(addNodeAsOutput(op, ifTrueVal));
+  }
+  return Error::success();
+}
+
 Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   ArgumentDictionaryTy dict = loadArgumentMap(op);
   const std::string &typeName = op.op_type();
@@ -4586,8 +5894,8 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
     // Identity is the only official ONNX op used with useGlowCustomOps. Let it
     // fall through to logic to handle below, otherwise return error.
     if (typeName != "Identity") {
-      RETURN_ERR("Failed to load operator " + typeName + " .",
-                 ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_OPERATOR);
+      return MAKE_ERR("Failed to load operator " + typeName + " .",
+                      ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_OPERATOR);
     }
   }
 
@@ -4598,9 +5906,18 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (tryLoadCommonOperatorResult) {
     return Error::success();
   }
+  if (typeName == "Loop") {
+    return loadLoop(op, dict);
+  }
 
   if (typeName == "Constant") {
     return loadConstant(op, dict);
+  }
+  if (typeName == "Range") {
+    return loadRange(op, dict);
+  }
+  if (typeName == "PRelu") {
+    return loadPRelu(op, dict);
   }
   if (typeName == "Slice") {
     return loadSlice(op, dict);
@@ -4608,12 +5925,17 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "Sin" || typeName == "Cos") {
     return loadTrigonometricOps(typeName, op, dict);
   }
+  if (typeName == "Erf") {
+    return loadErf(op, dict);
+  }
   if (typeName == "Conv") {
-    // If the Conv operator has quantized inputs, use
+    // If the Conv operator has quantized inputs and
+    // dict contains the scale and offset params, use
     // loadTensorwiseQuantizedConvolution.
     NodeValue in;
     ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
-    return in.getType()->isQuantizedType()
+    return in.getType()->isQuantizedType() && dict.count("out_scale") &&
+                   dict.count("out_offset")
                ? loadTensorwiseQuantizedConvolution(op, dict)
                : loadConv(op, dict);
   }
@@ -4625,7 +5947,8 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
     // loadTensorwiseQuantizedPool.
     NodeValue in;
     ASSIGN_VALUE_OR_RETURN_ERR(in, getNodeValueByName(op.input(0)));
-    return in.getType()->isQuantizedType()
+    return in.getType()->isQuantizedType() && dict.count("out_scale") &&
+                   dict.count("out_offset")
                ? loadTensorwiseQuantizedPool(op, dict, typeName)
                : loadPool(op, dict, typeName);
   }
@@ -4641,6 +5964,9 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "BatchNormalization") {
     return loadBatchNormalization(op, dict);
   }
+  if (typeName == "InstanceNormalization") {
+    return loadInstanceNormalization(op, dict);
+  }
   if (typeName == "Concat") {
     return loadConcat(op, dict);
   }
@@ -4653,6 +5979,9 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "Transpose") {
     return loadTranspose(op, dict, "perm");
   }
+  if (typeName == "ReduceSumSquare") {
+    return loadReduceOp(typeName, op, dict);
+  }
   if (typeName == "MatMul") {
     return loadMatMul(op, dict);
   }
@@ -4662,11 +5991,17 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "Cast") {
     return loadCast(op, dict);
   }
+  if (typeName == "HardSigmoid") {
+    return loadHardSigmoid(op, dict);
+  }
   if (typeName == "LeakyRelu") {
     return loadLeakyRelu(op, dict);
   }
   if (typeName == "SpaceToDepth") {
     return loadSpaceToDepth(op, dict);
+  }
+  if (typeName == "DepthToSpace") {
+    return loadDepthToSpace(op, dict);
   }
   if (typeName == "ReduceL2") {
     return loadReduceL2(op, dict);
@@ -4695,8 +6030,7 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "Clip") {
     return loadClip(op, dict);
   }
-  // Glow specific operators
-  if (typeName == "CmpEQ") {
+  if (typeName == "Equal") {
     return loadCmpEQ(op, dict);
   }
   if (typeName == "CmpLTE") {
@@ -4711,10 +6045,13 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "Quantize") {
     return loadQuantize(op, dict);
   }
+  if (typeName == "QuantizeLinear") {
+    return loadQuantizeLinear(op, dict);
+  }
   if (typeName == "ConvertTo") {
     return loadConvertTo(op, dict);
   }
-  if (typeName == "Dequantize") {
+  if ((typeName == "Dequantize") || (typeName == "DequantizeLinear")) {
     return loadDequantize(op, dict);
   }
   if (typeName == "Regression") {
@@ -4774,6 +6111,9 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "ConvTranspose") {
     return loadConvTranspose(op, dict);
   }
+  if (typeName == "If") {
+    return loadIf(op, dict);
+  }
   if (typeName == "AdaptiveAvgPool") {
     return loadAdaptiveAvgPool(op, dict);
   }
@@ -4813,9 +6153,21 @@ Error ONNXModelLoader::loadOperator(const ONNX_NAMESPACE::NodeProto &op) {
   if (typeName == "Sign") {
     return loadSign(op, dict);
   }
+  if (typeName == "Softmax") {
+    return loadSoftmax(op, dict);
+  }
+  if (typeName == "LogSoftmax") {
+    return loadLogSoftmax(op, dict);
+  }
+  if (typeName == "ScatterData") {
+    return loadScatterData(op, dict);
+  }
+  if (typeName == "TopK") {
+    return loadTopK(op, dict);
+  }
 
-  RETURN_ERR("Failed to load operator " + typeName + " .",
-             ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_OPERATOR);
+  return MAKE_ERR("Failed to load operator " + typeName + " .",
+                  ErrorValue::ErrorCode::MODEL_LOADER_UNSUPPORTED_OPERATOR);
 }
 
 void ONNXModelLoader::deleteConstFoldFunctions() {
@@ -4990,7 +6342,7 @@ Error ONNXModelLoader::loadInitializers(ONNX_NAMESPACE::GraphProto &net) {
 
 Error ONNXModelLoader::setOutputNodes(ONNX_NAMESPACE::GraphProto &net) {
   if (net.output_size() == 0) {
-    RETURN_ERR("Net output size must be greater than 0");
+    return MAKE_ERR("Net output size must be greater than 0");
   }
 
   for (int i = 0; i < net.output_size(); i++) {
@@ -5187,6 +6539,16 @@ Error ONNXModelLoader::setupOrigStaticTypeMap(ONNX_NAMESPACE::GraphProto &net) {
   return Error::success();
 }
 
+Error ONNXModelLoader::assignGraphInputs(const ONNX_NAMESPACE::GraphProto &net,
+                                         llvm::ArrayRef<NodeValue> NVs) {
+  RETURN_ERR_IF_NOT((dim_t)NVs.size() == (dim_t)net.input_size(),
+                    "Input size mismatch.");
+  for (size_t i = 0; i < NVs.size(); i++) {
+    nodeValueByName_[net.input(i).name()] = NVs[i];
+  }
+  return Error::success();
+}
+
 Error ONNXModelLoader::loadModel(ONNX_NAMESPACE::ModelProto &modelDef,
                                  llvm::ArrayRef<const char *> tensorNames,
                                  llvm::ArrayRef<TypeRef> types,
@@ -5229,7 +6591,8 @@ ONNXModelLoader::ONNXModelLoader(const std::string &modelDescFilename,
                                  Error *errPtr, bool zipMode,
                                  BackendSpecificNodeInfo *perNodeOpts,
                                  bool disableConstFoldInLoader,
-                                 bool loadIntoExistingModule, const Backend *B)
+                                 bool loadIntoExistingModule, const Backend *B,
+                                 const std::string *inputStringPtr)
     : CommonOperatorLoader(tensorNames, types, &F, errPtr,
                            loadIntoExistingModule),
       perNodeOpts_(perNodeOpts), staticPlaceholderTypes_(nullptr) {
@@ -5244,11 +6607,10 @@ ONNXModelLoader::ONNXModelLoader(const std::string &modelDescFilename,
 
   auto setup = [&]() -> Error {
     ONNX_NAMESPACE::ModelProto modelDef;
-    ASSIGN_VALUE_OR_RETURN_ERR(modelDef, loadProto(modelDescFilename, zipMode));
-
+    ASSIGN_VALUE_OR_RETURN_ERR(
+        modelDef, loadProto(modelDescFilename, zipMode, inputStringPtr));
     RETURN_IF_ERR(loadModel(modelDef, tensorNames, types, B,
                             /* loadInputsAsPlaceholdersForOnnx */ true));
-
     return Error::success();
   };
 
@@ -5284,7 +6646,7 @@ Error ONNXModelLoader::setupPartitions(ONNX_NAMESPACE::ModelProto &modelDef,
                                        PrePartitionedConfig &PPC,
                                        llvm::StringRef rootName,
                                        int numPartitions) {
-  PPC.funcName = rootName;
+  PPC.funcName = rootName.str();
   PPC.resizeAndReserve(numPartitions);
 
   for (int i = 0; i < numPartitions; i++) {
@@ -5414,7 +6776,8 @@ Error ONNXModelLoader::setupUpdatedTQPMap(
   Error err(Error::success());
   Module dummyMod;
   Caffe2ModelLoader tmpLoader(qParamC2ProtoStr, weightsCount, weightDescriptors,
-                              dummyMod, &err, &originNameToTQPMap);
+                              dummyMod, &err, &originNameToTQPMap,
+                              clipQuantRangeToFP16_);
   RETURN_IF_ERR(err);
 
   // Now parse the originNameToUniqueOffsetMappingStr to find the original C2
@@ -5435,12 +6798,12 @@ Error ONNXModelLoader::setupUpdatedTQPMap(
     auto nameOffsetPair = nameOffsetSplit.split(offsetSepSig);
     int32_t idx;
     ASSIGN_VALUE_OR_RETURN_ERR(idx, getIntFromStr(nameOffsetPair.second));
-    RETURN_ERR_IF_NOT(idx < updatedTQPs_.size(),
+    RETURN_ERR_IF_NOT(idx < int32_t(updatedTQPs_.size()),
                       strFormat("Provided offset index %d not inside size "
                                 "of updatedTQPs_ %lu",
                                 idx, updatedTQPs_.size()));
 
-    auto it = originNameToTQPMap.find(nameOffsetPair.first);
+    auto it = originNameToTQPMap.find(nameOffsetPair.first.str());
     RETURN_ERR_IF_NOT(it != originNameToTQPMap.end(),
                       strFormat("Did not find matching TQP for %s",
                                 nameOffsetPair.first.str().data()));
@@ -5455,7 +6818,7 @@ ONNXModelLoader::ONNXModelLoader(
     Module &mod, llvm::StringRef funName, PrePartitionedConfig *PPC,
     Error *errPtr, bool zipMode, BackendSpecificNodeInfo *perNodeOpts,
     bool loadIntoExistingModule, bool disableConstFoldInLoader,
-    const Backend *B)
+    const Backend *B, const std::string *inputStringPtr)
     : CommonOperatorLoader(tensorNames, types, mod, errPtr,
                            loadIntoExistingModule),
       perNodeOpts_(perNodeOpts), staticPlaceholderTypes_(nullptr) {
@@ -5470,7 +6833,8 @@ ONNXModelLoader::ONNXModelLoader(
 
   auto setup = [&]() -> Error {
     ONNX_NAMESPACE::ModelProto modelDef;
-    ASSIGN_VALUE_OR_RETURN_ERR(modelDef, loadProto(modelDescFilename, zipMode));
+    ASSIGN_VALUE_OR_RETURN_ERR(
+        modelDef, loadProto(modelDescFilename, zipMode, inputStringPtr));
 
     auto numPartitionsOrErr = getIntMetadataProp(modelDef, "numPartitions");
     if (!numPartitionsOrErr) {
@@ -5537,12 +6901,14 @@ ONNXModelLoader::ONNXModelLoader(
     llvm::StringRef funName, PrePartitionedConfig *PPC,
     bool loadInputsAsPlaceholdersForOnnx, Error *errPtr, bool constFoldInLoader,
     BackendSpecificNodeInfo *perNodeOpts,
-    std::map<std::string, Type> *staticPlaceholderTypes, bool replaceDummyTQPs)
+    std::map<std::string, Type> *staticPlaceholderTypes, bool replaceDummyTQPs,
+    bool clipQuantRangeToFP16)
     : CommonOperatorLoader({}, {}, mod, errPtr,
                            /* loadIntoExistingModule */ true,
                            /* originNameToTQPMap */ nullptr,
                            /* loadUniquedDummyQParams */ false,
-                           replaceDummyTQPs),
+                           replaceDummyTQPs, /* zeroScaleFP16Clip */ false,
+                           clipQuantRangeToFP16),
       perNodeOpts_(perNodeOpts),
       staticPlaceholderTypes_(staticPlaceholderTypes) {
   // if errPtr already contains an error then don't continue with constructor
@@ -5562,6 +6928,18 @@ ONNXModelLoader::ONNXModelLoader(
     // If we're going to be replacing dummy TQPs then setup the updated TQP map,
     // which is used later on when loading each op.
     if (replaceDummyTQPs_) {
+      // Check if the model has specified that clipQuantRangeToFP16 should be
+      // overridden via the clipQuantRangeToFP16Key metadata prop. Do this
+      // before updating TQP map, because this will affect the qparams loaded.
+      for (const auto &keyVal : modelDef.metadata_props()) {
+        if (keyVal.key() == clipQuantRangeToFP16Key && keyVal.value() == "1") {
+          LOG(INFO) << "ONNXModelLoader found enabled "
+                    << clipQuantRangeToFP16Key;
+          clipQuantRangeToFP16_ = true;
+          break;
+        }
+      }
+
       RETURN_IF_ERR(
           setupUpdatedTQPMap(modelDef, weightsCount, weightDescriptors));
     }
