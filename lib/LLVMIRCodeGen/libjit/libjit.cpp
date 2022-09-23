@@ -12,6 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ * Modifications copyright (C) 2022 <ETRI/Yongin Kwon>
  */
 #include <algorithm>
 #include <assert.h>
@@ -158,13 +159,41 @@ static void libjit_insert_tensor(ElemTy *tensor, ElemTy *slice, dim_t *offset,
                                  dim_t numDimsTensor, dim_t numDimsSlice,
                                  dim_t offsetDim, dim_t count, dim_t axis) {
   // Destination coordinates.
-  dim_t C[5];
+  dim_t C[6];
 
   // A local copy of the offsets buffer. We copy the buffer to make it clear
   // to the optimizer that the inputs don't alias. This loop is optimized away.
-  dim_t offsets_cpy[5];
+  dim_t offsets_cpy[6];
   for (dim_t i = 0; i < numDimsSlice; i++) {
     offsets_cpy[i] = offset[i];
+  }
+
+  if (numDimsSlice == 6) {
+    for (dim_t c = 0; c < count; c++)
+      for (dim_t x = 0; x < sliceDim[0]; x++)
+        for (dim_t y = 0; y < sliceDim[1]; y++)
+          for (dim_t z = 0; z < sliceDim[2]; z++)
+            for (dim_t w = 0; w < sliceDim[3]; w++)
+              for (dim_t q = 0; q < sliceDim[4]; q++)
+                for (dim_t r = 0; r < sliceDim[5]; r++) {
+                  const dim_t countAxisOffset = c * sliceDim[axis];
+                  C[0] =
+                      x + offsets_cpy[0] + ((axis == 0) ? countAxisOffset : 0);
+                  C[1] =
+                      y + offsets_cpy[1] + ((axis == 1) ? countAxisOffset : 0);
+                  C[2] =
+                      z + offsets_cpy[2] + ((axis == 2) ? countAxisOffset : 0);
+                  C[3] =
+                      w + offsets_cpy[3] + ((axis == 3) ? countAxisOffset : 0);
+                  C[4] =
+                      q + offsets_cpy[4] + ((axis == 4) ? countAxisOffset : 0);
+                  C[5] =
+                      r + offsets_cpy[5] + ((axis == 5) ? countAxisOffset : 0);
+                  tensor[libjit_getXYZWQR(tensorDim, C[0], C[1], C[2], C[3],
+                                          C[4], C[5])] =
+                      slice[libjit_getXYZWQR(sliceDim, x, y, z, w, q, r)];
+                }
+    return;
   }
 
   if (numDimsSlice == 5) {
@@ -359,7 +388,7 @@ static void libjit_topk(T *values, TI *indices, const T *input, void *scratch,
       // Find the largest value by iterating over the array instead of calling
       // 'sort'.
       value_index<T, TI> mx = {0, input[in]};
-      for (TI i = 1; i < n; i++) {
+      for (TI i = 1; i < TI(n); i++) {
         if (input[i + in] > mx.value) {
           mx = {i, input[i + in]};
         }
@@ -408,6 +437,33 @@ static void libjit_gather(T *dest, const T *data, const IDX *indices,
       // Point to the next location in the destination tensor.
       outIdx++;
     }
+  }
+}
+
+template <typename DataT, typename IndexT>
+static void
+libjit_gather_nd(DataT *out, const DataT *data, const IndexT *indicesPtr,
+                 dim_t batchCount, dim_t inpSliceCount, dim_t outSliceCount,
+                 dim_t sliceSize, dim_t indicesDimLast, dim_t *indicesDimProd) {
+  const char *dataPtr = (const char *)data;
+  char *outPtr = (char *)out;
+
+  for (dim_t batchIdx = 0; batchIdx < batchCount; ++batchIdx) {
+    for (dim_t outSliceIdx = 0; outSliceIdx < outSliceCount; ++outSliceIdx) {
+
+      // Compute input slice index.
+      dim_t inpSliceIdx = 0;
+      for (size_t idx = 0; idx < indicesDimLast; ++idx) {
+        inpSliceIdx += (*indicesPtr++) * indicesDimProd[idx];
+      }
+
+      // Copy data.
+      memcpy(outPtr, dataPtr + inpSliceIdx * sliceSize, sliceSize);
+      outPtr += sliceSize;
+    }
+
+    // Increment input pointer for next batch.
+    dataPtr += inpSliceCount * sliceSize;
   }
 }
 
@@ -500,7 +556,7 @@ static void libjit_scatterdataaddquantized(T *data, const dim_t *dataDims,
     for (size_t j = 0; j < sliceSize; j++) {
       float lhs = (data[destDataIdx * sliceSize + j] - dataOffset) * dataScale;
       float rhs = (slices[i * sliceSize + j] - sliceOffset) * sliceScale;
-      T result = libjit_clip((lhs + rhs) / dataScale + dataOffset);
+      T result = libjit_clip_i8((lhs + rhs) / dataScale + dataOffset);
       data[destDataIdx * sliceSize + j] = result;
     }
   }
@@ -641,6 +697,34 @@ static void libjit_flip_generic(const T *inW, T *outW, const dim_t *dims,
   }
 }
 
+template <typename ty>
+static void libjit_embedding_generic(ty *dest, ty *weights, int64_t *indices,
+                                     const dim_t *indDims, dim_t indSize,
+                                     dim_t num_embedding, dim_t embedding_dim,
+                                     int64_t padIdx, bool scale, bool sparse) {
+  dim_t indLen = 1;
+  for (dim_t idx = 0; idx < indSize; ++idx) {
+    indLen *= indDims[idx];
+  }
+
+  assert(!scale && "Currently only support scale_grad_by_freq == 'false'");
+  assert(!sparse && "Currently only support sparse == 'false'");
+  if (padIdx > -1) {
+    assert(static_cast<dim_t>(padIdx) <= num_embedding &&
+           "padIdx must be within num_embedding");
+  }
+  memset(dest, 0, indLen * embedding_dim * sizeof(ty));
+
+  for (int64_t i = 0; i < indLen; i++) {
+    int64_t index = indices[i];
+    if (index != padIdx) {
+      for (dim_t j = 0; j < embedding_dim; j++) {
+        dest[i * embedding_dim + j] = weights[index * embedding_dim + j];
+      }
+    }
+  }
+}
+
 template <typename inpT, typename outT>
 static void libjit_arg_max_generic(const inpT *inpW, outT *outW,
                                    const dim_t *dims, size_t numDims,
@@ -728,53 +812,78 @@ static void libjit_arg_min_generic(const inpT *inpW, outT *outW,
 template <typename T>
 static void libjit_max_pool_generic(const T *inW, T *outW, const dim_t *inWdims,
                                     const dim_t *outWdims, dim_t *kernelSizes,
-                                    dim_t *strides, dim_t *pads) {
-  dim_t pad_t = pads[0];
-  dim_t pad_l = pads[1];
-  dim_t stride_h = strides[0];
-  dim_t stride_w = strides[1];
-  dim_t kernel_h = kernelSizes[0];
-  dim_t kernel_w = kernelSizes[1];
-  // For each sample in the batch:
-  for (dim_t n = 0; n < outWdims[0]; n++) {
-    // For each (x,y) step in the input/output tensor:
-    sdim_t x = -(sdim_t)pad_t;
-    for (dim_t ax = 0; ax < outWdims[1]; x += stride_h, ax++) {
-      sdim_t y = -(sdim_t)pad_l;
-      for (dim_t ay = 0; ay < outWdims[2]; y += stride_w, ay++) {
+                                    dim_t *strides, dim_t *pads, T defVal) {
 
-        // For each layer in the output tensor:
-        for (dim_t z = 0; z < inWdims[3]; z++) {
-          int first = 1;
-          T max = 0;
+  size_t kernelH = kernelSizes[0];
+  size_t kernelW = kernelSizes[1];
 
-          // For each element in the pool filter:
-          for (dim_t fx = 0; fx < kernel_h; fx++) {
-            for (dim_t fy = 0; fy < kernel_w; fy++) {
-              sdim_t ox = x + fx;
-              sdim_t oy = y + fy;
+  size_t strideH = strides[0];
+  size_t strideW = strides[1];
 
-              // Ignore index access below zero (this is due to padding).
-              if (ox < 0 || oy < 0 || ox >= (sdim_t)inWdims[1] ||
-                  oy >= (sdim_t)inWdims[2]) {
-                continue;
-              }
+  size_t padT = pads[0];
+  size_t padL = pads[1];
 
-              float val =
-                  inW[libjit_getXYZW(inWdims, n, (dim_t)ox, (dim_t)oy, z)];
+  // For each input in the batch.
+  for (size_t n = 0; n < inWdims[0]; n++) {
 
-              if (first || (val >= max)) {
-                first = 0;
-                max = val;
-              }
+    // For each output height.
+    ssize_t i_h_min = -(ssize_t)padT;
+    for (size_t o_h = 0; o_h < outWdims[1]; o_h++, i_h_min += strideH) {
+
+      // Effective kernel height limits.
+      ssize_t f_h_min = libjit_conv_flt_min(i_h_min);
+      ssize_t f_h_max = libjit_conv_flt_max(inWdims[1], kernelH, i_h_min);
+      ssize_t f_h_len = libjit_conv_flt_len(f_h_min, f_h_max);
+      const T *inpPtrH = inW + (i_h_min + f_h_min) * inWdims[2] * inWdims[3];
+
+      // For each output width.
+      ssize_t i_w_min = -(ssize_t)padL;
+      for (size_t o_w = 0; o_w < outWdims[2]; o_w++, i_w_min += strideW) {
+
+        // Effective kernel width limits.
+        ssize_t f_w_min = libjit_conv_flt_min(i_w_min);
+        ssize_t f_w_max = libjit_conv_flt_max(inWdims[2], kernelW, i_w_min);
+        ssize_t f_w_len = libjit_conv_flt_len(f_w_min, f_w_max);
+        const T *inpPtr = inpPtrH + (i_w_min + f_w_min) * inWdims[3];
+
+        // For each output channel.
+        for (size_t o_c = 0; o_c < outWdims[3]; o_c++) {
+
+          // Initialize max.
+          T max = std::numeric_limits<T>::lowest();
+
+          // For each kernel height.
+          for (size_t f_h = 0; f_h < f_h_len; f_h++) {
+
+            // For each kernel width.
+            for (size_t f_w = 0; f_w < f_w_len; f_w++) {
+
+              // Take maximum along the kernel width.
+              max = std::max(max, *inpPtr);
+              inpPtr += inWdims[3];
             }
+
+            // Advance input pointer for next kernel height.
+            inpPtr = inpPtr - f_w_len * inWdims[3] + inWdims[2] * inWdims[3];
           }
 
-          outW[libjit_getXYZW(outWdims, n, ax, ay, z)] = max;
-        } // C
-      }   // W
-    }     // H
-  }       // N
+          // Store max. If the effective pooling window size is empty then we
+          // return the default value.
+          if (f_h_len > 0 && f_w_len > 0) {
+            *outW++ = max;
+          } else {
+            *outW++ = defVal;
+          }
+
+          // Advance input pointer for next output channel.
+          inpPtr = inpPtr - f_h_len * inWdims[2] * inWdims[3] + 1;
+        }
+      }
+    }
+
+    // Advance input pointer for next batch.
+    inW += inWdims[1] * inWdims[2] * inWdims[3];
+  }
 }
 
 template <typename T, typename T2>
@@ -899,9 +1008,9 @@ libjit_batchedadd_quantized(int8_t *dest, const int8_t *batch, const T *slice,
     for (dim_t i = 0; i < sliceSize; i++) {
       int32_t b = batch[base + i] - batchOffset;
       int32_t s = slice[i] - sliceOffset;
-      int32_t x = libjit_scale_i32i8(b, batchPre, batchPost, batchScale, 0);
-      int32_t y = libjit_scale_i32i8(s, slicePre, slicePost, sliceScale, 0);
-      dest[base + i] = libjit_clip(x + y + destOffset);
+      int32_t x = libjit_scale<int32_t>(b, batchPre, batchPost, batchScale, 0);
+      int32_t y = libjit_scale<int32_t>(s, slicePre, slicePost, sliceScale, 0);
+      dest[base + i] = libjit_clip_i8(x + y + destOffset);
     }
   }
 }
@@ -1416,7 +1525,7 @@ void libjit_softmax_grad_generic(T *inG, T *outW, const T2 *selectedW,
                                  const dim_t *idim, const dim_t *selectdim) {
   for (dim_t n = 0; n < idim[0]; n++) {
     for (dim_t i = 0; i < idim[1]; i++) {
-      float delta = (selectedW[libjit_getXY(selectdim, n, 0)] == i);
+      float delta = (selectedW[libjit_getXY(selectdim, n, 0)] == T2(i));
       inG[libjit_getXY(idim, n, i)] = outW[libjit_getXY(idim, n, i)] - delta;
     }
   }
@@ -1487,11 +1596,11 @@ extern "C" {
             int32_t lhsOffset, int32_t rhsOffset, int32_t lhsPre,              \
             int32_t lhsPost, int32_t lhsScale, int32_t rhsPre,                 \
             int32_t rhsPost, int32_t rhsScale) {                               \
-    int32_t lhs = libjit_scale_i32i8(LHS[idx] - lhsOffset, lhsPre, lhsPost,    \
-                                     lhsScale, 0);                             \
-    int32_t rhs = libjit_scale_i32i8(RHS[idx] - rhsOffset, rhsPre, rhsPost,    \
-                                     rhsScale, 0);                             \
-    return libjit_clip((body) + destOffset);                                   \
+    int32_t lhs = libjit_scale<int32_t>(LHS[idx] - lhsOffset, lhsPre, lhsPost, \
+                                        lhsScale, 0);                          \
+    int32_t rhs = libjit_scale<int32_t>(RHS[idx] - rhsOffset, rhsPre, rhsPost, \
+                                        rhsScale, 0);                          \
+    return libjit_clip_i8((body) + destOffset);                                \
   }
 
 /// Macro to define a mini-kernel for data-parallel multiplicative quantized
@@ -1505,8 +1614,8 @@ extern "C" {
               int32_t pre, int32_t post, int32_t scale) {                      \
     int32_t lhs = LHS[idx] - lhsOffset;                                        \
     int32_t rhs = RHS[idx] - rhsOffset;                                        \
-    return libjit_clip(                                                        \
-        libjit_scale_i32i8((body), pre, post, scale, destOffset));             \
+    return libjit_clip_i8(                                                     \
+        libjit_scale<int32_t>((body), pre, post, scale, destOffset));          \
   }
 
 /// Define mini-kernels for all data parallel operations. They are invoked from
@@ -1554,6 +1663,8 @@ DEFINE_DATA_PARALLEL_KERNEL(libjit_element_round_kernel_f, float,
                             std::nearbyintf(LHS[idx]))
 DEFINE_DATA_PARALLEL_KERNEL(libjit_element_sqrt_kernel_f, float,
                             std::sqrt(LHS[idx]))
+DEFINE_DATA_PARALLEL_KERNEL(libjit_element_erf_kernel_f, float,
+                            std::erf(LHS[idx]))
 DEFINE_DATA_PARALLEL_KERNEL(libjit_element_rsqrt_kernel_f, float,
                             1 / std::sqrt(LHS[idx]))
 DEFINE_DATA_PARALLEL_KERNEL(libjit_element_reciprocal_kernel_f, float,
@@ -1576,6 +1687,11 @@ DEFINE_DATA_PARALLEL_KERNEL_QUANTIZED(libjit_element_min_kernel_i8, int8_t,
                                       MIN(lhs, rhs))
 DEFINE_DATA_PARALLEL_KERNEL_QUANTIZED_M(libjit_element_mul_kernel_i8, lhs *rhs)
 DEFINE_DATA_PARALLEL_KERNEL_QUANTIZED_M(libjit_element_div_kernel_i8, lhs / rhs)
+
+DEFINE_DATA_PARALLEL_KERNEL(libjit_element_add_kernel_u, size_t,
+                            LHS[idx] + RHS[idx])
+DEFINE_DATA_PARALLEL_KERNEL(libjit_element_mul_kernel_u, size_t,
+                            LHS[idx] * RHS[idx])
 
 /// This is a variable used by Glow backends to determine the actual type used
 /// for size_t, dim_t and int variables when libjit was compiled.
@@ -1646,7 +1762,7 @@ int8_t libjit_element_xor_kernel_b(dim_t idx, const bool *LHS,
               int32_t rhsOffset, int32_t pre, int32_t post, int32_t scale) {   \
     int32_t lhs = LHS[idx] - lhsOffset;                                        \
     int32_t rhs = RHS[idx] - rhsOffset;                                        \
-    return (libjit_scale_i32i8(lhs, pre, post, scale, 0) cmp rhs) ? 1 : 0;     \
+    return (libjit_scale<int32_t>(lhs, pre, post, scale, 0) cmp rhs) ? 1 : 0;  \
   }
 DEFINE_CMP_KERNEL_QUANTIZED(libjit_element_cmp_eq_kernel_i8, int8_t, ==)
 DEFINE_CMP_KERNEL_QUANTIZED(libjit_element_cmp_neq_kernel_i8, int8_t, !=)
@@ -1707,6 +1823,11 @@ int8_t libjit_intlookuptable_kernel_i8(dim_t idx, const int8_t *src,
   return mapping[src[idx] + 128];
 }
 
+int16_t libjit_intlookuptable_kernel_i16(dim_t idx, const int16_t *src,
+                                         const int16_t *mapping) {
+  return mapping[src[idx] + 32768];
+}
+
 float libjit_elementselect_kernel_f(dim_t idx, const int8_t *cond,
                                     const float *LHS, const float *RHS) {
   return (cond[idx] != 0) ? LHS[idx] : RHS[idx];
@@ -1720,10 +1841,11 @@ int8_t libjit_elementselect_kernel_i8(dim_t idx, const int8_t *cond,
                                       int32_t rhsPre, int32_t rhsPost,
                                       int32_t rhsScale) {
   return (cond[idx] != 0)
-             ? libjit_clip(libjit_scale_i32i8(LHS[idx] - lhsOffset, lhsPre,
-                                              lhsPost, lhsScale, destOffset))
-             : libjit_clip(libjit_scale_i32i8(RHS[idx] - rhsOffset, rhsPre,
-                                              rhsPost, rhsScale, destOffset));
+             ? libjit_clip_i8(libjit_scale<int32_t>(
+                   LHS[idx] - lhsOffset, lhsPre, lhsPost, lhsScale, destOffset))
+             : libjit_clip_i8(libjit_scale<int32_t>(RHS[idx] - rhsOffset,
+                                                    rhsPre, rhsPost, rhsScale,
+                                                    destOffset));
 }
 
 float libjit_element_relu_f(dim_t idx, const float *src) {
@@ -1735,9 +1857,9 @@ int8_t libjit_element_relu_i8(dim_t idx, const int8_t *src, int8_t srcOffset,
                               int8_t destOffset, int32_t destPre,
                               int32_t destPost, int32_t destScale) {
   int32_t reluVal = MAX(src[idx], srcOffset);
-  int32_t scaledVal = libjit_scale_i32i8(reluVal - srcOffset, destPre, destPost,
-                                         destScale, destOffset);
-  return libjit_clip(scaledVal);
+  int32_t scaledVal = libjit_scale<int32_t>(reluVal - srcOffset, destPre,
+                                            destPost, destScale, destOffset);
+  return libjit_clip_i8(scaledVal);
 }
 
 float libjit_element_clip_f(dim_t idx, const float *src, float min, float max) {
@@ -1750,9 +1872,9 @@ int8_t libjit_element_clip_i8(dim_t idx, const int8_t *src, int8_t clipMin,
                               int8_t destOffset, int32_t destPre,
                               int32_t destPost, int32_t destScale) {
   int32_t clipVal = MIN(MAX(src[idx], clipMin), clipMax);
-  int32_t scaledVal = libjit_scale_i32i8(clipVal - srcOffset, destPre, destPost,
-                                         destScale, destOffset);
-  return libjit_clip(scaledVal);
+  int32_t scaledVal = libjit_scale<int32_t>(clipVal - srcOffset, destPre,
+                                            destPost, destScale, destOffset);
+  return libjit_clip_i8(scaledVal);
 }
 
 float libjit_element_leaky_relu_f(dim_t idx, const float *src, float alpha) {
@@ -1766,12 +1888,19 @@ int8_t libjit_element_leaky_relu_i8(dim_t idx, const int8_t *src,
                                     int32_t posScale, int32_t negPre,
                                     int32_t negPost, int32_t negScale) {
   int32_t srcVal = src[idx];
-  int32_t scaledVal = (srcVal >= srcOffset)
-                          ? libjit_scale_i32i8(srcVal - srcOffset, posPre,
-                                               posPost, posScale, destOffset)
-                          : libjit_scale_i32i8(srcVal - srcOffset, negPre,
-                                               negPost, negScale, destOffset);
-  return libjit_clip(scaledVal);
+  int32_t scaledVal =
+      (srcVal >= srcOffset)
+          ? libjit_scale<int32_t>(srcVal - srcOffset, posPre, posPost, posScale,
+                                  destOffset)
+          : libjit_scale<int32_t>(srcVal - srcOffset, negPre, negPost, negScale,
+                                  destOffset);
+  return libjit_clip_i8(scaledVal);
+}
+
+float libjit_element_hard_swish_f(dim_t idx, const float *src) {
+  float x = src[idx];
+  float relu6 = (x + 3) > 6 ? 6 : ((x + 3) < 0 ? 0 : (x + 3));
+  return x * relu6 / 6;
 }
 
 // When the LIBJIT compile option "-ffast-math" is enabled the intermediate
@@ -1844,27 +1973,35 @@ void libjit_batchedadd_i32_i8(int8_t *dest, const int8_t *batch,
                               sliceScale);
 }
 
-/// The dimensions passed in here are pre-expanded in LLVMIRGen with 1s so that
-/// we can iterate over the shape here, regardless of the shape of the tensor.
-void libjit_batchedreduceadd_f(float *dest, const float *batch, dim_t destSize,
-                               const dim_t *destDims, const dim_t *batchDims,
-                               dim_t axis) {
-  for (dim_t i = 0; i < destSize; i++)
-    dest[i] = 0.0;
+// /// The dimensions passed in here are pre-expanded in LLVMIRGen with 1s so
+// that
+// /// we can iterate over the shape here, regardless of the shape of the
+// tensor.
+#define DEFINE_BATCHEDREDUCE_KERNEL_FLOAT(name, type, init, op)                \
+  void libjit_##name(type *dest, const type *batch, dim_t destSize,            \
+                     const dim_t *destDims, const dim_t *batchDims,            \
+                     dim_t axis) {                                             \
+    for (dim_t i = 0; i < destSize; i++)                                       \
+      dest[i] = init;                                                          \
+    for (dim_t x = 0; x < batchDims[0]; x++)                                   \
+      for (dim_t y = 0; y < batchDims[1]; y++)                                 \
+        for (dim_t z = 0; z < batchDims[2]; z++)                               \
+          for (dim_t w = 0; w < batchDims[3]; w++)                             \
+            for (dim_t q = 0; q < batchDims[4]; q++)                           \
+              for (dim_t r = 0; r < batchDims[5]; r++) {                       \
+                dim_t I[] = {x, y, z, w, q, r};                                \
+                I[axis] = 0;                                                   \
+                dest[libjit_getXYZWQR(destDims, I[0], I[1], I[2], I[3], I[4],  \
+                                      I[5])] =                                 \
+                    dest[libjit_getXYZWQR(destDims, I[0], I[1], I[2], I[3],    \
+                                          I[4], I[5])] op                      \
+                        batch[libjit_getXYZWQR(batchDims, x, y, z, w, q, r)];  \
+              }                                                                \
+  }
 
-  for (dim_t x = 0; x < batchDims[0]; x++)
-    for (dim_t y = 0; y < batchDims[1]; y++)
-      for (dim_t z = 0; z < batchDims[2]; z++)
-        for (dim_t w = 0; w < batchDims[3]; w++)
-          for (dim_t q = 0; q < batchDims[4]; q++)
-            for (dim_t r = 0; r < batchDims[5]; r++) {
-              dim_t I[] = {x, y, z, w, q, r};
-              I[axis] = 0;
-              dest[libjit_getXYZWQR(destDims, I[0], I[1], I[2], I[3], I[4],
-                                    I[5])] +=
-                  batch[libjit_getXYZWQR(batchDims, x, y, z, w, q, r)];
-            }
-}
+DEFINE_BATCHEDREDUCE_KERNEL_FLOAT(batchedreduceadd_f, float, 0.0, +)
+DEFINE_BATCHEDREDUCE_KERNEL_FLOAT(batchedreduceprod_f, float, 1.0, *)
+#undef DEFINE_BATCHEDREDUCE_KERNEL_FLOAT
 
 /// Macro to reducemin/max wrapper kernels.
 #define DEFINE_REDUCE_MINMAX(func, suffix, type, init)                         \
@@ -1917,10 +2054,10 @@ void libjit_batchedreduceadd_i8(int8_t *dest, const int8_t *batch,
                        batchOffset;                                            \
               }                                                                \
               dim_t i##_D5_AXIS = 0;                                           \
-              int32_t res = libjit_scale_i32i8(sum, batchPre, batchPost,       \
-                                               batchScale, destOffset);        \
+              int32_t res = libjit_scale<int32_t>(sum, batchPre, batchPost,    \
+                                                  batchScale, destOffset);     \
               dest[libjit_getXYZWQR(destDims, i0, i1, i2, i3, i4, i5)] =       \
-                  libjit_clip(res);                                            \
+                  libjit_clip_i8(res);                                         \
             }                                                                  \
     return;
 
@@ -1945,6 +2082,9 @@ void libjit_cross_entropy_loss_f_i32(float *CE, float *P, int32_t *labels,
   libjit_cross_entropy_loss_generic(CE, P, labels, dims);
 }
 
+//===----------------------------------------------------------------------===//
+//                                    Gather
+//===----------------------------------------------------------------------===//
 void libjit_gather64_f(float *dest, const float *data, const int64_t *indices,
                        dim_t numIndices, dim_t sliceSize, dim_t numSamples,
                        dim_t sampleSize) {
@@ -1994,6 +2134,84 @@ void libjit_gather32_i32(int32_t *dest, const int32_t *data,
                 sampleSize);
 }
 
+//===----------------------------------------------------------------------===//
+//                                  Gather ND
+//===----------------------------------------------------------------------===//
+void libjit_gather_nd_f_u(float *dest, const float *data,
+                          const int64_t *indices, dim_t batchCount,
+                          dim_t inpSliceCount, dim_t outSliceCount,
+                          dim_t sliceSize, dim_t indicesDimLast,
+                          dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+void libjit_gather_nd_i8_u(int8_t *dest, const int8_t *data,
+                           const int64_t *indices, dim_t batchCount,
+                           dim_t inpSliceCount, dim_t outSliceCount,
+                           dim_t sliceSize, dim_t indicesDimLast,
+                           dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+void libjit_gather_nd_i32_u(int32_t *dest, const int32_t *data,
+                            const int64_t *indices, dim_t batchCount,
+                            dim_t inpSliceCount, dim_t outSliceCount,
+                            dim_t sliceSize, dim_t indicesDimLast,
+                            dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+void libjit_gather_nd_u_u(int64_t *dest, const int64_t *data,
+                          const int64_t *indices, dim_t batchCount,
+                          dim_t inpSliceCount, dim_t outSliceCount,
+                          dim_t sliceSize, dim_t indicesDimLast,
+                          dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+void libjit_gather_nd_f_i32(float *dest, const float *data,
+                            const int32_t *indices, dim_t batchCount,
+                            dim_t inpSliceCount, dim_t outSliceCount,
+                            dim_t sliceSize, dim_t indicesDimLast,
+                            dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+void libjit_gather_nd_i8_i32(int8_t *dest, const int8_t *data,
+                             const int32_t *indices, dim_t batchCount,
+                             dim_t inpSliceCount, dim_t outSliceCount,
+                             dim_t sliceSize, dim_t indicesDimLast,
+                             dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+void libjit_gather_nd_i32_i32(int32_t *dest, const int32_t *data,
+                              const int32_t *indices, dim_t batchCount,
+                              dim_t inpSliceCount, dim_t outSliceCount,
+                              dim_t sliceSize, dim_t indicesDimLast,
+                              dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+void libjit_gather_nd_u_i32(int64_t *dest, const int64_t *data,
+                            const int32_t *indices, dim_t batchCount,
+                            dim_t inpSliceCount, dim_t outSliceCount,
+                            dim_t sliceSize, dim_t indicesDimLast,
+                            dim_t *indicesDimProd) {
+  libjit_gather_nd(dest, data, indices, batchCount, inpSliceCount,
+                   outSliceCount, sliceSize, indicesDimLast, indicesDimProd);
+}
+
+//===----------------------------------------------------------------------===//
+//                                Gather Ranges
+//===----------------------------------------------------------------------===//
 void libjit_gatherranges64_f(float *output, int64_t *lengths, const float *data,
                              const int64_t *ranges, dim_t numExamples,
                              dim_t exampleSize) {
@@ -2132,8 +2350,16 @@ void libjit_sparse_lengths_weighted_sum_f_i32(float *dest, float *data,
                                              lengths, segments, lineSize);
 }
 
+void libjit_embedding_f(float *dest, float *weights, int64_t *indices,
+                        const dim_t *indDims, dim_t indSize, dim_t numEmbedding,
+                        dim_t embeddingDim, int64_t padIdx, bool scale,
+                        bool sparse) {
+  libjit_embedding_generic(dest, weights, indices, indDims, indSize,
+                           numEmbedding, embeddingDim, padIdx, scale, sparse);
+}
+
 void libjit_embedding_bag_f(float *dest, float *data, float *weights,
-                            size_t *indices, size_t *offsets, dim_t segments,
+                            int32_t *indices, int32_t *offsets, dim_t segments,
                             dim_t lineSize, dim_t totalLength,
                             bool hasEndOffset) {
   if (hasEndOffset) {
@@ -2142,10 +2368,10 @@ void libjit_embedding_bag_f(float *dest, float *data, float *weights,
   memset(dest, 0, segments * lineSize * sizeof(float));
   dim_t curIndex = 0;
   for (dim_t i = 0; i < segments; i++) {
-    int64_t start = offsets[i];
-    int64_t end =
+    int32_t start = offsets[i];
+    int32_t end =
         !hasEndOffset && i == segments - 1 ? totalLength : offsets[i + 1];
-    for (int64_t j = start; j < end; j++) {
+    for (int32_t j = start; j < end; j++) {
       float weight = weights[curIndex];
       dim_t line = indices[curIndex];
       for (dim_t k = 0; k < lineSize; k++) {
@@ -2231,9 +2457,9 @@ void libjit_fused_rowwise_quantized_sparse_lengths_weighted_sum_f(
 }
 
 void libjit_embedding_bag_byte_rowwise_offsets_f(
-    float *dest, int8_t *data, float *weights, size_t *indices, size_t *offsets,
-    dim_t segments, dim_t numIndices, dim_t inLineSize, dim_t outLineSize,
-    bool hasEndOffset) {
+    float *dest, int8_t *data, float *weights, int32_t *indices,
+    int32_t *offsets, dim_t segments, dim_t numIndices, dim_t inLineSize,
+    dim_t outLineSize, bool hasEndOffset) {
   if (hasEndOffset) {
     --segments;
   }
@@ -2370,16 +2596,16 @@ void libjit_local_response_normalization_grad_f(
 
 void libjit_max_pool_i8(const int8_t *inW, int8_t *outW, const dim_t *inWdims,
                         const dim_t *outWdims, dim_t *kernelSizes,
-                        dim_t *strides, dim_t *pads) {
+                        dim_t *strides, dim_t *pads, int32_t outOffset) {
   libjit_max_pool_generic(inW, outW, inWdims, outWdims, kernelSizes, strides,
-                          pads);
+                          pads, static_cast<int8_t>(outOffset));
 }
 
 void libjit_max_pool_f(const float *inW, float *outW, const dim_t *inWdims,
                        const dim_t *outWdims, dim_t *kernelSizes,
                        dim_t *strides, dim_t *pads) {
   libjit_max_pool_generic(inW, outW, inWdims, outWdims, kernelSizes, strides,
-                          pads);
+                          pads, static_cast<float>(0));
 }
 
 void libjit_max_pool_argmax_i8_u(const int8_t *inW, int8_t *outW,
@@ -2514,146 +2740,165 @@ void libjit_resizebilinear_u(int64_t *dst, const int64_t *src,
   libjit_resizebilinear_generic(dst, src, scale, inWdims, outWdims);
 }
 
-void libjit_avg_pool_i8(const int8_t *inW, int8_t *outW, const dim_t *inWdims,
-                        const dim_t *outWdims, dim_t *kernelSizes,
-                        dim_t *strides, dim_t *pads, int32_t outOffset,
-                        int32_t inOffset, int32_t outPre, int32_t outPost,
-                        int32_t outScale) {
-  dim_t pad_t = pads[0];
-  dim_t pad_l = pads[1];
-  dim_t stride_h = strides[0];
-  dim_t stride_w = strides[1];
-  dim_t kernel_h = kernelSizes[0];
-  dim_t kernel_w = kernelSizes[1];
-  // For each input in the batch:
-  for (dim_t n = 0; n < outWdims[0]; n++) {
-    // For each (x,y) step in the input/output tensor:
-    sdim_t x = -sdim_t(pad_t);
-    for (dim_t ax = 0; ax < outWdims[1]; x += stride_h, ax++) {
-      sdim_t y = -sdim_t(pad_l);
-      for (dim_t ay = 0; ay < outWdims[2]; y += stride_w, ay++) {
-        // For each layer in the output tensor:
-        for (dim_t z = 0; z < inWdims[3]; z++) {
-          int32_t sum = 0;
-
-          for (dim_t fx = 0; fx < kernel_h; fx++) {
-            for (dim_t fy = 0; fy < kernel_w; fy++) {
-              sdim_t ox = x + fx;
-              sdim_t oy = y + fy;
-
-              // Ignore index access below zero (this is due to padding).
-              if (ox < 0 || oy < 0 || ox >= (sdim_t)inWdims[1] ||
-                  oy >= (sdim_t)inWdims[2]) {
-                continue;
-              }
-              sum += inW[libjit_getXYZW(inWdims, n, (dim_t)ox, (dim_t)oy, z)] -
-                     inOffset;
-            }
-          }
-          outW[libjit_getXYZW(outWdims, n, ax, ay, z)] = libjit_clip(
-              libjit_scale_i32i8(sum, outPre, outPost, outScale, outOffset));
-        } // C
-      }   // W
-    }     // H
-  }       // N
-}
-
-void libjit_avg_pool_count_exclude_pad_i8(
-    const int8_t *inW, int8_t *outW, const dim_t *inWdims,
-    const dim_t *outWdims, dim_t *kernelSizes, dim_t *strides, dim_t *pads,
-    int32_t inOffset, int32_t outOffset, float inScale, float outScale) {
-  dim_t pad_t = pads[0];
-  dim_t pad_l = pads[1];
-  dim_t stride_h = strides[0];
-  dim_t stride_w = strides[1];
-  dim_t kernel_h = kernelSizes[0];
-  dim_t kernel_w = kernelSizes[1];
-
-  float rawFilterArea = kernel_h * kernel_w;
-  // For each input in the batch:
-  for (dim_t n = 0; n < outWdims[0]; n++) {
-    // For each (x,y) step in the input/output tensor:
-    sdim_t x = -sdim_t(pad_t);
-    for (dim_t ax = 0; ax < outWdims[1]; x += stride_h, ax++) {
-      sdim_t y = -sdim_t(pad_l);
-      for (dim_t ay = 0; ay < outWdims[2]; y += stride_w, ay++) {
-        // For each layer in the output tensor:
-        for (dim_t z = 0; z < inWdims[3]; z++) {
-          int32_t sum = 0;
-          float filterArea = rawFilterArea;
-
-          for (dim_t fx = 0; fx < kernel_h; fx++) {
-            for (dim_t fy = 0; fy < kernel_w; fy++) {
-              sdim_t ox = x + fx;
-              sdim_t oy = y + fy;
-
-              // Ignore index access below zero (this is due to padding).
-              if (ox < 0 || oy < 0 || ox >= (sdim_t)inWdims[1] ||
-                  oy >= (sdim_t)inWdims[2]) {
-                filterArea--;
-                continue;
-              }
-              sum += inW[libjit_getXYZW(inWdims, n, (dim_t)ox, (dim_t)oy, z)] -
-                     inOffset;
-            }
-          }
-          assert(filterArea != 0 && "FilterArea can't be 0");
-          outW[libjit_getXYZW(outWdims, n, ax, ay, z)] = libjit_clip(round(
-              float(sum) * (inScale / outScale / filterArea) + outOffset));
-        } // C
-      }   // W
-    }     // H
-  }       // N
-}
-
 void libjit_avg_pool_f(const float *inW, float *outW, const dim_t *inWdims,
                        const dim_t *outWdims, dim_t *kernelSizes,
                        dim_t *strides, dim_t *pads, bool countIncludePads) {
-  dim_t pad_t = pads[0];
-  dim_t pad_l = pads[1];
-  dim_t stride_h = strides[0];
-  dim_t stride_w = strides[1];
-  dim_t kernel_h = kernelSizes[0];
-  dim_t kernel_w = kernelSizes[1];
-  float rawFilterArea = kernel_h * kernel_w;
-  // For each input in the batch:
-  for (dim_t n = 0; n < outWdims[0]; n++) {
-    // For each (x,y) step in the input/output tensor:
-    sdim_t x = -(sdim_t)pad_t;
-    for (dim_t ax = 0; ax < outWdims[1]; x += stride_h, ax++) {
-      sdim_t y = -(sdim_t)pad_l;
-      for (dim_t ay = 0; ay < outWdims[2]; y += stride_w, ay++) {
-        // For each layer in the output tensor:
-        for (dim_t z = 0; z < inWdims[3]; z++) {
 
+  size_t kernelH = kernelSizes[0];
+  size_t kernelW = kernelSizes[1];
+
+  size_t strideH = strides[0];
+  size_t strideW = strides[1];
+
+  size_t padT = pads[0];
+  size_t padL = pads[1];
+
+  // For each input in the batch.
+  for (size_t n = 0; n < inWdims[0]; n++) {
+
+    // For each output height.
+    ssize_t i_h_min = -(ssize_t)padT;
+    for (size_t o_h = 0; o_h < outWdims[1]; o_h++, i_h_min += strideH) {
+
+      // Effective kernel height limits.
+      ssize_t f_h_min = libjit_conv_flt_min(i_h_min);
+      ssize_t f_h_max = libjit_conv_flt_max(inWdims[1], kernelH, i_h_min);
+      ssize_t f_h_len = libjit_conv_flt_len(f_h_min, f_h_max);
+      const float *inpPtrH =
+          inW + (i_h_min + f_h_min) * inWdims[2] * inWdims[3];
+
+      // For each output width.
+      ssize_t i_w_min = -(ssize_t)padL;
+      for (size_t o_w = 0; o_w < outWdims[2]; o_w++, i_w_min += strideW) {
+
+        // Effective kernel width limits.
+        ssize_t f_w_min = libjit_conv_flt_min(i_w_min);
+        ssize_t f_w_max = libjit_conv_flt_max(inWdims[2], kernelW, i_w_min);
+        ssize_t f_w_len = libjit_conv_flt_len(f_w_min, f_w_max);
+        const float *inpPtr = inpPtrH + (i_w_min + f_w_min) * inWdims[3];
+
+        // For each output channel.
+        for (size_t o_c = 0; o_c < outWdims[3]; o_c++) {
+
+          // Initialize sum.
           float sum = 0;
-          float filterArea = rawFilterArea;
 
-          for (dim_t fx = 0; fx < kernel_h; fx++) {
-            for (dim_t fy = 0; fy < kernel_w; fy++) {
-              sdim_t ox = x + fx;
-              sdim_t oy = y + fy;
+          // For each kernel height.
+          for (size_t f_h = 0; f_h < f_h_len; f_h++) {
 
-              // Ignore index access below zero (this is due to padding).
-              if (ox < 0 || oy < 0 || ox >= (sdim_t)inWdims[1] ||
-                  oy >= (sdim_t)inWdims[2]) {
-                if (!countIncludePads) {
-                  filterArea--;
-                }
+            // For each kernel width.
+            for (size_t f_w = 0; f_w < f_w_len; f_w++) {
 
-                continue;
-              }
+              // Accumulate along the kernel width.
+              sum += (*inpPtr);
+              inpPtr += inWdims[3];
+            }
 
-              sum += inW[libjit_getXYZW(inWdims, n, (dim_t)ox, (dim_t)oy, z)];
+            // Advance input pointer for next kernel height.
+            inpPtr = inpPtr - f_w_len * inWdims[3] + inWdims[2] * inWdims[3];
+          }
+
+          // Normalize and store.
+          float area =
+              countIncludePads ? (kernelH * kernelW) : (f_h_len * f_w_len);
+          *outW++ = (area == 0) ? 0 : sum / area;
+
+          // Advance input pointer for next output channel.
+          inpPtr = inpPtr - f_h_len * inWdims[2] * inWdims[3] + 1;
+        }
+      }
+    }
+
+    // Advance input pointer for next batch.
+    inW += inWdims[1] * inWdims[2] * inWdims[3];
+  }
+}
+
+void libjit_avg_pool_i8(const int8_t *inW, int8_t *outW, const dim_t *inWdims,
+                        const dim_t *outWdims, dim_t *kernelSizes,
+                        dim_t *strides, dim_t *pads, bool countIncludePads,
+                        int32_t outOffset, int32_t inOffset, int32_t outPre,
+                        int32_t outPost, int32_t outScale) {
+
+  size_t kernelH = kernelSizes[0];
+  size_t kernelW = kernelSizes[1];
+
+  size_t strideH = strides[0];
+  size_t strideW = strides[1];
+
+  size_t padT = pads[0];
+  size_t padL = pads[1];
+
+  // For each input in the batch.
+  for (size_t n = 0; n < inWdims[0]; n++) {
+
+    // For each output height.
+    ssize_t i_h_min = -(ssize_t)padT;
+    for (size_t o_h = 0; o_h < outWdims[1]; o_h++, i_h_min += strideH) {
+
+      // Effective kernel height limits.
+      ssize_t f_h_min = libjit_conv_flt_min(i_h_min);
+      ssize_t f_h_max = libjit_conv_flt_max(inWdims[1], kernelH, i_h_min);
+      ssize_t f_h_len = libjit_conv_flt_len(f_h_min, f_h_max);
+      const int8_t *inpPtrH =
+          inW + (i_h_min + f_h_min) * inWdims[2] * inWdims[3];
+
+      // For each output width.
+      ssize_t i_w_min = -(ssize_t)padL;
+      for (size_t o_w = 0; o_w < outWdims[2]; o_w++, i_w_min += strideW) {
+
+        // Effective kernel width limits.
+        ssize_t f_w_min = libjit_conv_flt_min(i_w_min);
+        ssize_t f_w_max = libjit_conv_flt_max(inWdims[2], kernelW, i_w_min);
+        ssize_t f_w_len = libjit_conv_flt_len(f_w_min, f_w_max);
+        const int8_t *inpPtr = inpPtrH + (i_w_min + f_w_min) * inWdims[3];
+
+        // For each output channel.
+        for (size_t o_c = 0; o_c < outWdims[3]; o_c++) {
+
+          // Initialize sum.
+          int32_t sum = 0;
+
+          // For each kernel height.
+          for (size_t f_h = 0; f_h < f_h_len; f_h++) {
+
+            // For each kernel width.
+            for (size_t f_w = 0; f_w < f_w_len; f_w++) {
+
+              // Accumulate along the kernel width.
+              sum += (*inpPtr) - inOffset;
+              inpPtr += inWdims[3];
+            }
+
+            // Advance input pointer for next kernel height.
+            inpPtr = inpPtr - f_w_len * inWdims[3] + inWdims[2] * inWdims[3];
+          }
+
+          // Normalize and store.
+          if (countIncludePads) {
+            sum = libjit_scale<int32_t>(sum, outPre, outPost, outScale,
+                                        outOffset);
+            *outW++ = libjit_clip_i8(sum);
+          } else {
+            int32_t area = f_h_len * f_w_len;
+            if (area == 0) {
+              *outW++ = outOffset;
+            } else {
+              sum = libjit_scale<int32_t>(sum, outPre, outPost, outScale, 0);
+              sum = libjit_div_round_i32(sum, area) + outOffset;
+              *outW++ = libjit_clip_i8(sum);
             }
           }
 
-          assert(filterArea != 0 && "FilterArea shouldn't be 0");
-          outW[libjit_getXYZW(outWdims, n, ax, ay, z)] = sum / filterArea;
-        } // C
-      }   // W
-    }     // H
-  }       // N
+          // Advance input pointer for next output channel.
+          inpPtr = inpPtr - f_h_len * inWdims[2] * inWdims[3] + 1;
+        }
+      }
+    }
+
+    // Advance input pointer for next batch.
+    inW += inWdims[1] * inWdims[2] * inWdims[3];
+  }
 }
 
 void libjit_adaptive_avg_pool_f(const float *inW, float *outW,
@@ -2758,7 +3003,13 @@ void libjit_avg_pool_grad_f(float *inG, const float *outG, const dim_t *inGdims,
 int8_t libjit_element_quantize_kernel_i8(dim_t idx, const float *inW,
                                          float scale, int32_t offset) {
   int32_t result = (int32_t)nearbyintf(inW[idx] / scale + offset);
-  return (int8_t)MAX(INT8_MIN, MIN(INT8_MAX, result));
+  return libjit_clip_i8(result);
+}
+
+int16_t libjit_element_quantize_kernel_i16(dim_t idx, const float *inW,
+                                           float scale, int32_t offset) {
+  int32_t result = (int32_t)nearbyintf(inW[idx] / scale + offset);
+  return libjit_clip_i16(result);
 }
 
 int32_t libjit_element_quantize_kernel_i32(dim_t idx, const float *inW,
@@ -2767,8 +3018,18 @@ int32_t libjit_element_quantize_kernel_i32(dim_t idx, const float *inW,
   return result;
 }
 
-float libjit_element_dequantize_kernel_f(dim_t idx, const int8_t *inW,
-                                         float scale, int32_t offset) {
+float libjit_element_dequantize_kernel_i8(dim_t idx, const int8_t *inW,
+                                          float scale, int32_t offset) {
+  return scale * (inW[idx] - offset);
+}
+
+float libjit_element_dequantize_kernel_i16(dim_t idx, const int16_t *inW,
+                                           float scale, int32_t offset) {
+  return scale * (inW[idx] - offset);
+}
+
+float libjit_element_dequantize_kernel_i32(dim_t idx, const int32_t *inW,
+                                           float scale, int32_t offset) {
   return scale * (inW[idx] - offset);
 }
 
@@ -2777,8 +3038,26 @@ int8_t libjit_element_rescale_kernel_i8(dim_t idx, const int8_t *inW,
                                         int32_t pre, int32_t post,
                                         int32_t scale) {
   int32_t s =
-      libjit_scale_i32i8(inW[idx] - inOffset, pre, post, scale, outOffset);
-  return libjit_clip(s);
+      libjit_scale<int32_t>(inW[idx] - inOffset, pre, post, scale, outOffset);
+  return libjit_clip_i8(s);
+}
+
+int16_t libjit_element_rescale_kernel_i16(dim_t idx, const int16_t *inW,
+                                          int32_t outOffset, int32_t inOffset,
+                                          int32_t pre, int32_t post,
+                                          int32_t scale) {
+  int32_t s =
+      libjit_scale<int64_t>(inW[idx] - inOffset, pre, post, scale, outOffset);
+  return libjit_clip_i16(s);
+}
+
+int32_t libjit_element_rescale_kernel_i32(dim_t idx, const int32_t *inW,
+                                          int32_t outOffset, int32_t inOffset,
+                                          int32_t pre, int32_t post,
+                                          int32_t scale) {
+  int32_t s =
+      libjit_scale<int64_t>(inW[idx] - inOffset, pre, post, scale, outOffset);
+  return s;
 }
 
 void libjit_softmax_f(const float *inW, float *outW, const dim_t *idim,
@@ -2805,6 +3084,53 @@ void libjit_softmax_f(const float *inW, float *outW, const dim_t *idim,
       outW[libjit_getXY(odim, n, i)] = outW[libjit_getXY(odim, n, i)] / sum;
     }
   } // N
+}
+
+void libjit_softmax_i8(const int8_t *inW, int8_t *outW, const dim_t *dims,
+                       const uint32_t *expData, int32_t outputOffset,
+                       uint32_t invScale, uint32_t integerPoint,
+                       uint32_t invScalePoint) {
+  expData += 255;
+  for (int j = 0; j < dims[0]; j++) {
+
+    // Find max value.
+    int8_t max = std::numeric_limits<int8_t>::min();
+    for (uint32_t i = 0; i < dims[1]; i++) {
+      max = MAX(max, *inW);
+      inW++;
+    }
+    inW -= dims[1];
+
+    // Compute the sum of exponentials.
+    // The exponentials from the LookUp Table are in Q1.31 format.
+    uint32_t sum = 0;
+    for (int i = 0; i < dims[1]; i++) {
+      sum += (expData[*inW++ - max] >> (integerPoint - 1));
+    }
+    inW -= dims[1];
+
+    //  Reformat fixed point representation from Q32 to Q16 for sum.
+    uint32_t sumPoint = integerPoint;
+    while (!(sum & 0x80000000)) {
+      sum = sum << 1;
+      sumPoint--;
+    }
+    sum = sum >> 16;
+
+    // Compute 1 / outputScale * 1 / sum, where sum is computed above
+    // align point for both operands.
+    uint32_t division = (invScale + sum / 2) / sum;
+    int size = (16 - invScalePoint + sumPoint);
+    int point = 31 + size;
+
+    // Multiply with exp and bring the result into the right range.
+    uint64_t rnd = 1 << (point - 1);
+    for (int i = 0; i < dims[1]; i++) {
+      uint64_t mul = (uint64_t)division * (uint64_t)expData[*inW++ - max];
+      int32_t res = (int32_t)((mul + rnd) >> point) + outputOffset;
+      *outW++ = MAX(MIN(res, 127), -128);
+    }
+  }
 }
 
 void libjit_softmax_grad_f_u(float *inG, float *outW, const size_t *selectedW,
@@ -3111,6 +3437,12 @@ void libjit_convertTo_i32_b(int32_t *dstPtr, const bool *srcPtr,
                                                     numDims);
 }
 
+void libjit_convertTo_i32_f(int32_t *dstPtr, const float *srcPtr,
+                            const dim_t *dims, dim_t numDims) {
+  libjit_copy_kernel_with_conversion<int32_t, float>(dstPtr, srcPtr, dims,
+                                                     numDims);
+}
+
 /// Update min/max values \p compInfo and histogram \p existingHistogram with
 /// data collected from tensor \p inputTensor.
 /// Note: code ported from Profile.cpp: generateTensorHistogram
@@ -3255,7 +3587,7 @@ void libjit_fft_complex_f(float *output, float *input,
   if (inPlace) {
     for (dim_t idx = 0; idx < fftLength; idx++) {
       int32_t bitRevIdx = bitReverseIndices[idx];
-      if (idx < bitRevIdx) {
+      if (int32_t(idx) < bitRevIdx) {
         // Swap complex pair.
         float real = input[2 * idx + 0];
         float imag = input[2 * idx + 1];
@@ -3507,4 +3839,399 @@ void libjit_mfcc_f(void *scratch, float *coefficients, const float *spectrogram,
     spectrogram += winSize;
   }
 }
+
+//===----------------------------------------------------------------------===//
+//                          TFLiteDetectionPostProcess
+//===----------------------------------------------------------------------===//
+static int32_t partition(int32_t *arr, int32_t low, int32_t high,
+                         float *values) {
+  float pivot = values[high];
+  int32_t i = (low - 1);
+  float swap_float;
+  int32_t swap_int;
+
+  for (int32_t j = low; j <= high - 1; j++) {
+    if (values[j] > pivot) {
+      i++;
+
+      swap_float = values[i];
+      values[i] = values[j];
+      values[j] = swap_float;
+
+      swap_int = arr[i];
+      arr[i] = arr[j];
+      arr[j] = swap_int;
+    }
+  }
+
+  swap_float = values[i + 1];
+  values[i + 1] = values[high];
+  values[high] = swap_float;
+
+  swap_int = arr[i + 1];
+  arr[i + 1] = arr[high];
+  arr[high] = swap_int;
+
+  return (i + 1);
+}
+
+static void partial_sort(int32_t *arr, int32_t i, int32_t j, int32_t k,
+                         float *values) {
+  int32_t p;
+  if (i < j) {
+    p = partition(arr, i, j, values);
+
+    partial_sort(arr, i, p - 1, k, values);
+
+    if (p < k - 1)
+      partial_sort(arr, p + 1, j, k, values);
+  }
+}
+
+static void iota(int32_t *first, int32_t *last, int32_t value) {
+  while (first != last) {
+    *first++ = value;
+    value++;
+  }
+}
+
+static void decreasing_partial_arg_sort(float *values, int32_t num_values,
+                                        int32_t num_to_sort, int32_t *indices,
+                                        float *aux_values) {
+  iota(indices, indices + num_values, 0);
+
+  memcpy(aux_values, values, sizeof(float) * num_values);
+
+  partial_sort(indices, 0, num_values - 1, num_to_sort, aux_values);
+}
+
+static void select_detection_above_score_threshold(
+    float *scores, int32_t num_scores, float threshold, float *keep_values,
+    int32_t *keep_indices, int32_t *num_indices) {
+  int32_t idx = 0;
+  for (int32_t i = 0; i < num_scores; i++) {
+    if (scores[i] >= threshold) {
+      keep_indices[idx] = i;
+      keep_values[idx] = scores[i];
+      idx++;
+    }
+  }
+  *num_indices = idx;
+}
+
+/// Compute the IOU (Intersection Over Union) metric between two boxes. Each
+/// of box1 and box2 is a vector with 4 floating-point values with the box
+/// coordinates in the following format: [ymin, xmin, ymax, xmax].
+static float tflite_compute_iou(float *box1, float *box2) {
+
+  // Compute the areas of the two boxes.
+  float box1Area = (box1[2] - box1[0]) * (box1[3] - box1[1]);
+  float box2Area = (box2[2] - box2[0]) * (box2[3] - box2[1]);
+
+  // If box coordinates are invalid we return 0.
+  if (box1Area <= 0 || box2Area <= 0) {
+    return 0.0f;
+  }
+
+  // Determine the coordinates of the intersection rectangle.
+  float iYmin = MAX(box1[0], box2[0]);
+  float iXmin = MAX(box1[1], box2[1]);
+  float iYmax = MIN(box1[2], box2[2]);
+  float iXmax = MIN(box1[3], box2[3]);
+
+  // Compute the area of the intersection rectangle.
+  float iArea = MAX(0.0f, iXmax - iXmin) * MAX(0.0f, iYmax - iYmin);
+
+  // Compute the area of the union (reunion) rectangle.
+  float uArea = box1Area + box2Area - iArea;
+
+  // Compute the Intersection Over Union metric.
+  return iArea / uArea;
+}
+
+static void tflite_helper(float *boxesPtr, int32_t num_boxes,
+                          float nms_score_threshold, float nms_iou_treshold,
+                          float *class_scores, int32_t num_scores,
+                          int32_t *selected, int32_t *num_selected,
+                          int32_t max_detections, int32_t *keep_indices,
+                          float *keep_scores, int32_t *sorted_indices_helper) {
+
+  *num_selected = 0;
+
+  int32_t num_scores_kept;
+  select_detection_above_score_threshold(class_scores, num_boxes,
+                                         nms_score_threshold, keep_scores,
+                                         keep_indices, &num_scores_kept);
+
+  decreasing_partial_arg_sort(keep_scores, num_scores_kept, num_scores_kept,
+                              sorted_indices_helper, (float *)selected);
+
+  int32_t num_boxes_kept = num_scores_kept;
+  int32_t output_size = MIN(num_boxes_kept, max_detections);
+
+  int32_t num_active_candidate = num_boxes_kept;
+
+  uint8_t *active_box_candidate = (uint8_t *)keep_scores;
+
+  for (int32_t row = 0; row < num_boxes_kept; row++) {
+    active_box_candidate[row] = 1;
+  }
+
+  for (int32_t i = 0; i < num_boxes_kept; i++) {
+    if (num_active_candidate == 0 || *num_selected >= output_size)
+      break;
+    if (active_box_candidate[i] == 1) {
+      selected[*num_selected] = keep_indices[sorted_indices_helper[i]];
+      (*num_selected)++;
+      active_box_candidate[i] = 0;
+      num_active_candidate--;
+    } else {
+      continue;
+    }
+
+    for (int32_t j = i + 1; j < num_boxes_kept; ++j) {
+      if (active_box_candidate[j] == 1) {
+
+        float *box1 = boxesPtr + 4 * keep_indices[sorted_indices_helper[i]];
+        float *box2 = boxesPtr + 4 * keep_indices[sorted_indices_helper[j]];
+        float iou = tflite_compute_iou(box1, box2);
+
+        if (iou > nms_iou_treshold) {
+          active_box_candidate[j] = 0;
+          num_active_candidate--;
+        }
+      }
+    }
+  }
+}
+
+void libjit_tflite_detection_post_process_f(
+    float *boxes, float *scores, float *anchors, float *detectionBoxes,
+    int32_t *detectionClasses, float *detectionScores, int32_t *numDetections,
+    int8_t *scratch, int32_t numBoxes, int32_t numTotalClasses,
+    int32_t numClasses, int32_t maxDetections, int32_t maxClassesPerDetection,
+    int32_t maxDetectionsPerClass, float iouThreshold, float scoreThreshold,
+    float xScaleInv, float yScaleInv, float hScaleInv, float wScaleInv,
+    bool regularNMS) {
+
+  // Decode the box coordinates in-place using the anchors.
+  for (int32_t i = 0; i < numBoxes; i++) {
+
+    float *box = &boxes[i * 4];
+    float *anchor = &anchors[i * 4];
+
+    float ycenter = box[0] * yScaleInv * anchor[2] + anchor[0];
+    float xcenter = box[1] * xScaleInv * anchor[3] + anchor[1];
+
+    float half_h = 0.5f * expf(box[2] * hScaleInv) * anchor[2];
+    float half_w = 0.5f * expf(box[3] * wScaleInv) * anchor[3];
+
+    box[0] = ycenter - half_h;
+    box[1] = xcenter - half_w;
+    box[2] = ycenter + half_h;
+    box[3] = xcenter + half_w;
+  }
+
+  int32_t max_categories_per_anchor = maxClassesPerDetection;
+  int32_t num_categories_per_anchor =
+      MIN(max_categories_per_anchor, numClasses);
+  int32_t label_offset = numTotalClasses - numClasses;
+
+  if (regularNMS) {
+    int32_t num_detections_per_class = maxDetectionsPerClass;
+
+    float *class_scores = (float *)(scratch);
+    scratch += numBoxes * sizeof(float);
+
+    int32_t *box_indices_after_regular_nms = (int32_t *)(scratch);
+    scratch += (numBoxes + maxDetections) * sizeof(int32_t);
+
+    float *scores_after_regular_nms = (float *)(scratch);
+    scratch += (numBoxes + maxDetections) * sizeof(float);
+
+    int32_t size_of_sorted_indices = 0;
+
+    int32_t *sorted_indices = (int32_t *)(scratch);
+    scratch += (numBoxes + maxDetections) * sizeof(int32_t);
+
+    float *sorted_values = (float *)(scratch);
+    scratch += MIN(numBoxes, maxDetectionsPerClass) * sizeof(float);
+
+    int32_t *selected = (int32_t *)scratch;
+    scratch += numBoxes * sizeof(int32_t);
+
+    int32_t *keep_indices = (int32_t *)(scratch);
+    scratch += numBoxes * sizeof(int32_t);
+
+    float *keep_scores = (float *)(scratch);
+    scratch += numBoxes * sizeof(float);
+
+    int32_t *sorted_indices_helper = (int32_t *)scratch;
+    scratch += numBoxes * sizeof(int32_t);
+
+    for (int32_t col = 0; col < numClasses; col++) {
+      for (int32_t row = 0; row < numBoxes; row++) {
+        class_scores[row] =
+            *(scores + row * numTotalClasses + col + label_offset);
+      }
+
+      int32_t num_selected;
+      tflite_helper(boxes, numBoxes, scoreThreshold, iouThreshold, class_scores,
+                    numBoxes, selected, &num_selected, num_detections_per_class,
+                    keep_indices, keep_scores, sorted_indices_helper);
+
+      int32_t output_index = size_of_sorted_indices;
+      for (int32_t i = 0; i < num_selected; i++) {
+        int32_t selected_index = selected[i];
+        box_indices_after_regular_nms[output_index] =
+            (selected_index * numTotalClasses + col + label_offset);
+        scores_after_regular_nms[output_index] = class_scores[selected_index];
+        output_index++;
+      }
+
+      int32_t num_indices_to_sort = MIN(output_index, maxDetections);
+
+      decreasing_partial_arg_sort(scores_after_regular_nms, output_index,
+                                  num_indices_to_sort, sorted_indices,
+                                  keep_scores);
+
+      for (int32_t row = 0; row < num_indices_to_sort; row++) {
+        int32_t temp = sorted_indices[row];
+        sorted_indices[row] = box_indices_after_regular_nms[temp];
+        sorted_values[row] = scores_after_regular_nms[temp];
+      }
+
+      for (int32_t row = 0; row < num_indices_to_sort; row++) {
+        box_indices_after_regular_nms[row] = sorted_indices[row];
+        scores_after_regular_nms[row] = sorted_values[row];
+      }
+
+      size_of_sorted_indices = num_indices_to_sort;
+    }
+
+    for (int32_t output_box_index = 0;
+         output_box_index < size_of_sorted_indices; output_box_index++) {
+
+      int32_t anchor_index =
+          box_indices_after_regular_nms[output_box_index] / numTotalClasses;
+      int32_t class_index = box_indices_after_regular_nms[output_box_index] -
+                            anchor_index * numTotalClasses - label_offset;
+      float selected_score = scores_after_regular_nms[output_box_index];
+      float *box = boxes + anchor_index * 4;
+
+      *detectionBoxes++ = *box++;
+      *detectionBoxes++ = *box++;
+      *detectionBoxes++ = *box++;
+      *detectionBoxes++ = *box++;
+      *detectionClasses++ = class_index;
+      *detectionScores++ = selected_score;
+    }
+
+    *numDetections = size_of_sorted_indices;
+  } else {
+    float *max_scores = (float *)scratch;
+    scratch += numBoxes * sizeof(float);
+
+    int32_t *sorted_classes_indices = (int32_t *)scratch;
+    scratch += numBoxes * MIN(maxDetections, numClasses) * sizeof(int32_t);
+
+    int32_t *selected = (int32_t *)scratch;
+    scratch += numBoxes * sizeof(int32_t);
+
+    int32_t *keep_indices = (int32_t *)(scratch);
+    scratch += numBoxes * sizeof(int32_t);
+
+    float *keep_scores = (float *)(scratch);
+    scratch += numBoxes * sizeof(float);
+
+    int32_t *sorted_indices_helper = (int32_t *)scratch;
+    scratch += numBoxes * sizeof(int32_t);
+
+    for (int32_t row = 0; row < numBoxes; row++) {
+      float *box_scores = scores + row * numTotalClasses + label_offset;
+      int32_t *class_indices =
+          sorted_classes_indices + row * num_categories_per_anchor;
+
+      decreasing_partial_arg_sort(box_scores, numClasses,
+                                  num_categories_per_anchor, keep_indices,
+                                  keep_scores);
+
+      for (int32_t i = 0; i < num_categories_per_anchor; i++) {
+        class_indices[i] = keep_indices[i];
+      }
+
+      max_scores[row] = box_scores[class_indices[0]];
+    }
+
+    int32_t selected_size = 0;
+    tflite_helper(boxes, numBoxes, scoreThreshold, iouThreshold, max_scores,
+                  numBoxes, selected, &selected_size, maxDetections,
+                  keep_indices, keep_scores, sorted_indices_helper);
+
+    int32_t num_detections = 0;
+    for (int32_t i = 0; i < selected_size; i++) {
+
+      int32_t selected_index = selected[i];
+      float *box = boxes + selected_index * 4;
+      float *box_scores =
+          scores + selected_index * numTotalClasses + label_offset;
+      int32_t *class_indices =
+          sorted_classes_indices + selected_index * num_categories_per_anchor;
+
+      for (int32_t col = 0; (col < num_categories_per_anchor) &&
+                            (num_detections <= selected_size);
+           ++col) {
+        *detectionBoxes++ = box[0];
+        *detectionBoxes++ = box[1];
+        *detectionBoxes++ = box[2];
+        *detectionBoxes++ = box[3];
+        *detectionClasses++ = class_indices[col];
+        *detectionScores++ = box_scores[class_indices[col]];
+        num_detections++;
+      }
+    }
+
+    *numDetections = selected_size;
+  }
+}
+
+//===----------------------------------------------------------------------===//
+//                          Instrumentation Callbacks
+//===----------------------------------------------------------------------===//
+#ifdef GLOW_LIBJIT_EXTERNAL_FUNCTIONS
+/// Glow IR instrumentation external callbacks.
+void glow_instrument_before(int id, int kind, int opInp, int opOut,
+                            uint8_t **opAddr, int *opSize);
+void glow_instrument_after(int id, int kind, int opInp, int opOut,
+                           uint8_t **opAddr, int *opSize);
+
+__attribute__((noinline)) void libjit_instrument_before(int id, int kind,
+                                                        int opInp, int opOut,
+                                                        uint8_t **opAddr,
+                                                        int *opSize) {
+  glow_instrument_before(id, kind, opInp, opOut, opAddr, opSize);
+}
+
+__attribute__((noinline)) void libjit_instrument_after(int id, int kind,
+                                                       int opInp, int opOut,
+                                                       uint8_t **opAddr,
+                                                       int *opSize) {
+  glow_instrument_after(id, kind, opInp, opOut, opAddr, opSize);
+}
+
+/// TFLite custom operator callback.
+void glow_tflite_custom_operator(const char *type, const uint8_t *optsAddr,
+                                 int optsSize, int opInp, int opOut,
+                                 uint8_t **opAddr, int *opSize);
+
+__attribute__((noinline)) void
+libjit_glow_tflite_custom_operator(const char *type, const uint8_t *optsAddr,
+                                   int optsSize, int opInp, int opOut,
+                                   uint8_t **opAddr, int *opSize) {
+  glow_tflite_custom_operator(type, optsAddr, optsSize, opInp, opOut, opAddr,
+                              opSize);
+}
+
+#endif
+
 } // extern "C"

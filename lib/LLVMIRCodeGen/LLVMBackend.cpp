@@ -26,11 +26,11 @@
 #include "glow/IR/Instrs.h"
 #include "glow/Optimizer/IROptimizer/IROptimizer.h"
 #include "glow/Support/Debug.h"
-
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/Support/Host.h"
 
 using namespace glow;
 
@@ -43,8 +43,8 @@ namespace {
 /// Perform memory allocation for a JIT execution.
 void allocateJITMemory(const IRFunction *F, AllocationsInfo &allocationsInfo) {
   allocationsInfo.numberValues(F);
-  allocationsInfo.allocateActivations(F);
   allocationsInfo.allocateWeightVars(F);
+  allocationsInfo.allocateActivations(F);
   allocationsInfo.allocateTensorViews(F);
 }
 
@@ -58,6 +58,9 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::BatchedReduceMinNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Int32ITy, ElemKind::Int64ITy});
+
+  case Kinded::Kind::BatchedReduceProdNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy});
 
   case Kinded::Kind::AddNodeKind:
   case Kinded::Kind::MulNodeKind:
@@ -78,6 +81,7 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Int8QTy});
 
+  case Kinded::Kind::HardSwishNodeKind:
   case Kinded::Kind::AdaptiveAvgPoolNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy});
 
@@ -106,8 +110,9 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::ReshapeNodeKind:
     // These are implemented via a Copy Instruction.
     return NI.allInputsAndOutputsHaveSameElemKind(
-        {ElemKind::FloatTy, ElemKind::Int8QTy, ElemKind::Int32QTy,
-         ElemKind::Int32ITy, ElemKind::Int64ITy, ElemKind::BoolTy});
+        {ElemKind::FloatTy, ElemKind::Int8QTy, ElemKind::Int16QTy,
+         ElemKind::Int32QTy, ElemKind::Int32ITy, ElemKind::Int64ITy,
+         ElemKind::BoolTy});
 
     // InsertTensor ==> Copy + InsertTensor. Copy supports everything
     // ReshapeNode above supports, so InsertTensor is the limiting factor.
@@ -123,6 +128,9 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Int8QTy, ElemKind::Int32QTy,
          ElemKind::Int32ITy, ElemKind::Int64ITy});
+  case Kinded::Kind::FmodNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Int32ITy, ElemKind::Int64ITy});
   case Kinded::Kind::SpaceToDepthNodeKind:
   case Kinded::Kind::DivNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -163,13 +171,18 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
            (NI.getInElemTy(SparseLengthsWeightedSumNode::LengthsIdx) ==
             ElemKind::Int32ITy);
 
+  case Kinded::Kind::EmbeddingNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+               {ElemKind::FloatTy}, {EmbeddingNode::IndicesIdx}) &&
+           (NI.getInElemTy(EmbeddingNode::IndicesIdx) == ElemKind::Int32ITy);
+
   case Kinded::Kind::EmbeddingBagNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy},
                {EmbeddingBagNode::IndicesIdx, EmbeddingBagNode::OffsetsIdx}) &&
            (NI.getInElemTy(EmbeddingBagNode::IndicesIdx) ==
-            ElemKind::Int64ITy) &&
-           (NI.getInElemTy(EmbeddingBagNode::OffsetsIdx) == ElemKind::Int64ITy);
+            ElemKind::Int32ITy) &&
+           (NI.getInElemTy(EmbeddingBagNode::OffsetsIdx) == ElemKind::Int32ITy);
 
   case Kinded::Kind::SparseLengthsWeightedSumGradNodeKind:
     // GradOfInputNamedIndicesIdx and GradOfInputNamedLengthsIdx do not need to
@@ -182,7 +195,7 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
                 SparseLengthsWeightedSumGradNode::
                     GradOfInputNamedLengthsIdx}) &&
            (NI.getInElemTy(SparseLengthsWeightedSumGradNode::IndicesIdx) ==
-                ElemKind::Int64ITy ||
+                ElemKind::Int32ITy ||
             NI.getInElemTy(SparseLengthsWeightedSumGradNode::IndicesIdx) ==
                 ElemKind::Int32ITy) &&
            (NI.getInElemTy(SparseLengthsWeightedSumGradNode::LengthsIdx) ==
@@ -219,8 +232,12 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::Int32ITy});
 
   case Kinded::Kind::IntLookupTableNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::Int8QTy, ElemKind::Int16QTy});
+
   case Kinded::Kind::RescaleQuantizedNodeKind:
-    return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::Int8QTy});
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::Int8QTy, ElemKind::Int16QTy, ElemKind::Int32QTy});
 
   case Kinded::Kind::PowNodeKind:
   case Kinded::Kind::AvgPoolGradNodeKind:
@@ -309,6 +326,14 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
            ((NI.getInElemTy(GatherNode::IndicesIdx) == ElemKind::Int32ITy) ||
             (NI.getInElemTy(GatherNode::IndicesIdx) == ElemKind::Int64ITy));
 
+  case Kinded::Kind::GatherNDNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+               {ElemKind::FloatTy, ElemKind::Int8QTy, ElemKind::Int64ITy,
+                ElemKind::Int32ITy},
+               {GatherNDNode::IndicesIdx}) &&
+           ((NI.getInElemTy(GatherNDNode::IndicesIdx) == ElemKind::Int32ITy) ||
+            (NI.getInElemTy(GatherNDNode::IndicesIdx) == ElemKind::Int64ITy));
+
   case Kinded::Kind::GatherRangesNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy, ElemKind::Int8QTy, ElemKind::Int64ITy,
@@ -349,6 +374,7 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::CeilNodeKind:
   case Kinded::Kind::RoundNodeKind:
   case Kinded::Kind::SqrtNodeKind:
+  case Kinded::Kind::ErfNodeKind:
   case Kinded::Kind::RsqrtNodeKind:
   case Kinded::Kind::ReciprocalNodeKind:
   case Kinded::Kind::SinNodeKind:
@@ -380,15 +406,19 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::QuantizeNodeKind:
     return (NI.getInElemTy(QuantizeNode::InputIdx) == ElemKind::FloatTy) &&
            ((NI.getOutElemTy(QuantizeNode::ResultIdx) == ElemKind::Int8QTy) ||
+            (NI.getOutElemTy(QuantizeNode::ResultIdx) == ElemKind::Int16QTy) ||
             (NI.getOutElemTy(QuantizeNode::ResultIdx) == ElemKind::Int32QTy));
 
   case Kinded::Kind::DequantizeNodeKind:
-    return (NI.getInElemTy(DequantizeNode::InputIdx) == ElemKind::Int8QTy) &&
+    return ((NI.getInElemTy(DequantizeNode::InputIdx) == ElemKind::Int8QTy) ||
+            (NI.getInElemTy(DequantizeNode::InputIdx) == ElemKind::Int16QTy) ||
+            (NI.getInElemTy(DequantizeNode::InputIdx) == ElemKind::Int32QTy)) &&
            (NI.getOutElemTy(DequantizeNode::ResultIdx) == ElemKind::FloatTy);
 
   case Kinded::Kind::SoftMaxNodeKind:
-    return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy},
-                                                  {SoftMaxNode::SelectedIdx}) &&
+    return NI.allInputsAndOutputsHaveSameElemKind(
+               {ElemKind::FloatTy, ElemKind::Int8QTy},
+               {SoftMaxNode::SelectedIdx}) &&
            (NI.getInElemTy(SoftMaxNode::SelectedIdx) == ElemKind::Int64ITy ||
             NI.getInElemTy(SoftMaxNode::SelectedIdx) == ElemKind::Int32ITy);
 
@@ -411,9 +441,9 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
            (NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::WeightsIdx) ==
             ElemKind::FloatTy) &&
            (NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::IndicesIdx) ==
-            ElemKind::Int64ITy) &&
+            ElemKind::Int32ITy) &&
            (NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::OffsetsIdx) ==
-            ElemKind::Int64ITy) &&
+            ElemKind::Int32ITy) &&
            (NI.getOutElemTy(EmbeddingBagByteRowwiseOffsetsNode::ResultIdx) ==
             ElemKind::FloatTy);
 
@@ -433,6 +463,15 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
                 FusedRowwiseQuantizedSparseLengthsWeightedSumNode::ResultIdx) ==
             ElemKind::FloatTy);
 
+  case Kinded::Kind::FullyConnectedNodeKind:
+    if (!NI.getInTy(FullyConnectedNode::InputIdx)->isQuantizedType()) {
+      return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy});
+    }
+    return NI.allInputsAndOutputsHaveSameElemKind(
+               {ElemKind::Int8QTy}, {FullyConnectedNode::BiasIdx}) &&
+           (NI.getInElemTy(FullyConnectedNode::BiasIdx) == ElemKind::Int8QTy ||
+            NI.getInElemTy(FullyConnectedNode::BiasIdx) == ElemKind::Int32QTy);
+
   case Kinded::Kind::RowwiseQuantizedFullyConnectedNodeKind:
     return (NI.getInElemTy(RowwiseQuantizedFullyConnectedNode::InputIdx) ==
             ElemKind::Int8QTy) &&
@@ -448,14 +487,6 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
                 ElemKind::Int32QTy) &&
            (NI.getOutElemTy(RowwiseQuantizedFullyConnectedNode::ResultIdx) ==
             ElemKind::Int8QTy);
-
-  case Kinded::Kind::SparseToDenseNodeKind:
-    return NI.allInputsAndOutputsHaveSameElemKind(
-               {ElemKind::FloatTy}, {SparseToDenseNode::IndicesIdx}) &&
-           (NI.getInElemTy(SparseToDenseNode::IndicesIdx) ==
-                ElemKind::Int64ITy ||
-            NI.getInElemTy(SparseToDenseNode::IndicesIdx) ==
-                ElemKind::Int32ITy);
 
   case Kinded::Kind::SoftMaxGradNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -499,6 +530,27 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
                 NonMaxSuppressionNode::NumberOfSelectedIndicesIdx) ==
                 ElemKind::Int64ITy);
 
+  case Kinded::Kind::TFLiteDetectionPostProcessNodeKind:
+    return NI.getInElemTy(TFLiteDetectionPostProcessNode::BoxesIdx) ==
+               ElemKind::FloatTy &&
+           NI.getInElemTy(TFLiteDetectionPostProcessNode::ScoresIdx) ==
+               ElemKind::FloatTy &&
+           NI.getInElemTy(TFLiteDetectionPostProcessNode::AnchorsIdx) ==
+               ElemKind::FloatTy &&
+           NI.getOutElemTy(TFLiteDetectionPostProcessNode::DetectionBoxesIdx) ==
+               ElemKind::FloatTy &&
+           NI.getOutElemTy(
+               TFLiteDetectionPostProcessNode::DetectionClassesIdx) ==
+               ElemKind::Int32ITy &&
+           NI.getOutElemTy(
+               TFLiteDetectionPostProcessNode::DetectionScoresIdx) ==
+               ElemKind::FloatTy &&
+           NI.getOutElemTy(TFLiteDetectionPostProcessNode::NumDetectionsIdx) ==
+               ElemKind::Int32ITy;
+
+  case Kinded::Kind::TFLiteCustomOperatorNodeKind:
+    return true;
+
   case Kinded::Kind::AudioSpectrogramNodeKind:
     return NI.getInElemTy(AudioSpectrogramNode::InputIdx) ==
                ElemKind::FloatTy &&
@@ -522,6 +574,9 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
              ElemKind::Int64ITy)) ||
            ((NI.getInElemTy(ConvertToNode::InputIdx) == ElemKind::FloatTy) &&
             (NI.getOutElemTy(ConvertToNode::ResultIdx) == ElemKind::BoolTy)) ||
+           ((NI.getInElemTy(ConvertToNode::InputIdx) == ElemKind::FloatTy) &&
+            (NI.getOutElemTy(ConvertToNode::ResultIdx) ==
+             ElemKind::Int32ITy)) ||
            ((NI.getInElemTy(ConvertToNode::InputIdx) == ElemKind::BoolTy) &&
             (NI.getOutElemTy(ConvertToNode::ResultIdx) == ElemKind::Int32ITy));
 
@@ -545,6 +600,35 @@ LLVMBackendOptions::LLVMBackendOptions() {
 }
 
 LLVMBackend::LLVMBackend() {}
+
+std::string LLVMBackend::getHostTarget() {
+  return llvm::sys::getProcessTriple();
+}
+
+std::string LLVMBackend::getHostCPU() {
+  auto cpu_name = llvm::sys::getHostCPUName();
+  // Skip avx512 because LLVM does not support it well.
+  cpu_name.consume_back("-avx512");
+  return cpu_name.str();
+}
+
+llvm::SmallVector<std::string, 0> LLVMBackend::getHostFeatures() {
+  llvm::SmallVector<std::string, 0> result;
+  llvm::StringMap<bool> hostFeatures;
+  if (llvm::sys::getHostCPUFeatures(hostFeatures)) {
+    for (auto &feature : hostFeatures) {
+      if (feature.second) {
+        llvm::StringRef fn = feature.first();
+        // Skip avx512 because LLVM does not support it well.
+        if (fn.startswith("avx512")) {
+          continue;
+        }
+        result.push_back(fn.str());
+      }
+    }
+  }
+  return result;
+}
 
 /// Emit the entry point for JIT called "jitmain".
 /// Function has the following API:
@@ -619,7 +703,8 @@ LLVMBackend::compileIRWithoutConstants(IRFunction *IR) const {
   emitJitMain(*irgen);
   irgen->finishCodeGen();
   // Hand over the module to JIT for the machine code generation.
-  auto JIT = glow::make_unique<llvm::orc::GlowJIT>(irgen->getTargetMachine());
+  auto JIT = glow::make_unique<GlowJIT>(irgen->takeTargetMachine());
+  JIT->setContext(irgen->takeLLVMContext());
   JIT->addModule(irgen->borrowModule());
   // Build runtimeBundle object containing offsets and allocation sizes.
   MemoryAllocator constantAllocator("ConstantWeights", 0);

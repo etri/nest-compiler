@@ -42,15 +42,15 @@ using llvm::cast;
 using llvm::dyn_cast;
 using llvm::isa;
 
-static llvm::cl::opt<bool>
-    dumpIR("dump-llvm-ir",
-           llvm::cl::desc("Dump the LLVM-IR of the jitted code"),
-           llvm::cl::init(false), llvm::cl::cat(getLLVMBackendCat()));
-
-static llvm::cl::opt<bool>
-    dumpJitAsm("dump-llvm-asm",
-               llvm::cl::desc("Dump the textual assembly of the jitted code"),
+llvm::cl::opt<bool>
+    dumpLLVMIR("dump-llvm-ir",
+               llvm::cl::desc("Dump the LLVM-IR of the jitted code"),
                llvm::cl::init(false), llvm::cl::cat(getLLVMBackendCat()));
+
+llvm::cl::opt<bool>
+    dumpLLVMAsm("dump-llvm-asm",
+                llvm::cl::desc("Dump the textual assembly of the jitted code"),
+                llvm::cl::init(false), llvm::cl::cat(getLLVMBackendCat()));
 
 llvm::cl::opt<bool>
     emitDebugInfo("g", llvm::cl::desc("Emit debug information for debuggers"),
@@ -59,33 +59,6 @@ llvm::cl::opt<bool>
 /// Limitation of number of arguments for `emitDataParallelKernel`.
 constexpr static size_t kArgLimit = 64;
 
-/// Generate the LLVM machine attribute list for the host.
-static llvm::SmallVector<std::string, 0> getHostMachineAttributes() {
-  llvm::SmallVector<std::string, 0> result;
-  llvm::StringMap<bool> hostFeatures;
-  if (llvm::sys::getHostCPUFeatures(hostFeatures)) {
-    for (auto &feature : hostFeatures) {
-      if (feature.second) {
-        llvm::StringRef fn = feature.first();
-        // Skip avx512 because LLVM does not support it well.
-        if (fn.startswith("avx512")) {
-          continue;
-        }
-        result.push_back(fn);
-      }
-    }
-  }
-  return result;
-}
-
-/// Returns the CPU hostname.
-static llvm::StringRef getHostCpuName() {
-  auto cpu_name = llvm::sys::getHostCPUName();
-  // Skip avx512 because LLVM does not support it well.
-  cpu_name.consume_back("-avx512");
-  return cpu_name;
-}
-
 /// Query the TargetMachine to get the pointer size in bits
 static unsigned getPointerNumBits(const llvm::TargetMachine &TM) {
   return TM.getPointerSize(0) * 8;
@@ -93,13 +66,34 @@ static unsigned getPointerNumBits(const llvm::TargetMachine &TM) {
 
 LLVMIRGen::LLVMIRGen(const IRFunction *F, AllocationsInfo &allocationsInfo,
                      std::string mainEntryName, llvm::StringRef libjitBC)
-    : F_(F), allocationsInfo_(allocationsInfo), libjitBC_(libjitBC) {
+    : F_(F), ctx_(std::make_unique<llvm::LLVMContext>()),
+      allocationsInfo_(allocationsInfo), libjitBC_(libjitBC) {
+  // Legalize main entry name.
+  setMainEntryName(mainEntryName);
+}
+
+LLVMIRGen::LLVMIRGen(const IRFunction *F, AllocationsInfo &allocationsInfo,
+                     std::string mainEntryName, llvm::StringRef libjitBC,
+                     llvm::ArrayRef<llvm::MemoryBufferRef> objectRegistry)
+    : F_(F), ctx_(std::make_unique<llvm::LLVMContext>()),
+      allocationsInfo_(allocationsInfo), libjitBC_(libjitBC),
+      objectRegistry_(objectRegistry) {
   // Legalize main entry name.
   setMainEntryName(mainEntryName);
 }
 
 /// Mutex to protect LLVM's TargetRegistry.
 static std::mutex initTargetMutex;
+
+void LLVMIRGen::initTargetOptions(llvm::TargetOptions &targetOpts,
+                                  const LLVMBackendOptions &backendOpts) {
+  if (backendOpts.getFloatABI().hasValue()) {
+    targetOpts.FloatABIType = backendOpts.getFloatABI().getValue();
+  }
+  if (!backendOpts.getABIName().empty()) {
+    targetOpts.MCOptions.ABIName = backendOpts.getABIName();
+  }
+}
 
 void LLVMIRGen::initTargetMachine(const LLVMBackendOptions &opts) {
   // LLVM's TargetRegistry is not thread safe so we add a critical section.
@@ -111,19 +105,17 @@ void LLVMIRGen::initTargetMachine(const LLVMBackendOptions &opts) {
   llvm::InitializeAllAsmParsers();
 
   llvm::TargetOptions targetOpts;
-  if (opts.getFloatABI().hasValue()) {
-    targetOpts.FloatABIType = opts.getFloatABI().getValue();
-  }
-  if (!opts.getABIName().empty()) {
-    targetOpts.MCOptions.ABIName = opts.getABIName();
-  }
+  // Initialize target options in a backend-specific way.
+  initTargetOptions(targetOpts, opts);
+
   if (opts.getTarget().empty()) {
     TM_.reset(llvm::EngineBuilder()
                   .setCodeModel(opts.getCodeModel())
                   .setRelocationModel(opts.getRelocModel())
                   .setTargetOptions(targetOpts)
                   .selectTarget(llvm::Triple(), opts.getArch(),
-                                getHostCpuName(), getHostMachineAttributes()));
+                                LLVMBackend::getHostCPU(),
+                                LLVMBackend::getHostFeatures()));
   } else {
     TM_.reset(llvm::EngineBuilder()
                   .setCodeModel(opts.getCodeModel())
@@ -135,16 +127,55 @@ void LLVMIRGen::initTargetMachine(const LLVMBackendOptions &opts) {
   assert(TM_ && "Could not initialize the target machine");
 }
 
+void LLVMIRGen::performBackendOptimizations() { return; }
+
 llvm::StringRef LLVMIRGen::getBundleName() const { return bundleName_; }
 
 void LLVMIRGen::setBundleName(const std::string &name) {
   bundleName_ = name.empty() ? "bundle" : legalizeName(name);
 }
 
+llvm::StringRef LLVMIRGen::getSavedBundleName() const {
+  return savedBundleName_;
+}
+
+void LLVMIRGen::setSavedBundleName(const std::string &name) {
+  assert(!name.empty() && "Name cannot be empty");
+  savedBundleName_ = name;
+}
+
 std::string LLVMIRGen::getMainEntryName() const { return mainEntryName_; }
 
 void LLVMIRGen::setMainEntryName(std::string name) {
   mainEntryName_ = name.empty() ? "main" : legalizeName(name);
+}
+
+llvm::ArrayRef<llvm::MemoryBufferRef> LLVMIRGen::getObjectRegistry() const {
+  return objectRegistry_;
+}
+
+void LLVMIRGen::setObjectRegistry(
+    llvm::ArrayRef<llvm::MemoryBufferRef> objectRegistry) {
+  objectRegistry_ = objectRegistry;
+}
+
+std::vector<std::string> LLVMIRGen::getBundleObjects() const {
+  // Default list of object names.
+  auto bundleObjects = bundleObjects_;
+  // Add object names enforced from command line interface.
+  for (auto bundleObject : bundleObjectsOpt) {
+    bundleObjects.push_back(bundleObject);
+  }
+  return bundleObjects;
+}
+
+void LLVMIRGen::addBundleObject(llvm::StringRef objectName) {
+  // Add bundle object if not already added.
+  auto it =
+      std::find(bundleObjects_.begin(), bundleObjects_.end(), objectName.str());
+  if (it == bundleObjects_.end()) {
+    bundleObjects_.push_back(objectName.str());
+  }
 }
 
 /// Load base addresses of different memory areas so that they can be easily
@@ -232,6 +263,8 @@ llvm::Type *LLVMIRGen::getElementType(llvm::IRBuilder<> &builder,
     llvm_unreachable("Not implemented");
   case ElemKind::BFloat16Ty:
     llvm_unreachable("Not implemented");
+  case ElemKind::Float64Ty:
+    return builder.getDoubleTy();
   case ElemKind::Int8QTy:
     return builder.getInt8Ty();
   case ElemKind::UInt8QTy:
@@ -240,6 +273,10 @@ llvm::Type *LLVMIRGen::getElementType(llvm::IRBuilder<> &builder,
     return builder.getInt16Ty();
   case ElemKind::Int32QTy:
     return builder.getInt32Ty();
+  case ElemKind::Int64QTy:
+    return builder.getInt64Ty();
+  case ElemKind::UInt8ITy:
+    return builder.getInt8Ty();
   case ElemKind::Int32ITy:
     return builder.getInt32Ty();
   case ElemKind::UInt8FusedQTy:
@@ -247,6 +284,8 @@ llvm::Type *LLVMIRGen::getElementType(llvm::IRBuilder<> &builder,
   case ElemKind::UInt8FusedFP16QTy:
     return builder.getInt8Ty();
   case ElemKind::UInt4FusedFP16QTy:
+    return builder.getInt8Ty();
+  case ElemKind::UInt4FusedQTy:
     return builder.getInt8Ty();
   case ElemKind::BoolTy:
     static_assert(sizeof(bool) == sizeof(int8_t),
@@ -283,14 +322,16 @@ void LLVMIRGen::performCodeGen() {
   // Emit all the code before the retrun instruction.
   builder_->SetInsertPoint(ret);
 
-  instrNumbering_.reset(new InstructionNumbering(*F_));
+  if (F_) {
+    instrNumbering_.reset(new InstructionNumbering(*F_));
+  }
   generateFunctionDebugInfo();
   loadBaseAddresses(*builder_);
   generateLLVMIRForModule(*builder_);
 }
 
 void LLVMIRGen::finishCodeGen() {
-  if (dumpIR) {
+  if (dumpLLVMIR) {
     llvm::outs() << "LLVM module before optimizations:\n";
     llmodule_->print(llvm::outs(), nullptr);
   }
@@ -312,12 +353,12 @@ void LLVMIRGen::finishCodeGen() {
   // Generate debug information.
   generateModuleDebugInfo();
 
-  if (dumpIR) {
+  if (dumpLLVMIR) {
     llvm::outs() << "LLVM module after optimizations:\n";
     llmodule_->print(llvm::outs(), nullptr);
   }
 
-  if (dumpJitAsm) {
+  if (dumpLLVMAsm) {
     llvm::SmallVector<char, 0> asmBuffer;
     llvm::raw_svector_ostream asmStream(asmBuffer);
     llvm::legacy::PassManager PM;
@@ -338,13 +379,9 @@ void LLVMIRGen::finishCodeGen() {
   }
 }
 
-llvm::Value *LLVMIRGen::emitValueAddress(llvm::IRBuilder<> &builder,
-                                         const glow::Value *val) {
-  assert(allocationsInfo_.allocatedAddress_.count(val) &&
-         "Value address was not allocated");
+llvm::Type *LLVMIRGen::getLLVMPtrType(glow::ElemKind kind) {
   llvm::Type *T = nullptr;
-
-  switch (val->getElementType()) {
+  switch (kind) {
   case ElemKind::FloatTy:
     T = llvm::Type::getFloatPtrTy(getLLVMContext());
     break;
@@ -366,11 +403,17 @@ llvm::Value *LLVMIRGen::emitValueAddress(llvm::IRBuilder<> &builder,
   case ElemKind::Int32QTy:
     T = llvm::Type::getInt32PtrTy(getLLVMContext());
     break;
+  case ElemKind::Int64QTy:
+    T = llvm::Type::getInt64PtrTy(getLLVMContext());
+    break;
   case ElemKind::Int64ITy:
     T = llvm::Type::getInt64PtrTy(getLLVMContext());
     break;
   case ElemKind::Int32ITy:
     T = llvm::Type::getInt32PtrTy(getLLVMContext());
+    break;
+  case ElemKind::UInt8ITy:
+    T = llvm::Type::getInt8PtrTy(getLLVMContext());
     break;
   case ElemKind::UInt8FusedQTy:
     T = llvm::Type::getInt8PtrTy(getLLVMContext());
@@ -381,13 +424,23 @@ llvm::Value *LLVMIRGen::emitValueAddress(llvm::IRBuilder<> &builder,
   case ElemKind::UInt4FusedFP16QTy:
     T = llvm::Type::getInt8PtrTy(getLLVMContext());
     break;
+  case ElemKind::UInt4FusedQTy:
+    T = llvm::Type::getInt8PtrTy(getLLVMContext());
+    break;
   case ElemKind::BoolTy:
     T = llvm::Type::getInt8PtrTy(getLLVMContext());
     break;
   default:
     LOG(FATAL) << "Unsupported element type: "
-               << Type::getElementName(val->getElementType()).str();
+               << Type::getElementName(kind).str();
   }
+  return T;
+}
+
+llvm::Value *LLVMIRGen::emitValueAddress(llvm::IRBuilder<> &builder,
+                                         const glow::Value *val) {
+  assert(allocationsInfo_.allocatedAddress_.count(val) &&
+         "Value address was not allocated");
 
   assert(allocationsInfo_.valueNumbers_.count(val));
   auto &kindAndValue = allocationsInfo_.valueNumbers_[val];
@@ -417,7 +470,7 @@ llvm::Value *LLVMIRGen::emitValueAddress(llvm::IRBuilder<> &builder,
   // Add offset to the base address.
   llvm::Value *addr = builder.CreateAdd(
       baseAddrValue, builder.CreateZExt(offsetValue, sizeTTy));
-  return builder.CreateIntToPtr(addr, T);
+  return builder.CreateIntToPtr(addr, getLLVMPtrType(val->getElementType()));
 }
 
 llvm::Value *
@@ -463,14 +516,24 @@ LLVMIRGen::emitConstOffsetsArray(llvm::IRBuilder<> &builder,
   return constArrayVar;
 }
 
+llvm::Value *LLVMIRGen::emitConstI32Array(llvm::IRBuilder<> &builder,
+                                          llvm::ArrayRef<int32_t> vals) {
+  std::vector<llvm::Constant *> elems;
+  for (auto I : vals) {
+    elems.push_back(builder.getInt32(I));
+  }
+  return emitConstArray(builder, elems, builder.getInt32Ty());
+}
+
 llvm::Value *LLVMIRGen::emitConstFloatArray(llvm::IRBuilder<> &builder,
                                             llvm::ArrayRef<float> vals) {
   std::vector<llvm::Constant *> elems;
   for (auto I : vals) {
-    elems.push_back(
-        llvm::ConstantFP::get(llvm::Type::getFloatTy(ctx_), (float)I));
+    elems.push_back(llvm::ConstantFP::get(
+        llvm::Type::getFloatTy(getLLVMContext()), (float)I));
   }
-  return emitConstArray(builder, elems, llvm::Type::getFloatTy(ctx_));
+  return emitConstArray(builder, elems,
+                        llvm::Type::getFloatTy(getLLVMContext()));
 }
 
 llvm::Value *LLVMIRGen::emitConstArray(llvm::IRBuilder<> &builder,
@@ -498,10 +561,75 @@ llvm::Value *LLVMIRGen::emitConstArray(llvm::IRBuilder<> &builder,
   return constArrayVar;
 }
 
+void LLVMIRGen::emitArrayStore(llvm::IRBuilder<> &builder,
+                               llvm::ArrayRef<llvm::Value *> vals,
+                               llvm::Value *basePtr, unsigned baseIdx) {
+  for (size_t idx = 0, end = vals.size(); idx < end; ++idx) {
+    assert(vals[idx]->getType()->getPointerTo() == basePtr->getType() &&
+           "Mismatch between pointer and value type!");
+    auto *storeIdx = builder.getInt32(idx + baseIdx);
+    auto *storeAddr = builder.CreateGEP(basePtr, storeIdx);
+    builder.CreateStore(vals[idx], storeAddr);
+  }
+}
+
 llvm::Value *LLVMIRGen::emitValueDims(llvm::IRBuilder<> &builder,
                                       const glow::Value *val) {
   auto dims = val->dims();
   return emitConstDimTArray(builder, dims);
+}
+
+template <class InstructionTy>
+llvm::Value *LLVMIRGen::emitConstFloatActivationArgs(llvm::IRBuilder<> &builder,
+                                                     const InstructionTy *I) {
+  return emitConstFloatArray(builder, I->getFusedActivationArgs());
+}
+
+template <class InstructionTy>
+llvm::Value *LLVMIRGen::emitConstQuantActivationArgs(llvm::IRBuilder<> &builder,
+                                                     const InstructionTy *I) {
+  auto actArgsF = I->getFusedActivationArgs();
+  std::vector<int32_t> actArgsQ;
+  auto *destTy = I->getDest()->getType();
+  switch (I->getFusedActivation()) {
+  case FusedActivation::NONE:
+  case FusedActivation::RELU:
+    assert(actArgsF.size() == 0 && "Invalid number of activation parameters!");
+    break;
+  case FusedActivation::CLIP: {
+    // For Clip we quantize min/max using the output quantization params.
+    assert(actArgsF.size() == 2 &&
+           "Invalid number of parameters for fused Clip activation!");
+    float minF = actArgsF[0];
+    float maxF = actArgsF[1];
+    TensorQuantizationParams TQP{destTy->getScale(), destTy->getOffset()};
+    int32_t minQ = quantization::quantize<int32_t>(minF, TQP);
+    int32_t maxQ = quantization::quantize<int32_t>(maxF, TQP);
+    actArgsQ.push_back(minQ);
+    actArgsQ.push_back(maxQ);
+    break;
+  }
+  case FusedActivation::SIGMOID:
+    LOG(FATAL) << "Fused Sigmoid for quantized type not supported!";
+    break;
+  case FusedActivation::TANH:
+    LOG(FATAL) << "Fused Tanh for quantized type not supported!";
+    break;
+  case FusedActivation::LEAKY_RELU: {
+    // For LeakyRelu we transform the alpha parameter into pre/post/scale.
+    assert(actArgsF.size() == 1 &&
+           "Invalid number of parameters for fused LeakyRelu activation!");
+    float alpha = actArgsF[0];
+    auto alphaScaleParam = quantization::quantizeScaleOffset32To8(alpha, 0);
+    actArgsQ.push_back(alphaScaleParam.pre);
+    actArgsQ.push_back(alphaScaleParam.post);
+    actArgsQ.push_back(alphaScaleParam.scale);
+    break;
+  }
+  default:
+    LOG(FATAL) << "Unsupported fused activation type!";
+  }
+  return emitConstI32Array(builder, actArgsQ);
 }
 
 llvm::Value *LLVMIRGen::emitValueSize(llvm::IRBuilder<> &builder,
@@ -515,6 +643,10 @@ llvm::Value *LLVMIRGen::emitConstF32(llvm::IRBuilder<> &builder, float val) {
 
 llvm::Value *LLVMIRGen::emitConstI32(llvm::IRBuilder<> &builder, int32_t val) {
   return builder.getInt32(val);
+}
+
+llvm::Value *LLVMIRGen::emitConstI16(llvm::IRBuilder<> &builder, int16_t val) {
+  return builder.getInt16(val);
 }
 
 llvm::Value *LLVMIRGen::emitConstI8(llvm::IRBuilder<> &builder, int8_t val) {
@@ -542,6 +674,9 @@ llvm::Value *LLVMIRGen::emitConst(llvm::IRBuilder<> &builder, float val,
     llvm_unreachable("Not implemented");
   case ElemKind::BFloat16Ty:
     llvm_unreachable("Not implemented");
+  case ElemKind::Float64Ty:
+    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(getLLVMContext()),
+                                 val);
   case ElemKind::Int64ITy:
     return builder.getInt64(static_cast<int64_t>(val));
   case ElemKind::Int8QTy:
@@ -552,6 +687,10 @@ llvm::Value *LLVMIRGen::emitConst(llvm::IRBuilder<> &builder, float val,
     return builder.getInt16(static_cast<int16_t>(val));
   case ElemKind::Int32QTy:
     return builder.getInt32(static_cast<int32_t>(val));
+  case ElemKind::UInt8ITy:
+    return builder.getInt8(static_cast<uint8_t>(val));
+  case ElemKind::Int64QTy:
+    return builder.getInt64(static_cast<int64_t>(val));
   case ElemKind::Int32ITy:
     return builder.getInt32(static_cast<int32_t>(val));
   case ElemKind::UInt8FusedQTy:
@@ -559,6 +698,8 @@ llvm::Value *LLVMIRGen::emitConst(llvm::IRBuilder<> &builder, float val,
   case ElemKind::UInt8FusedFP16QTy:
     return builder.getInt8(static_cast<int8_t>(val));
   case ElemKind::UInt4FusedFP16QTy:
+    return builder.getInt8(static_cast<int8_t>(val));
+  case ElemKind::UInt4FusedQTy:
     return builder.getInt8(static_cast<int8_t>(val));
   case ElemKind::BoolTy:
     return builder.getInt8(static_cast<int8_t>(val));
@@ -573,7 +714,14 @@ llvm::Value *LLVMIRGen::emitStringConst(llvm::IRBuilder<> &builder,
   llvm::GlobalVariable *gvarStr = new llvm::GlobalVariable(
       *llmodule_, constStrArray->getType(), true,
       llvm::GlobalValue::PrivateLinkage, constStrArray, ".str");
+#if LLVM_VERSION_MAJOR >= 10
+  gvarStr->setAlignment(llvm::MaybeAlign(1));
+#else
   gvarStr->setAlignment(1);
+#endif
+  // Add unnamed_addr attribute to enable constmerge pass.
+  gvarStr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+
   return builder.CreateBitCast(gvarStr, builder.getInt8PtrTy());
 }
 
@@ -635,24 +783,40 @@ llvm::CallInst *LLVMIRGen::createCall(llvm::IRBuilder<> &builder,
                                       llvm::Function *callee,
                                       llvm::ArrayRef<llvm::Value *> args,
                                       bool checked) {
+  llvm::CallInst *result = builder.CreateCall(callee, args);
 #ifndef NDEBUG
   llvm::FunctionType *FTy = callee->getFunctionType();
-  assert((args.size() == FTy->getNumParams() ||
-          (FTy->isVarArg() && args.size() > FTy->getNumParams())) &&
-         "Calling a function with bad signature: wrong number of arguments.");
+  if (args.size() != FTy->getNumParams() &&
+      !(FTy->isVarArg() && args.size() > FTy->getNumParams())) {
+    result->print(llvm::errs());
+    llvm::errs() << "\n";
+    CHECK_LT(FTy->getNumParams(), args.size())
+        << "Calling a function with bad signature: wrong number of arguments.";
+  }
 
   for (unsigned i = 0; i != args.size(); ++i) {
-    assert((i >= FTy->getNumParams() ||
-            FTy->getParamType(i) == args[i]->getType()) &&
-           "Calling a function with a bad signature: argument type mismatch.");
+    if (i >= FTy->getNumParams()) {
+      continue;
+    }
+    if (FTy->getParamType(i) != args[i]->getType()) {
+      result->print(llvm::errs());
+      llvm::errs() << "\n";
+      llvm::errs() << "Expected type: ";
+      FTy->getParamType(i)->print(llvm::errs());
+      llvm::errs() << "at index " << i << "\n";
+      llvm::errs() << "Provided type: ";
+      args[i]->print(llvm::errs());
+      llvm::errs() << "at index " << i << "\n";
+      CHECK_EQ(FTy->getParamType(i), args[i]->getType())
+          << "Calling a function with a bad signature: argument type mismatch.";
+    }
   }
 #endif
   if (!checked || !callee->getReturnType()->isIntegerTy()) {
-    return builder.CreateCall(callee, args);
+    return result;
   }
   // Check if callee returned an error, i.e. non-zero result.
   // Emit a return with this error code in this case.
-  auto *result = builder.CreateCall(callee, args);
   auto *zero = builder.getIntN(result->getType()->getIntegerBitWidth(), 0);
   auto *cond = builder.CreateICmpNE(result, zero);
   auto insertionPoint = builder.GetInsertPoint();
@@ -881,21 +1045,31 @@ void LLVMIRGen::emitDataParallelKernel(
 ///
 /// \param allocationsInfo information about allocations
 /// \param bundle current bundle of stacked instructions
-/// \param buf the buffer operand to be checked for overlaps with the \p bundle.
+/// \param op the operand to be checked for overlaps with the \p bundle.
 static bool isOverlappingWithAnyBundleBufferOperands(
     AllocationsInfo &allocationsInfo,
-    llvm::SmallVectorImpl<const Instruction *> &bundle, Value *buf) {
+    llvm::SmallVectorImpl<const Instruction *> &bundle,
+    const Instruction::Operand &op) {
+  auto *buf = op.first;
   auto addr1 = allocationsInfo.allocatedAddress_[buf];
   auto size1 = buf->getSizeInBytes();
   for (auto bi : bundle) {
     for (auto bop : bi->getOperands()) {
+      // Only input operands never interfere.
+      if (bop.second == OperandKind::In && op.second == OperandKind::In) {
+        continue;
+      }
       auto buf2 = bop.first;
       auto addr2 = allocationsInfo.allocatedAddress_[buf2];
       auto size2 = buf2->getSizeInBytes();
-      // It is fine, if buffers of different data-parallel instructions are
-      // allocated exactly the same memory region.
       if (addr1 == addr2 && size1 == size2) {
-        continue;
+        // The two buffers are the exact same memory region. The operations
+        // cannot be within the same bundle because the buffer pointers are
+        // "noalias" qualified, so the kernel operations can be reordered by
+        // LLVM's optimizations.
+        // TODO investigate if removing "noalias" can be used to create bigger
+        // and faster bundles.
+        return true;
       }
       if ((addr1 >= addr2 && addr1 < addr2 + size2) ||
           (addr2 >= addr1 && addr2 < addr1 + size1)) {
@@ -905,6 +1079,16 @@ static bool isOverlappingWithAnyBundleBufferOperands(
     }
   }
   return false;
+}
+
+template <typename T> bool matchPair(T a, T b) { return a == b; }
+
+template <typename T> bool matchPair(T a) { return false; }
+
+/// Returns true if the input /p a matches with at least one of the inputs in
+/// the variadic list \p b ....
+template <typename T, typename... Args> bool matchPair(T a, T b, Args... args) {
+  return a == b || matchPair(a, args...);
 }
 
 void LLVMIRGen::generateLLVMIRForModule(llvm::IRBuilder<> &builder) {
@@ -945,14 +1129,11 @@ void LLVMIRGen::generateLLVMIRForModule(llvm::IRBuilder<> &builder) {
     // bundled instructions. In case this condition does not hold, the current
     // instruction cannot be included into the data-parallel bundle, because
     // overlapping operand buffers are not data parallel.
-    for (auto op : I.getOperands()) {
-      // Skip non-mutated operands.
-      if (op.second == OperandKind::In)
-        continue;
+    for (auto &op : I.getOperands()) {
       // If the mutated operand buffer overlaps with any buffer already used by
       // the bundle, the current instruction cannot become a part of the bundle.
       if (isOverlappingWithAnyBundleBufferOperands(allocationsInfo_, bundle,
-                                                   op.first)) {
+                                                   op)) {
         isBundleCompatible = false;
         break;
       }
@@ -996,13 +1177,25 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
       /* Perform this early and let jit library to work */                     \
       /* with quantized number. */                                             \
       TensorQuantizationParams TQP{destTy->getScale(), destTy->getOffset()};   \
-      auto quantizedValue = quantization::quantize(value, TQP);                \
-      auto *val = emitConstI8(builder, quantizedValue);                        \
-      auto *stackedOpCall = createUncheckedCall(                               \
-          builder, F, {loopCount, val, pointerNull, pointerNull});             \
-      auto *destAddr = builder.CreateGEP(elementTy, destPtr, loopCount,        \
-                                         "buffer.element.addr");               \
-      builder.CreateStore(stackedOpCall, destAddr);                            \
+      if (destTy->getElementType() == ElemKind::Int8QTy) {                     \
+        auto quantizedValue = quantization::quantize<int8_t>(value, TQP);      \
+        auto *val = emitConstI8(builder, quantizedValue);                      \
+        auto *stackedOpCall = createUncheckedCall(                             \
+            builder, F, {loopCount, val, pointerNull, pointerNull});           \
+        auto *destAddr = builder.CreateGEP(elementTy, destPtr, loopCount,      \
+                                           "buffer.element.addr");             \
+        builder.CreateStore(stackedOpCall, destAddr);                          \
+      } else if (destTy->getElementType() == ElemKind::Int16QTy) {             \
+        auto quantizedValue = quantization::quantize<int16_t>(value, TQP);     \
+        auto *val = emitConstI16(builder, quantizedValue);                     \
+        auto *stackedOpCall = createUncheckedCall(                             \
+            builder, F, {loopCount, val, pointerNull, pointerNull});           \
+        auto *destAddr = builder.CreateGEP(elementTy, destPtr, loopCount,      \
+                                           "buffer.element.addr");             \
+        builder.CreateStore(stackedOpCall, destAddr);                          \
+      } else {                                                                 \
+        llvm_unreachable("Quantization precision not supported.");             \
+      }                                                                        \
     } else {                                                                   \
       auto *val = emitConst(builder, value, dest->getElementType());           \
       auto *stackedOpCall = createUncheckedCall(                               \
@@ -1092,8 +1285,9 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
     auto *F = getFunction("intlookuptable_kernel", dest->getElementType());
     auto *stackedOpCall =
         builder.CreateCall(F, {loopCount, srcPtr, mappingPtr});
-    auto *destAddr = builder.CreateGEP(builder.getInt8Ty(), destPtr, loopCount,
-                                       "buffer.element.addr");
+    auto *destType = getElementType(builder, dest);
+    auto *destAddr =
+        builder.CreateGEP(destType, destPtr, loopCount, "buffer.element.addr");
     builder.CreateStore(stackedOpCall, destAddr);
 
     break;
@@ -1127,6 +1321,7 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
     ARITHMETIC_UNARY_OP_CASE(ElementCeil, "element_ceil");
     ARITHMETIC_UNARY_OP_CASE(ElementRound, "element_round");
     ARITHMETIC_UNARY_OP_CASE(ElementSqrt, "element_sqrt");
+    ARITHMETIC_UNARY_OP_CASE(ElementErf, "element_erf");
     ARITHMETIC_UNARY_OP_CASE(ElementRsqrt, "element_rsqrt");
     ARITHMETIC_UNARY_OP_CASE(ElementReciprocal, "element_reciprocal");
     ARITHMETIC_UNARY_OP_CASE(ElementSin, "element_sin");
@@ -1263,6 +1458,27 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
     break;
   }
 
+  case Kinded::Kind::HardSwishInstKind: {
+    auto *HI = cast<HardSwishInst>(I);
+    auto *src = HI->getSrc();
+    auto *dest = HI->getDest();
+    auto *srcPtr = emitBufferAddress(builder, src, kernel, bufferToArgNum);
+    auto *destPtr = emitBufferAddress(builder, dest, kernel, bufferToArgNum);
+
+    auto *F = getFunction("element_hard_swish", dest->getElementType());
+    llvm::CallInst *stackedOpCall = nullptr;
+    if (dest->getElementType() == ElemKind::FloatTy) {
+      stackedOpCall = createCall(builder, F, {loopCount, srcPtr});
+    } else {
+      LOG(FATAL) << "Type is not supported";
+    }
+    auto *elementTy = getElementType(builder, dest);
+    auto *destAddr =
+        builder.CreateGEP(elementTy, destPtr, loopCount, "buffer.element.addr");
+    builder.CreateStore(stackedOpCall, destAddr);
+    break;
+  }
+
   case Kinded::Kind::ElementIsNaNInstKind: {
     auto *AN = cast<ElementIsNaNInst>(I);
     auto *src = AN->getSrc();
@@ -1291,17 +1507,9 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
 
     auto *stackedOpCall = createUncheckedCall(
         builder, F, {loopCount, srcPtr, destScale, destOffset});
-    llvm::Value *destAddr = nullptr;
-    if (dest->getElementType() == ElemKind::Int8QTy) {
-      destAddr = builder.CreateGEP(builder.getInt8Ty(), destPtr, loopCount,
-                                   "buffer.element.addr");
-    } else if (dest->getElementType() == ElemKind::Int32QTy) {
-      destAddr = builder.CreateGEP(builder.getInt32Ty(), destPtr, loopCount,
-                                   "buffer.element.addr");
-    } else {
-      LOG(FATAL) << "Type is not supported";
-    }
-
+    auto *destType = getElementType(builder, dest);
+    auto *destAddr =
+        builder.CreateGEP(destType, destPtr, loopCount, "buffer.element.addr");
     builder.CreateStore(stackedOpCall, destAddr);
     break;
   }
@@ -1315,7 +1523,7 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
     auto *srcTy = src->getType();
     auto *srcScale = emitConstF32(builder, srcTy->getScale());
     auto *srcOffset = emitConstI32(builder, srcTy->getOffset());
-    auto *F = getFunction("element_dequantize_kernel", dest->getElementType());
+    auto *F = getFunction("element_dequantize_kernel", src->getElementType());
 
     auto *stackedOpCall = createUncheckedCall(
         builder, F, {loopCount, srcPtr, srcScale, srcOffset});
@@ -1372,7 +1580,7 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
     break;
   }
 
-#define ARITHMETIC_BINARY_OP_CASE(INST_NAME_, FUN_NAME_)                       \
+#define ARITHMETIC_BINARY_OP_CASE(INST_NAME_, FUN_NAME_, ...)                  \
   case Kinded::Kind::INST_NAME_##InstKind: {                                   \
     auto *AN = cast<INST_NAME_##Inst>(I);                                      \
     auto *dest = AN->getDest();                                                \
@@ -1386,7 +1594,7 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
     auto *elementTy = getElementType(builder, dest);                           \
     auto *pointerNull =                                                        \
         llvm::ConstantPointerNull::get(elementTy->getPointerTo());             \
-                                                                               \
+    bool typesMatched = matchPair(dest->getElementType(), __VA_ARGS__);        \
     if (lhs->getType()->isQuantizedType()) {                                   \
       auto *destTy = dest->getType();                                          \
       auto *lhsTy = lhs->getType();                                            \
@@ -1417,20 +1625,23 @@ void LLVMIRGen::generateLLVMIRForDataParallelInstr(
       auto *destAddr = builder.CreateGEP(builder.getInt8Ty(), destPtr,         \
                                          loopCount, "buffer.element.addr");    \
       builder.CreateStore(stackedOpCall, destAddr);                            \
-    } else {                                                                   \
+    } else if (typesMatched) {                                                 \
       auto *stackedOpCall = createUncheckedCall(                               \
           builder, F, {loopCount, lhsPtr, rhsPtr, pointerNull});               \
       auto *destAddr = builder.CreateGEP(elementTy, destPtr, loopCount,        \
                                          "buffer.element.addr");               \
       builder.CreateStore(stackedOpCall, destAddr);                            \
+    } else {                                                                   \
+      llvm_unreachable("Unsupported Type in " #INST_NAME_);                    \
     }                                                                          \
     break;                                                                     \
   }
-    ARITHMETIC_BINARY_OP_CASE(ElementAdd, "element_add");
-    ARITHMETIC_BINARY_OP_CASE(ElementSub, "element_sub");
-    ARITHMETIC_BINARY_OP_CASE(ElementMax, "element_max");
-    ARITHMETIC_BINARY_OP_CASE(ElementMin, "element_min");
-    ARITHMETIC_BINARY_OP_CASE(ElementPow, "element_pow");
+    ARITHMETIC_BINARY_OP_CASE(ElementAdd, "element_add", ElemKind::FloatTy,
+                              ElemKind::Int32ITy, ElemKind::Int64ITy);
+    ARITHMETIC_BINARY_OP_CASE(ElementSub, "element_sub", ElemKind::FloatTy);
+    ARITHMETIC_BINARY_OP_CASE(ElementMax, "element_max", ElemKind::FloatTy);
+    ARITHMETIC_BINARY_OP_CASE(ElementMin, "element_min", ElemKind::FloatTy);
+    ARITHMETIC_BINARY_OP_CASE(ElementPow, "element_pow", ElemKind::FloatTy);
 #undef ARITHMETIC_BINARY_OP_CASE
 
   case Kinded::Kind::ElementNotInstKind: {
@@ -1814,6 +2025,67 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     break;
   }
 
+  case Kinded::Kind::FullyConnectedInstKind: {
+    auto *FCI = cast<FullyConnectedInst>(I);
+    auto *dest = FCI->getDest();
+    auto *src = FCI->getSrc();
+    auto *weights = FCI->getWeights();
+    auto *bias = FCI->getBias();
+    auto *destPtr = emitValueAddress(builder, dest);
+    auto *srcPtr = emitValueAddress(builder, src);
+    auto *weightsPtr = emitValueAddress(builder, weights);
+    auto *biasPtr = emitValueAddress(builder, bias);
+    auto *destDims = emitValueDims(builder, dest);
+    auto *srcDims = emitValueDims(builder, src);
+    auto *weightsDims = emitValueDims(builder, weights);
+    auto *biasDims = emitValueDims(builder, bias);
+
+    if (src->getType()->isQuantizedType()) {
+      auto *destTy = dest->getType();
+      auto *srcTy = src->getType();
+      auto *weightsTy = weights->getType();
+      auto *biasTy = bias->getType();
+
+      auto *destOffset = emitConstI32(builder, destTy->getOffset());
+      auto *srcOffset = emitConstI32(builder, srcTy->getOffset());
+      auto *weightsOffset = emitConstI32(builder, weightsTy->getOffset());
+      auto *biasOffset = emitConstI32(builder, biasTy->getOffset());
+
+      // Calculate the scale of the values that come out of the matrix
+      // multiplication part of the calculation.
+      float matMulScale = srcTy->getScale() * weightsTy->getScale();
+
+      // Calculate the scaling parameters for the bias and output.
+      auto biasScaleParam = quantization::quantizeScaleOffset32To8(
+          biasTy->getScale() / matMulScale, 0);
+      auto outScaleParam = quantization::quantizeScaleOffset32To8(
+          matMulScale / destTy->getScale(), 0);
+
+      // Pass the pre-shift, post-shift and integer scale parameters for the
+      // bias and output calculation.
+      auto *biasPre = emitConstI32(builder, biasScaleParam.pre);
+      auto *biasPost = emitConstI32(builder, biasScaleParam.post);
+      auto *biasScale = emitConstI32(builder, biasScaleParam.scale);
+      auto *outPre = emitConstI32(builder, outScaleParam.pre);
+      auto *outPost = emitConstI32(builder, outScaleParam.post);
+      auto *outScale = emitConstI32(builder, outScaleParam.scale);
+
+      auto *F =
+          getFunction("fc", {dest->getElementType(), bias->getElementType()});
+      createCall(builder, F,
+                 {destPtr, srcPtr, weightsPtr, biasPtr, destDims, srcDims,
+                  weightsDims, biasDims, destOffset, srcOffset, weightsOffset,
+                  biasOffset, biasPre, biasPost, biasScale, outPre, outPost,
+                  outScale});
+    } else {
+      auto *F = getFunction("fc", dest->getElementType());
+      createCall(builder, F,
+                 {destPtr, srcPtr, weightsPtr, biasPtr, destDims, srcDims,
+                  weightsDims, biasDims});
+    }
+    break;
+  }
+
   case Kinded::Kind::RowwiseQuantizedFullyConnectedInstKind: {
     auto *RWQFC = cast<RowwiseQuantizedFullyConnectedInst>(I);
 
@@ -2021,6 +2293,35 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     break;
   }
 
+  case Kinded::Kind::BatchedReduceProdInstKind: {
+    auto *BR = cast<BatchedReduceProdInst>(I);
+    auto *dest = BR->getDest();
+    auto *batch = BR->getBatch();
+    auto *destPtr = emitValueAddress(builder, dest);
+    auto *batchPtr = emitValueAddress(builder, batch);
+    auto *axis = emitConstDimT(builder, BR->getAxis());
+
+    ShapeVector eBatchDims = expandDimsToMax(batch->dims());
+    ShapeVector eDestDims = eBatchDims;
+    eDestDims[BR->getAxis()] = 1;
+
+    auto *batchDims =
+        emitConstDimTArray(builder, llvm::makeArrayRef(eBatchDims));
+    auto *destDims = emitConstDimTArray(builder, llvm::makeArrayRef(eDestDims));
+
+    auto *F = getFunction("batchedreduceprod", dest->getElementType());
+
+    assert(!batch->getType()->isQuantizedType() &&
+           "Quantized implementation for ReduceProd not supported yet.");
+
+    auto *destSize = emitConstDimT(builder, dest->size());
+
+    createCall(builder, F,
+               {destPtr, batchPtr, destSize, destDims, batchDims, axis});
+
+    break;
+  }
+
 #define BATCHED_REDUCE_MINMAX_CASE(INST_NAME_, FUN_NAME_)                      \
   case Kinded::Kind::Batched##INST_NAME_##InstKind: {                          \
     auto *BR = cast<Batched##INST_NAME_##Inst>(I);                             \
@@ -2068,8 +2369,6 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *CI = cast<ConvolutionInst>(I);
     assert(CI->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Convolutions");
-    assert(CI->getFusedActivation() == FusedActivation::NONE &&
-           "Glow CPU Backend does not support fused activations.");
     auto *dest = CI->getDest();
     auto *src = CI->getSrc();
     auto *filter = CI->getFilter();
@@ -2088,7 +2387,7 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *strides = emitConstDimTArray(builder, CI->getStrides());
     auto *pads = emitConstDimTArray(builder, CI->getPads());
     auto *group = emitConstDimT(builder, CI->getGroup());
-    auto *dilation = emitConstDimT(builder, CI->getDilation());
+    auto *dilation = emitConstDimTArray(builder, CI->getDilation());
 
     auto destDepth = dest->dims()[3];
 
@@ -2105,6 +2404,8 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     }
 
     auto *unrollD = emitConstI32(builder, unrollDFactor);
+
+    auto *actType = emitConstI32(builder, CI->getFusedActivation());
 
     if (src->getType()->isQuantizedType()) {
       auto *destTy = dest->getType();
@@ -2136,23 +2437,30 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
       auto *outPost = emitConstI32(builder, outScaleParam.post);
       auto *outScale = emitConstI32(builder, outScaleParam.scale);
 
+      // Emit parameters for fused activation.
+      auto *actArgsQuant = emitConstQuantActivationArgs(builder, CI);
+
       auto *F = getFunction("conv2d",
                             {dest->getElementType(), bias->getElementType()});
 
       createCall(builder, F,
-                 {destPtr,    srcPtr,     filterPtr,  biasPtr,   destDims,
-                  srcDims,    filterDims, biasDims,   kernels,   strides,
-                  pads,       group,      destOffset, srcOffset, filterOffset,
-                  biasOffset, biasPre,    biasPost,   biasScale, outPre,
-                  outPost,    outScale,   unrollD,    dilation});
+                 {destPtr,     srcPtr,     filterPtr,  biasPtr,   destDims,
+                  srcDims,     filterDims, biasDims,   kernels,   strides,
+                  pads,        group,      destOffset, srcOffset, filterOffset,
+                  biasOffset,  biasPre,    biasPost,   biasScale, outPre,
+                  outPost,     outScale,   unrollD,    dilation,  actType,
+                  actArgsQuant});
     } else {
+
+      // Emit parameters for fused activation.
+      auto *actArgsFloat = emitConstFloatActivationArgs(builder, CI);
 
       auto *F = getFunction("conv2d", dest->getElementType());
 
       createCall(builder, F,
                  {destPtr, srcPtr, filterPtr, biasPtr, destDims, srcDims,
                   filterDims, biasDims, kernels, strides, pads, group, unrollD,
-                  dilation});
+                  dilation, actType, actArgsFloat});
     }
     break;
   }
@@ -2178,7 +2486,7 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *strides = emitConstDimTArray(builder, CG->getStrides());
     auto *pads = emitConstDimTArray(builder, CG->getPads());
     auto *group = emitConstDimT(builder, CG->getGroup());
-    auto *dilation = emitConstDimT(builder, CG->getDilation());
+    auto *dilation = emitConstDimTArray(builder, CG->getDilation());
 
     auto *F = getFunction("convolution_grad", srcGrad->getElementType());
     createCall(builder, F,
@@ -2208,7 +2516,7 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *strides = emitConstDimTArray(builder, CI->getStrides());
     auto *pads = emitConstDimTArray(builder, CI->getPads());
     auto *group = emitConstDimT(builder, CI->getGroup());
-    auto *dilation = emitConstDimT(builder, CI->getDilation());
+    auto *dilation = emitConstDimTArray(builder, CI->getDilation());
 
     const char *kernelName = "conv_transpose";
 
@@ -2318,7 +2626,7 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *strides = emitConstDimTArray(builder, CQCI->getStrides());
     auto *pads = emitConstDimTArray(builder, CQCI->getPads());
     auto *group = emitConstDimT(builder, CQCI->getGroup());
-    auto *dilation = emitConstDimT(builder, CQCI->getDilation());
+    auto *dilation = emitConstDimTArray(builder, CQCI->getDilation());
 
     auto *destOffset = emitConstI32(builder, destTy->getOffset());
     auto *srcOffset = emitConstI32(builder, srcTy->getOffset());
@@ -2342,13 +2650,17 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
                                    : "channelwise_quantized_conv2d",
                           {dest->getElementType(), bias->getElementType()});
 
+    auto *actType = emitConstI32(builder, CQCI->getFusedActivation());
+    auto *actArgsQuant = emitConstQuantActivationArgs(builder, CQCI);
+
     createCall(builder, F,
-               {destPtr,        srcPtr,        filterPtr,     biasPtr,
-                destDims,       srcDims,       filterDims,    biasDims,
-                kernels,        strides,       pads,          group,
-                dilation,       destOffset,    srcOffset,     filterOffsetsPtr,
-                biasOffsetsPtr, biasPrePtr,    biasPostPtr,   biasScalePtr,
-                outputPrePtr,   outputPostPtr, outputScalePtr});
+               {destPtr,        srcPtr,        filterPtr,      biasPtr,
+                destDims,       srcDims,       filterDims,     biasDims,
+                kernels,        strides,       pads,           group,
+                dilation,       destOffset,    srcOffset,      filterOffsetsPtr,
+                biasOffsetsPtr, biasPrePtr,    biasPostPtr,    biasScalePtr,
+                outputPrePtr,   outputPostPtr, outputScalePtr, actType,
+                actArgsQuant});
     break;
   }
 
@@ -2468,8 +2780,16 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *pads = emitConstDimTArray(builder, PM->getPads());
 
     auto *F = getFunction("max_pool", dest->getElementType());
-    createCall(builder, F,
-               {srcPtr, destPtr, srcDims, destDims, kernels, strides, pads});
+
+    if (src->getType()->isQuantizedType()) {
+      auto *destOffset = emitConstI32(builder, dest->getType()->getOffset());
+      createCall(builder, F,
+                 {srcPtr, destPtr, srcDims, destDims, kernels, strides, pads,
+                  destOffset});
+    } else {
+      createCall(builder, F,
+                 {srcPtr, destPtr, srcDims, destDims, kernels, strides, pads});
+    }
     break;
   }
 
@@ -2562,52 +2882,35 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *kernels = emitConstDimTArray(builder, PA->getKernels());
     auto *strides = emitConstDimTArray(builder, PA->getStrides());
     auto *pads = emitConstDimTArray(builder, PA->getPads());
+    auto *countIncludePads = emitConstI1(builder, PA->getCountIncludePads());
+
+    auto *F = getFunction("avg_pool", dest->getElementType());
 
     if (src->getType()->isQuantizedType()) {
       auto *destTy = dest->getType();
       auto *srcTy = src->getType();
       auto *destOffset = emitConstI32(builder, destTy->getOffset());
       auto *srcOffset = emitConstI32(builder, srcTy->getOffset());
-
-      // if the flag is false, we can't pre-calculate the reduced scale
-      // because the kernel area will change since pads are excluded.
-      if (!PA->getCountIncludePads()) {
-        auto *srcScale = emitConstF32(builder, srcTy->getScale());
-        auto *destScale = emitConstF32(builder, destTy->getScale());
-
-        auto *F =
-            getFunction("avg_pool_count_exclude_pad", dest->getElementType());
-        createCall(builder, F,
-                   {srcPtr, destPtr, srcDims, destDims, kernels, strides, pads,
-                    srcOffset, destOffset, srcScale, destScale});
-      } else {
-        // Reduce resulting scale by a factor of PA->getKernels()[0] *
-        // PA->getKernels()[1] since each subtensor value is divided by the area
-        // of kernel.
-        auto outScaleParam = quantization::quantizeScaleOffset32To8(
-            srcTy->getScale() / destTy->getScale() /
-                (PA->getKernels()[0] * PA->getKernels()[1]),
-            destTy->getOffset());
-        auto *outPre = emitConstI32(builder, outScaleParam.pre);
-        auto *outPost = emitConstI32(builder, outScaleParam.post);
-        auto *outScale = emitConstI32(builder, outScaleParam.scale);
-
-        auto *F = getFunction("avg_pool", dest->getElementType());
-        createCall(builder, F,
-                   {srcPtr, destPtr, srcDims, destDims, kernels, strides, pads,
-                    destOffset, srcOffset, outPre, outPost, outScale});
+      // When we count the padding pixels in the normalizing factor we include
+      // the filter area in the scaling parameters since it is a constant.
+      float scale = srcTy->getScale() / destTy->getScale();
+      if (PA->getCountIncludePads()) {
+        scale = scale / (PA->getKernels()[0] * PA->getKernels()[1]);
       }
-
-      break;
+      auto outScaleParam = quantization::quantizeScaleOffset32To8(scale, 0);
+      auto *outPre = emitConstI32(builder, outScaleParam.pre);
+      auto *outPost = emitConstI32(builder, outScaleParam.post);
+      auto *outScale = emitConstI32(builder, outScaleParam.scale);
+      createCall(builder, F,
+                 {srcPtr, destPtr, srcDims, destDims, kernels, strides, pads,
+                  countIncludePads, destOffset, srcOffset, outPre, outPost,
+                  outScale});
     } else {
-      auto *countIncludePads = emitConstI1(builder, PA->getCountIncludePads());
-
-      auto *F = getFunction("avg_pool", dest->getElementType());
       createCall(builder, F,
                  {srcPtr, destPtr, srcDims, destDims, kernels, strides, pads,
                   countIncludePads});
-      break;
     }
+    break;
   }
 
   case Kinded::Kind::AdaptiveAvgPoolInstKind: {
@@ -2653,12 +2956,44 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *src = SM->getSrc();
     auto *destPtr = emitValueAddress(builder, dest);
     auto *srcPtr = emitValueAddress(builder, src);
-
     auto *destDims = emitValueDims(builder, dest);
     auto *srcDims = emitValueDims(builder, src);
-
     auto *F = getFunction("softmax", dest->getElementType());
-    createCall(builder, F, {srcPtr, destPtr, srcDims, destDims});
+
+    if (src->getType()->isQuantizedType()) {
+      std::vector<int32_t> lut;
+
+      // Compute lookup table containing all the exponentials based on the
+      // formula e^(scale * value), where scale is the input scale of
+      // the quantized input data and value is a value from [-255, 0].
+      for (int32_t i = 0; i < 256; i++) {
+        auto exponent =
+            FixedPointUInt32(exp(src->getType()->getScale() * (i - 255)), 1)
+                .getFixedVal();
+        lut.push_back(exponent);
+      }
+
+      auto *lutPtr = emitConstI32Array(builder, lut);
+      auto *outOffset = emitConstI32(builder, dest->getType()->getOffset());
+      float size = static_cast<float>(src->getType()->dims()[1]);
+      auto *sumIntegerPart = emitConstI32(builder, ceil(log2(size)));
+
+      if (ceil(log2(size)) == floor(log2(size))) {
+        sumIntegerPart = emitConstI32(builder, ceil(log2(size)) + 1);
+      }
+
+      FixedPointUInt32 invScaleFixedPoint =
+          FixedPointUInt32(1.f / dest->getType()->getScale());
+      auto *invScale = emitConstI32(builder, invScaleFixedPoint.getFixedVal());
+      auto *invScalePoint =
+          emitConstI32(builder, invScaleFixedPoint.getIntBits());
+      createCall(builder, F,
+                 {srcPtr, destPtr, srcDims, lutPtr, outOffset, invScale,
+                  sumIntegerPart, invScalePoint});
+    } else {
+      createCall(builder, F, {srcPtr, destPtr, srcDims, destDims});
+    }
+
     break;
   }
 
@@ -2827,7 +3162,7 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *dest = GI->getDest();
     auto *data = GI->getData();
     auto *indices = GI->getIndices();
-    unsigned batchDims = GI->getBatchDims();
+    unsigned axis = GI->getBatchDims();
 
     auto *destPtr = emitValueAddress(builder, dest);
     auto *dataPtr = emitValueAddress(builder, data);
@@ -2838,9 +3173,9 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *dataType = data->getType();
 
     // The size of the sample in the batch.
-    size_t sampleSize = dataType->getSliceSize(batchDims);
+    size_t sampleSize = dataType->getSliceSize(axis);
     // The size of the slices that we gather.
-    size_t sliceSize = dataType->getSliceSize(batchDims + 1);
+    size_t sliceSize = dataType->getSliceSize(axis + 1);
     // The size of each sample in the batch.
     size_t numSamples = dataType->size() / sampleSize;
 
@@ -2848,7 +3183,7 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *numSamplesVal = emitConstDimT(builder, numSamples);
     auto *sampleSizeVal = emitConstDimT(builder, sampleSize);
 
-    // Dispatching function depeending on the input type of Indices.
+    // Dispatching function depending on the input type of Indices.
     llvm::Function *F = nullptr;
     if (indices->getElementType() == ElemKind::Int64ITy) {
       F = getFunction("gather64", dest->getElementType());
@@ -2862,6 +3197,74 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     createCall(builder, F,
                {destPtr, dataPtr, indicesPtr, indicesSize, sliceSizeVal,
                 numSamplesVal, sampleSizeVal});
+    break;
+  }
+
+  case Kinded::Kind::GatherNDInstKind: {
+    auto *GI = llvm::cast<GatherNDInst>(I);
+    auto *dest = GI->getDest();
+    auto *data = GI->getData();
+    auto *indices = GI->getIndices();
+    unsigned batchDims = GI->getBatchDims();
+
+    auto dataDims = data->dims();
+    auto indicesDims = indices->dims();
+    dim_t indicesDimLast = indicesDims.back();
+
+    // Compute batch count.
+    dim_t batchCount = 1;
+    for (size_t idx = 0; idx < batchDims; ++idx) {
+      batchCount *= dataDims[idx];
+    }
+
+    // Compute input slice count.
+    dim_t inpSliceCount = 1;
+    for (size_t idx = batchDims; idx < batchDims + indicesDimLast; ++idx) {
+      inpSliceCount *= dataDims[idx];
+    }
+
+    // Compute output slice count.
+    dim_t outSliceCount = 1;
+    for (size_t idx = batchDims; idx < indicesDims.size() - 1; ++idx) {
+      outSliceCount *= indicesDims[idx];
+    }
+
+    // Compute slice size (in bytes).
+    dim_t sliceSize = data->getType()->getElementSize();
+    for (size_t idx = batchDims + indicesDimLast; idx < dataDims.size();
+         idx++) {
+      sliceSize *= dataDims[idx];
+    }
+
+    // Get indices dimension products.
+    std::vector<dim_t> indicesDimProd(indicesDimLast);
+    indicesDimProd[indicesDimLast - 1] = 1;
+    for (ssize_t idx = static_cast<ssize_t>(indicesDimLast) - 2; idx >= 0;
+         idx--) {
+      indicesDimProd[idx] =
+          indicesDimProd[idx + 1] * dataDims[batchDims + idx + 1];
+    }
+
+    // Emit pointers.
+    auto *destPtr = emitValueAddress(builder, dest);
+    auto *dataPtr = emitValueAddress(builder, data);
+    auto *indicesPtr = emitValueAddress(builder, indices);
+
+    // Emit parameters.
+    auto *batchCountArg = emitConstDimT(builder, batchCount);
+    auto *inpSliceCountArg = emitConstDimT(builder, inpSliceCount);
+    auto *outSliceCountArg = emitConstDimT(builder, outSliceCount);
+    auto *sliceSizeArg = emitConstDimT(builder, sliceSize);
+    auto *indicesDimLastArg = emitConstDimT(builder, indicesDimLast);
+    auto *indicesDimProdArg =
+        emitConstDimTArray(builder, llvm::makeArrayRef(indicesDimProd));
+
+    llvm::Function *F = getFunction(
+        "gather_nd", {data->getElementType(), indices->getElementType()});
+    createCall(builder, F,
+               {destPtr, dataPtr, indicesPtr, batchCountArg, inpSliceCountArg,
+                outSliceCountArg, sliceSizeArg, indicesDimLastArg,
+                indicesDimProdArg});
     break;
   }
 
@@ -2997,6 +3400,29 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     break;
   }
 
+  case Kinded::Kind::EmbeddingInstKind: {
+    auto *SI = cast<EmbeddingInst>(I);
+    auto *dest = SI->getDest();
+    auto *weights = SI->getWeights();
+    auto *indices = SI->getIndices();
+    auto *padIdx = emitConstSizeT(builder, SI->getPadIdx());
+    auto *scale = emitConstI1(builder, SI->getScale());
+    auto *sparse = emitConstI1(builder, SI->getSparse());
+    auto *destPtr = emitValueAddress(builder, dest);
+    auto *weightsPtr = emitValueAddress(builder, weights);
+    auto *indicesPtr = emitValueAddress(builder, indices);
+    auto *indDims = emitValueDims(builder, indices);
+    auto *indSize = emitConstDimT(builder, indices->dims().size());
+    assert(weights->dims().size() == 2 && "weights must be 2-D");
+    auto *numEmbedding = emitConstDimT(builder, weights->dims()[0]);
+    auto *embeddingDim = emitConstDimT(builder, weights->dims()[1]);
+    auto *F = getFunction("embedding", dest->getElementType());
+    createCall(builder, F,
+               {destPtr, weightsPtr, indicesPtr, indDims, indSize, numEmbedding,
+                embeddingDim, padIdx, scale, sparse});
+    break;
+  }
+
   case Kinded::Kind::EmbeddingBagInstKind: {
     auto *SI = cast<EmbeddingBagInst>(I);
     auto *dest = SI->getDest();
@@ -3124,31 +3550,6 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     break;
   }
 
-  case Kinded::Kind::SparseToDenseInstKind: {
-    auto *STDI = llvm::cast<SparseToDenseInst>(I);
-    auto *indices = STDI->getIndices();
-    auto *values = STDI->getValues();
-    auto *dest = STDI->getDest();
-
-    auto *indicesPtr = emitValueAddress(builder, indices);
-    auto *valuesPtr = emitValueAddress(builder, values);
-    auto *destPtr = emitValueAddress(builder, dest);
-
-    auto *indicesSize = emitConstDimT(builder, indices->size());
-    auto *destSize = emitConstDimT(builder, dest->size());
-
-    auto *valuesType = values->getType();
-    auto *valueSize =
-        emitConstDimT(builder, valuesType->size() / valuesType->dims()[0]);
-
-    auto *F = getFunction("sparse_to_dense",
-                          {dest->getElementType(), indices->getElementType()});
-    createCall(
-        builder, F,
-        {destPtr, indicesPtr, valuesPtr, indicesSize, destSize, valueSize});
-    break;
-  }
-
   case Kinded::Kind::DebugPrintInstKind: {
     auto *DPI = llvm::cast<DebugPrintInst>(I);
     auto *src = DPI->getSrc();
@@ -3198,6 +3599,107 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     } else {
       LOG(FATAL) << "Invalid 'Format' attribute for DebugPrint instruction!";
     }
+    break;
+  }
+
+  case Kinded::Kind::InstrumentInstKind: {
+    auto *instrumentI = llvm::cast<InstrumentInst>(I);
+    auto *opInfo = instrumentI->getOperandsInfo();
+
+    // Instruction being instrumented.
+    Instruction *instrRef = instrumentI->getInstrRef();
+
+    // Emit instruction ID and instruction kind.
+    llvm::Type *intTy =
+        llvm::Type::getIntNTy(getLLVMContext(), getLibjitIntWidth());
+    auto *ID = llvm::ConstantInt::get(intTy, instrumentI->getID());
+    auto *kind = llvm::ConstantInt::get(intTy, (int)(instrRef->getKind()));
+
+    // Emit number of input and output operands.
+    auto inpNum = instrRef->getNumInputs();
+    auto outNum = instrRef->getNumOutputs();
+    auto opNum = inpNum + outNum;
+    auto *opInp = llvm::ConstantInt::get(intTy, inpNum);
+    auto *opOut = llvm::ConstantInt::get(intTy, outNum);
+
+    // Emit opInfo address as uint8_t*.
+    assert(opInfo->getType()->getSizeInBytes() >= 2 * opNum * sizeof(int64_t) &&
+           "Not enough memory allocated for instrumentation!");
+    auto *opInfoPtr = emitValueAddress(builder, opInfo);
+    opInfoPtr = builder.CreateBitCast(opInfoPtr, builder.getInt8PtrTy());
+
+    // Emit opAddr address as uint8_t** starting from offset 0.
+    auto *opAddrPtr =
+        builder.CreateGEP(opInfoPtr, llvm::ConstantInt::get(intTy, 0));
+    opAddrPtr = builder.CreateBitCast(opAddrPtr,
+                                      builder.getInt8PtrTy()->getPointerTo());
+
+    // Emit opSize address as int* starting from offset opNum * sizeof(int64_t).
+    auto *opSizePtr = builder.CreateGEP(
+        opInfoPtr, llvm::ConstantInt::get(intTy, opNum * sizeof(int64_t)));
+    opSizePtr = builder.CreateBitCast(opSizePtr, intTy->getPointerTo());
+
+    // Generate instrumentation.
+    auto instrumentKind = instrumentI->getInstrumentKind();
+    if (instrumentKind == InstrumentKind::Before) {
+
+      // Operands addresses and sizes.
+      std::vector<llvm::Value *> opAddrArray;
+      std::vector<llvm::Value *> opSizeArray;
+
+      // Get addresses and sizes for the input operands.
+      for (const auto &op : instrRef->getOperands()) {
+        if (op.second == OperandKind::Out) {
+          continue;
+        }
+        // Emit operand address as uint8_t* variable.
+        auto *opAddr = emitValueAddress(builder, op.first);
+        opAddr = builder.CreateBitCast(opAddr, builder.getInt8PtrTy());
+        opAddrArray.push_back(opAddr);
+        // Emit operand size in bytes as int constant.
+        auto *opSize = llvm::ConstantInt::get(
+            intTy, op.first->getType()->getSizeInBytes());
+        opSizeArray.push_back(opSize);
+      }
+      assert(opAddrArray.size() == inpNum && "Inconsistent size!");
+
+      // Get addresses and sizes for the output operands.
+      for (const auto &op : instrRef->getOperands()) {
+        if (op.second == OperandKind::In) {
+          continue;
+        }
+        // Emit operand address as uint8_t* variable.
+        auto *opAddr = emitValueAddress(builder, op.first);
+        opAddr = builder.CreateBitCast(opAddr, builder.getInt8PtrTy());
+        opAddrArray.push_back(opAddr);
+        // Emit operand size in bytes as int constant.
+        auto *opSize = llvm::ConstantInt::get(
+            intTy, op.first->getType()->getSizeInBytes());
+        opSizeArray.push_back(opSize);
+      }
+      assert(opAddrArray.size() == opNum && "Inconsistent size!");
+
+      // Write the addresses of the operands in the opAddr.
+      emitArrayStore(builder, opAddrArray, opAddrPtr);
+
+      // Write the sizes of the operands in opSize.
+      emitArrayStore(builder, opSizeArray, opSizePtr);
+
+      // Create callback call.
+      auto *F = getFunction("instrument_before");
+      createCall(builder, F, {ID, kind, opInp, opOut, opAddrPtr, opSizePtr});
+
+    } else if (instrumentKind == InstrumentKind::After) {
+
+      // Create callback call.
+      auto *F = getFunction("instrument_after");
+      createCall(builder, F, {ID, kind, opInp, opOut, opAddrPtr, opSizePtr});
+
+    } else {
+      llvm_unreachable("Instrumentation kind not supported!");
+    }
+    // Print the IR instrumentation callback API.
+    printInstrumentIR_ = true;
     break;
   }
 
@@ -3281,6 +3783,163 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
                 indicesDimVal, indicesDimSizeVal, centerPointBoxVal,
                 maxBoxesPerClassVal, iouThresholdVal, scoreThresholdVal,
                 isV4Val});
+    break;
+  }
+
+  case Kinded::Kind::TFLiteDetectionPostProcessInstKind: {
+    auto *DPPI = llvm::cast<TFLiteDetectionPostProcessInst>(I);
+    auto boxes = DPPI->getBoxes();
+    auto scores = DPPI->getScores();
+    auto anchors = DPPI->getAnchors();
+    auto detectionBoxes = DPPI->getDetectionBoxes();
+    auto detectionClasses = DPPI->getDetectionClasses();
+    auto detectionScores = DPPI->getDetectionScores();
+    auto numDetections = DPPI->getNumDetections();
+    auto scratch = DPPI->getScratch();
+
+    // Emit pointers.
+    auto *boxesPtr = emitValueAddress(builder, boxes);
+    auto *scoresPtr = emitValueAddress(builder, scores);
+    auto *anchorsPtr = emitValueAddress(builder, anchors);
+    auto *detectionBoxesPtr = emitValueAddress(builder, detectionBoxes);
+    auto *detectionClassesPtr = emitValueAddress(builder, detectionClasses);
+    auto *detectionScoresPtr = emitValueAddress(builder, detectionScores);
+    auto *numDetectionsPtr = emitValueAddress(builder, numDetections);
+    auto *scratchPtr = emitValueAddress(builder, scratch);
+
+    // Emit parameters.
+    auto *numBoxes = emitConstI32(builder, boxes->dims()[1]);
+    auto *numTotalClasses = emitConstI32(builder, scores->dims()[2]);
+    auto *numClasses = emitConstI32(builder, DPPI->getNumClasses());
+    auto *maxDetections = emitConstI32(builder, DPPI->getMaxDetections());
+    auto *maxClassesPerDetection =
+        emitConstI32(builder, DPPI->getMaxClassesPerDetection());
+    auto *maxDetectionsPerClass =
+        emitConstI32(builder, DPPI->getMaxDetectionsPerClass());
+    auto *iouThreshold = emitConstF32(builder, DPPI->getIouThreshold());
+    auto *scoreThreshold = emitConstF32(builder, DPPI->getScoreThreshold());
+    auto *xScaleInv = emitConstF32(builder, 1.0f / DPPI->getXScale());
+    auto *yScaleInv = emitConstF32(builder, 1.0f / DPPI->getYScale());
+    auto *hScaleInv = emitConstF32(builder, 1.0f / DPPI->getHScale());
+    auto *wScaleInv = emitConstF32(builder, 1.0f / DPPI->getWScale());
+    auto *regularNMS = emitConstI1(builder, DPPI->getRegularNMS());
+
+    // Current implementation only supports batch size 1.
+    assert(boxes->dims()[0] == 1 &&
+           "TFLiteDetectionPostProcess batch not supported!");
+
+    // Call function.
+    auto *F = getFunction("tflite_detection_post_process_f");
+    createCall(builder, F,
+               {boxesPtr,
+                scoresPtr,
+                anchorsPtr,
+                detectionBoxesPtr,
+                detectionClassesPtr,
+                detectionScoresPtr,
+                numDetectionsPtr,
+                scratchPtr,
+                numBoxes,
+                numTotalClasses,
+                numClasses,
+                maxDetections,
+                maxClassesPerDetection,
+                maxDetectionsPerClass,
+                iouThreshold,
+                scoreThreshold,
+                xScaleInv,
+                yScaleInv,
+                hScaleInv,
+                wScaleInv,
+                regularNMS});
+    break;
+  }
+
+  case Kinded::Kind::TFLiteCustomOperatorInstKind: {
+    auto *TCOI = llvm::cast<TFLiteCustomOperatorInst>(I);
+    auto *opInfo = TCOI->getOperandsInfo();
+    std::vector<Value *> outputs = TCOI->getOutputs();
+    std::vector<Value *> inputs = TCOI->getInputs();
+
+    // Target int type.
+    llvm::Type *intTy =
+        llvm::Type::getIntNTy(getLLVMContext(), getLibjitIntWidth());
+
+    // Emit operator type and options.
+    auto *operatorType = emitStringConst(builder, TCOI->getOperatorType());
+    auto *operatorOptions =
+        emitStringConst(builder, TCOI->getOperatorOptions());
+    auto *operatorOptionsSize =
+        llvm::ConstantInt::get(intTy, TCOI->getOperatorOptions().size());
+
+    // Emit number of input and output operands.
+    auto inpNum = inputs.size();
+    auto outNum = outputs.size();
+    auto opNum = inpNum + outNum;
+    auto *opInp = llvm::ConstantInt::get(intTy, inpNum);
+    auto *opOut = llvm::ConstantInt::get(intTy, outNum);
+
+    // Emit opInfo address as uint8_t*.
+    assert(opInfo->getType()->getSizeInBytes() >= 2 * opNum * sizeof(int64_t) &&
+           "Not enough memory allocated for operands information!");
+    auto *opInfoPtr = emitValueAddress(builder, opInfo);
+    opInfoPtr = builder.CreateBitCast(opInfoPtr, builder.getInt8PtrTy());
+
+    // Emit opAddr address as uint8_t** starting from offset 0.
+    auto *opAddrPtr =
+        builder.CreateGEP(opInfoPtr, llvm::ConstantInt::get(intTy, 0));
+    opAddrPtr = builder.CreateBitCast(opAddrPtr,
+                                      builder.getInt8PtrTy()->getPointerTo());
+
+    // Emit opSize address as int* starting from offset opNum * sizeof(int64_t).
+    auto *opSizePtr = builder.CreateGEP(
+        opInfoPtr, llvm::ConstantInt::get(intTy, opNum * sizeof(int64_t)));
+    opSizePtr = builder.CreateBitCast(opSizePtr, intTy->getPointerTo());
+
+    // Operands addresses and sizes.
+    std::vector<llvm::Value *> opAddrArray;
+    std::vector<llvm::Value *> opSizeArray;
+
+    // Get addresses and sizes for the input operands.
+    for (Value *inpVal : inputs) {
+      // Emit operand address as uint8_t* variable.
+      auto *opAddr = emitValueAddress(builder, inpVal);
+      opAddr = builder.CreateBitCast(opAddr, builder.getInt8PtrTy());
+      opAddrArray.push_back(opAddr);
+      // Emit operand size in bytes as int constant.
+      auto *opSize =
+          llvm::ConstantInt::get(intTy, inpVal->getType()->getSizeInBytes());
+      opSizeArray.push_back(opSize);
+    }
+    assert(opAddrArray.size() == inpNum && "Inconsistent size!");
+
+    // Get addresses and sizes for the output operands.
+    for (Value *outVal : outputs) {
+      // Emit operand address as uint8_t* variable.
+      auto *opAddr = emitValueAddress(builder, outVal);
+      opAddr = builder.CreateBitCast(opAddr, builder.getInt8PtrTy());
+      opAddrArray.push_back(opAddr);
+      // Emit operand size in bytes as int constant.
+      auto *opSize =
+          llvm::ConstantInt::get(intTy, outVal->getType()->getSizeInBytes());
+      opSizeArray.push_back(opSize);
+    }
+    assert(opAddrArray.size() == opNum && "Inconsistent size!");
+
+    // Write the addresses of the operands in the opAddr.
+    emitArrayStore(builder, opAddrArray, opAddrPtr);
+
+    // Write the sizes of the operands in opSize.
+    emitArrayStore(builder, opSizeArray, opSizePtr);
+
+    // Create callback call.
+    auto *F = getFunction("glow_tflite_custom_operator");
+    createCall(builder, F,
+               {operatorType, operatorOptions, operatorOptionsSize, opInp,
+                opOut, opAddrPtr, opSizePtr});
+
+    // Print the TFLite Custom Operator callback API.
+    printTFLiteCustomOperator_ = true;
     break;
   }
 
@@ -3402,4 +4061,98 @@ bool LLVMIRGen::canBePartOfDataParallelKernel(
   return I->isDataParallel();
 }
 
-std::string LLVMIRGen::getBundleHeaderExtra() const { return ""; }
+/// Extra bundle header file content with the IR instrumentation callback API.
+static const char *instrumentIRApi =
+    R"RAW(
+// -----------------------------------------------------------------------------
+// Callback function used for Glow IR instruction instrumentation:
+// - This callback is called by the bundle BEFORE executing each instruction.
+// - This callback must be defined by the bundle user application.
+// ARGUMENTS:
+//   id     - Instruction instance ID.
+//   kind   - Instruction kind (type).
+//   opInp  - Number of input operands.
+//   opOut  - Number of output operands.
+//   opAddr - Array with addresses for all operands. The addresses are listed
+//            first for the input operands and then for the output operands.
+//            The array contains opInp + opOut addresses.
+//   opSize - Array with sizes (in bytes) for all operands. The sizes are listed
+//            first for the input operands and then for the output operands.
+//            The array contains opInp + opOut sizes.
+// NOTES:
+// - This callback should be used to dump only the input operands since the
+//   output operands are not yet computed/written when this callback is used.
+// - This callback uses C linkage therefore if the callback is implemented in a
+//   .cpp file you must enclose the implementation in extern "C" {}.
+// - Look in the metafile "instrument-ir.info" generated during compile-time
+//   to see more information about the instrumented instructions.
+// -----------------------------------------------------------------------------
+void glow_instrument_before(int id, int kind, int opInp, int opOut, uint8_t **opAddr, int *opSize);
+
+// -----------------------------------------------------------------------------
+// Callback function used for Glow IR instruction instrumentation:
+// - This callback is called by the bundle AFTER executing each instruction.
+// - This callback must be defined by the bundle user application.
+// ARGUMENTS:
+//   id     - Instruction instance ID.
+//   kind   - Instruction kind (type).
+//   opInp  - Number of input operands.
+//   opOut  - Number of output operands.
+//   opAddr - Array with addresses for all operands. The addresses are listed
+//            first for the input operands and then for the output operands.
+//            The array contains opInp + opOut addresses.
+//   opSize - Array with sizes (in bytes) for all operands. The sizes are listed
+//            first for the input operands and then for the output operands.
+//            The array contains opInp + opOut sizes.
+// NOTES:
+// - This callback should be used to dump only the output operands since some
+//   of the input operands might have been overwritten for instructions which
+//   perform in-place computation.
+// - This callback uses C linkage therefore if the callback is implemented in a
+//   .cpp file you must enclose the implementation in extern "C" {}.
+// - Look in the metafile "instrument-ir.info" generated during compile-time
+//   to see more information about the instrumented instructions.
+// -----------------------------------------------------------------------------
+void glow_instrument_after(int id, int kind, int opInp, int opOut, uint8_t **opAddr, int *opSize);
+
+)RAW";
+
+/// Extra bundle header file content with the TFLite custom operator callback
+/// API.
+static const char *tfliteCustomOperatorApi =
+    R"RAW(
+// -----------------------------------------------------------------------------
+// Callback function used for TFLite custom operator:
+// - This callback is called by the bundle for each TFLite Custom Operator.
+// ARGUMENTS:
+//   type      - Custom operator type (string).
+//   optsAddr  - Custom operator options (attributes) as raw buffer.
+//   optsSize  - Custom operator options size (in bytes).
+//   opInp     - Number of input operands.
+//   opOut     - Number of output operands.
+//   opAddr    - Array with addresses for all operands. The addresses are listed
+//               first for the input operands and then for the output operands.
+//               The array contains opInp + opOut addresses.
+//   opSize    - Array with sizes (in bytes) for all operands. The sizes are listed
+//               first for the input operands and then for the output operands.
+//               The array contains opInp + opOut sizes.
+// NOTES:
+// - This callback uses C linkage therefore if the callback is implemented in a
+//   .cpp file you must enclose the implementation in extern "C" {}.
+// -----------------------------------------------------------------------------
+void glow_tflite_custom_operator(const char *type, const uint8_t *optsAddr, int optsSize, int opInp, int opOut, uint8_t **opAddr, int *opSize);
+
+)RAW";
+
+std::string LLVMIRGen::getBundleHeaderExtra() const {
+  std::string headerExtra = "";
+  // Print IR instrumentation callback API.
+  if (printInstrumentIR_) {
+    headerExtra += std::string(instrumentIRApi);
+  }
+  // Print the TFLite Custom Operator callback API.
+  if (printTFLiteCustomOperator_) {
+    headerExtra += std::string(tfliteCustomOperatorApi);
+  }
+  return headerExtra;
+}
