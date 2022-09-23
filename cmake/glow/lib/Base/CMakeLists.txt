@@ -1,9 +1,10 @@
 add_library(Base
               ${NESTC_ROOT_DIR}/lib/Base/Tensor.cpp
               TensorSerialization.cpp
-              ${NESTC_ROOT_DIR}/lib/Base/Type.cpp
+              Type.cpp
               IO.cpp
-              TaggedList.cpp)
+              TaggedList.cpp
+              NumpyReader.cpp)
 
 target_include_directories(Base PUBLIC BEFORE ${NESTC_ROOT_DIR}/include/glow/Base/)
 

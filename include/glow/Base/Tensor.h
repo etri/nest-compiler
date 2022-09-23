@@ -58,6 +58,12 @@ ShapeVector expandDimsToMax(llvm::ArrayRef<dim_t> currDims);
 ShapeVector reduceDims(llvm::ArrayRef<dim_t> dims,
                        llvm::ArrayRef<unsigned_t> axes, bool keepDims);
 
+/// Helper function that \returns the transpose shuffle that would undo the
+/// given \p shuffle so that if two transposes were composed with the given
+/// shuffle and the result of this function, it would result in the identity
+/// shuffle.
+std::vector<unsigned_t> getInverseTranspose(llvm::ArrayRef<unsigned_t> shuffle);
+
 namespace runtime {
 class DeviceManager;
 }
@@ -301,6 +307,23 @@ public:
   /// unmanaged.
   TensorPool *getOwningPool() { return tensorPool_; }
 
+  template <typename DataType>
+  static Tensor fromData(ElemKind elemKind, llvm::ArrayRef<dim_t> dims,
+                         const std::initializer_list<DataType> &data) {
+    Tensor tensor(elemKind, dims);
+    tensor.getHandle<DataType>() = data;
+    return tensor;
+  }
+
+  template <typename DataType>
+  static Tensor fromData(ElemKind elemKind, float scale, int32_t offset,
+                         llvm::ArrayRef<dim_t> dims,
+                         const std::initializer_list<DataType> &data) {
+    Tensor tensor(elemKind, dims, scale, offset);
+    tensor.getHandle<DataType>() = data;
+    return tensor;
+  }
+
   /// Initialize an empty tensor.
   Tensor() = default;
 
@@ -471,10 +494,12 @@ public:
 
     // If the new size is identical to the allocated size then there is no need
     // to re-allocate the buffer.
-    const bool isOrigPadded = getSizeInBytes() != getUnpaddedSizeInBytes();
-    const bool isNewPadded = T.getSizeInBytes() != unpaddedSize;
-    const bool isBufReuseAllowed = (isOrigPadded == isNewPadded) &&
-                                   (getUnpaddedSizeInBytes() == unpaddedSize);
+    const bool isOrigPadded =
+        getSizeInBytes() != uint64_t(getUnpaddedSizeInBytes());
+    const bool isNewPadded = T.getSizeInBytes() != size_t(unpaddedSize);
+    const bool isBufReuseAllowed =
+        (isOrigPadded == isNewPadded) &&
+        (getUnpaddedSizeInBytes() == size_t(unpaddedSize));
     if (type_ == T && getData() && isBufReuseAllowed) {
 #ifdef GLOW_DEBUG_TENSOR_INIT
       PseudoRNG rng;
@@ -540,24 +565,46 @@ public:
 
   // Move ctor.
   Tensor(Tensor &&other) noexcept {
-    std::swap(data_, other.data_);
-    std::swap(type_, other.type_);
-    std::swap(isUnowned_, other.isUnowned_);
-    std::swap(tensorPool_, other.tensorPool_);
-    std::swap(unpaddedSize_, other.unpaddedSize_);
-    std::swap(deviceResidency_, other.deviceResidency_);
-    std::swap(ownsDeviceResidency_, other.ownsDeviceResidency_);
+    if (!isUnowned()) {
+      alignedFree(getData());
+    }
+    if (ownsDeviceResidency_) {
+      delete deviceResidency_;
+    }
+    data_ = other.data_;
+    type_ = other.type_;
+    isUnowned_ = other.isUnowned_;
+    tensorPool_ = other.tensorPool_;
+    unpaddedSize_ = other.unpaddedSize_;
+    deviceResidency_ = other.deviceResidency_;
+    ownsDeviceResidency_ = other.ownsDeviceResidency_;
+    other.data_ = nullptr;
+    other.isUnowned_ = true;
+    other.tensorPool_ = nullptr;
+    other.deviceResidency_ = nullptr;
+    other.ownsDeviceResidency_ = false;
   }
 
   /// Move assignment operator.
-  Tensor &operator=(Tensor &&other) noexcept {
-    std::swap(data_, other.data_);
-    std::swap(type_, other.type_);
-    std::swap(isUnowned_, other.isUnowned_);
-    std::swap(tensorPool_, other.tensorPool_);
-    std::swap(unpaddedSize_, other.unpaddedSize_);
-    std::swap(deviceResidency_, other.deviceResidency_);
-    std::swap(ownsDeviceResidency_, other.ownsDeviceResidency_);
+  Tensor &operator=(Tensor &&other) {
+    if (!isUnowned()) {
+      alignedFree(getData());
+    }
+    if (ownsDeviceResidency_) {
+      delete deviceResidency_;
+    }
+    data_ = other.data_;
+    type_ = other.type_;
+    isUnowned_ = other.isUnowned_;
+    tensorPool_ = other.tensorPool_;
+    unpaddedSize_ = other.unpaddedSize_;
+    deviceResidency_ = other.deviceResidency_;
+    ownsDeviceResidency_ = other.ownsDeviceResidency_;
+    other.data_ = nullptr;
+    other.isUnowned_ = true;
+    other.tensorPool_ = nullptr;
+    other.deviceResidency_ = nullptr;
+    other.ownsDeviceResidency_ = false;
     return *this;
   }
 
@@ -666,6 +713,8 @@ public:
       return isEqualImpl<float16_t>(other, allowedError, verbose);
     case ElemKind::BFloat16Ty:
       return isEqualImpl<bfloat16_t>(other, allowedError, verbose);
+    case ElemKind::Float64Ty:
+      return isEqualImpl<double>(other, allowedError, verbose);
     case ElemKind::Int8QTy:
       return isEqualImpl<int8_t>(other, allowedError, verbose);
     case ElemKind::UInt8QTy:
@@ -674,6 +723,10 @@ public:
       return isEqualImpl<int16_t>(other, allowedError, verbose);
     case ElemKind::Int32QTy:
       return isEqualImpl<int32_t>(other, allowedError, verbose);
+    case ElemKind::Int64QTy:
+      return isEqualImpl<int64_t>(other, allowedError, verbose);
+    case ElemKind::UInt8ITy:
+      return isEqualImpl<uint8_t>(other, allowedError, verbose);
     case ElemKind::Int32ITy:
       return isEqualImpl<int32_t>(other, allowedError, verbose);
     case ElemKind::Int64ITy:
@@ -686,6 +739,8 @@ public:
     case ElemKind::UInt8FusedFP16QTy:
       return isEqualImpl<uint8_t>(other, allowedError, verbose);
     case ElemKind::UInt4FusedFP16QTy:
+      return isEqualImpl<uint8_t>(other, allowedError, verbose);
+    case ElemKind::UInt4FusedQTy:
       return isEqualImpl<uint8_t>(other, allowedError, verbose);
     case ElemKind::BoolTy:
       return isEqualImpl<bool>(other, allowedError, verbose);
@@ -979,18 +1034,21 @@ private:
     auto const *myData = getUnsafePtr();
     auto const *otherData = other.getUnsafePtr();
     dim_t mismatchCount = 0;
-    for (size_t i = 0, e = getSizeInBytes(); i < e; i++) {
-      if (myData[i] != otherData[i]) {
-        if (!verbose) {
-          return false;
+
+    if (verbose) {
+      for (size_t i = 0, e = getSizeInBytes(); i < e; i++) {
+        if (myData[i] != otherData[i]) {
+          ++mismatchCount;
         }
-        ++mismatchCount;
       }
+      if (mismatchCount != 0) {
+        LOG(INFO) << "Tensors not bitwise equal: " << mismatchCount
+                  << " bytes out of " << getSizeInBytes() << " mismatched.";
+      }
+    } else {
+      mismatchCount = memcmp(myData, otherData, getSizeInBytes());
     }
-    if (mismatchCount != 0) {
-      LOG(INFO) << "Tensors not bitwise equal: " << mismatchCount
-                << " bytes out of " << getSizeInBytes() << " mismatched.";
-    }
+
     return mismatchCount == 0;
   }
 };
@@ -1602,7 +1660,8 @@ private:
   /// \p T of a row \p rowIdx.
   template <typename T> ElemTy *getFusedRowScaleOffsetPtr(dim_t rowIdx) {
     switch (getElementType()) {
-    case ElemKind::UInt8FusedQTy: {
+    case ElemKind::UInt8FusedQTy:
+    case ElemKind::UInt4FusedQTy: {
       constexpr auto isFloat = std::is_same<float, T>::value;
       DCHECK(isFloat) << "Expected float scale/offset";
       break;

@@ -79,7 +79,7 @@ struct ShapeNHWC {
   dim_t c; // Number of Channels
 
   template <typename T> explicit ShapeNHWC(llvm::ArrayRef<T> shape) {
-    //    assert(shape.size() == 4 && "Invalid shape");
+    // assert(shape.size() == 4 && "Invalid shape");
     n = shape[DimN];
     h = shape[DimH];
     w = shape[DimW];
@@ -434,6 +434,24 @@ inline std::pair<dim_t, dim_t> flattenCdr(llvm::ArrayRef<dim_t> dims,
   return {first, rest};
 }
 
+/// Collapse a tensor shape into two sizes: the first will be
+/// size of n without the axis dimension, and second will be
+/// size of the axis dimension. For example, ([7, 3, 4, 2], 1) -> [56, 3]
+inline std::pair<dim_t, dim_t> collapseShape(llvm::ArrayRef<dim_t> dims,
+                                             unsigned_t n = 1) {
+  assert(1 <= n && n <= dims.size());
+  size_t first = 1;
+  size_t second = 1;
+  for (unsigned_t i = 0; i < dims.size(); i++) {
+    if (i == n) {
+      second = dims[i];
+    } else {
+      first *= dims[i];
+    }
+  }
+  return {first, second};
+}
+
 inline bool operator==(const ShapeNHWC &LHS, const ShapeNHWC &RHS) {
   return LHS.equals(RHS);
 }
@@ -465,6 +483,8 @@ enum class ElemKind : unsigned char {
   Float16Ty,
   // 16-bit float type (bfloat16)
   BFloat16Ty,
+  // 64-bit float type (double)
+  Float64Ty,
   // 8-bit quantized type (int8_t)
   Int8QTy,
   // unsigned 8-bit quantized type (uint8_t)
@@ -473,6 +493,8 @@ enum class ElemKind : unsigned char {
   Int16QTy,
   // 32-bit quantized type (int32_t)
   Int32QTy,
+  // 8-bit index type (uint8_t)
+  UInt8ITy,
   // 32-bit index type (int32_t)
   Int32ITy,
   // 64-bit index type (int64_t)
@@ -484,38 +506,54 @@ enum class ElemKind : unsigned char {
   // 4-bit quantized type with fused FP16 scale/offset (uint8_t, each byte
   // represents 2 4-bit quantized data)
   UInt4FusedFP16QTy,
+  // 4-bit quantized type with fused FP32 scale/offset (uint8_t, each byte
+  // represents 2 4-bit quantized data)
+  UInt4FusedQTy,
   // Bool type (bool)
   BoolTy,
+  // 64-bit quantized type (int64_t, partial support)
+  Int64QTy,
 };
 
 /// \returns whether \p e is a quantized ElemKind.
 inline bool isQuantizedElemKind(ElemKind e) {
   return e == ElemKind::Int8QTy || e == ElemKind::UInt8QTy ||
          e == ElemKind::Int16QTy || e == ElemKind::Int32QTy ||
-         e == ElemKind::UInt8FusedQTy || e == ElemKind::UInt8FusedFP16QTy ||
-         e == ElemKind::UInt4FusedFP16QTy;
+         e == ElemKind::Int64QTy || e == ElemKind::UInt8FusedQTy ||
+         e == ElemKind::UInt8FusedFP16QTy || e == ElemKind::UInt4FusedFP16QTy ||
+         e == ElemKind::UInt4FusedQTy;
 }
 
 /// \returns whether \p e is a float ElemKind.
 inline bool isFloatElemKind(ElemKind e) {
   return e == ElemKind::FloatTy || e == ElemKind::Float16Ty ||
-         e == ElemKind::BFloat16Ty;
+         e == ElemKind::BFloat16Ty || e == ElemKind::Float64Ty;
+}
+
+/// \returns whether \p e is a non-quantized integer ElemKind.
+inline bool isNonQuantizedIntElemKind(ElemKind e) {
+  return e == ElemKind::Int32ITy || e == ElemKind::Int64ITy;
 }
 
 /// \returns whether \p e is a fused quantized ElemKind.
 inline bool isFusedQuantizedElemKind(ElemKind e) {
   return e == ElemKind::UInt8FusedQTy || e == ElemKind::UInt8FusedFP16QTy ||
-         e == ElemKind::UInt4FusedFP16QTy;
+         e == ElemKind::UInt4FusedFP16QTy || e == ElemKind::UInt4FusedQTy;
 }
 
 /// \returns the scale and offset ElemKind used by the fused ElemKind \p e.
 inline ElemKind getScaleOffsetElemKindFromFused(ElemKind e) {
   assert(isFusedQuantizedElemKind(e) && "Must pass Fused ElemKind.");
-  if (e == ElemKind::UInt8FusedQTy) {
+  if (e == ElemKind::UInt8FusedQTy || e == ElemKind::UInt4FusedQTy) {
     return ElemKind::FloatTy;
   }
   return ElemKind::Float16Ty;
 }
+
+/// \returns the floating point value range that covers a quantized type (min
+/// first, max second) given \p scale, \p offset, and \p elementType.
+std::pair<float, float> getQuantizedValueRange(float scale, int32_t offset,
+                                               ElemKind elementType);
 
 /// A class that represents a type of a tensor.
 struct Type final {
@@ -612,6 +650,42 @@ struct Type final {
     return ty;
   }
 
+  /// Reshape existing type \p T by taking shapes and using the provided \p
+  /// strides.
+  static Type newStrides(const Type &T, llvm::ArrayRef<dim_t> strides) {
+    assert(strides.size() == T.strides().size());
+    Type ty = T;
+    // Copy the stride information.
+    std::copy(&strides[0], &strides[0] + ty.numSizes_, ty.strides_);
+    return ty;
+  }
+
+  /// Reshape existing type. This method takes care of quantized types.
+  static Type newQuantparams(const Type &T, float scale, int32_t offset) {
+    assert(T.isQuantizedType() &&
+           "Can't modify scale and offset of non quantized types");
+    return Type(T.getElementType(), T.dims(), scale, offset);
+  }
+
+  /// \returns true if a type has standard strides and no special alignment
+  /// requirements.
+  bool hasStandardStrides() const {
+    if (numSizes_ > 0) {
+      // Stride of the last dimension is always 1.
+      assert(strides_[numSizes_ - 1] == 1 &&
+             "Last dimension must always be aligned.");
+    }
+    for (int i = numSizes_ - 2; i >= 0; i--) {
+      // All the strides (except for last one) depend on the previous dimension.
+      // For standard strides the following should be true:
+      // strides_[i] == sizes_[i + 1] * strides_[i + 1]
+      if (strides_[i] != sizes_[i + 1] * strides_[i + 1]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// An empty type.
   Type() = default;
 
@@ -633,43 +707,33 @@ struct Type final {
   /// \returns the floating point value range that covers a quantized type (min
   /// first, max second).
   std::pair<float, float> getQuantizedValueRange() const {
+    return ::glow::getQuantizedValueRange(scale_, offset_, elementType_);
+  }
+
+  /// \returns the number of values associated to the quantized type (e.g. 256
+  /// for Int8QTy).
+  size_t getQuantizedValueCount() const {
+    assert(getElementSize() < sizeof(size_t) &&
+           "Cannot retrieve quantized value count with size_t!");
+    double numBits = getElementSize() * 8;
+    return static_cast<size_t>(std::exp2(numBits));
+  }
+
+  /// \returns the floating point value step associated to the quantized type.
+  /// The quantization step is actually equal to the quantization scale.
+  float getQuantizedValueStep() const {
     assert(isQuantizedType() &&
-           "Can't get the quantized value range of a non-quantized type");
-
-    int64_t low = 0, high = 0;
-    switch (elementType_) {
-    case ElemKind::Int32QTy: {
-      low = INT32_MIN;
-      high = INT32_MAX;
-      break;
-    }
-    case ElemKind::Int16QTy: {
-      low = INT16_MIN;
-      high = INT16_MAX;
-      break;
-    }
-    case ElemKind::Int8QTy: {
-      low = INT8_MIN;
-      high = INT8_MAX;
-      break;
-    }
-    case ElemKind::UInt8QTy: {
-      low = UINT8_MIN;
-      high = UINT8_MAX;
-      break;
-    }
-    default:;
-    }
-
-    float lowFloat = (low - offset_) * scale_;
-    float highFloat = (high - offset_) * scale_;
-    return std::make_pair(lowFloat, highFloat);
+           "Can't get the quantized value step of a non-quantized type");
+    return scale_;
   }
 
   /// \returns true if \p other is the same type. If \p allowDifferentShape then
-  /// shapes will not be considered as part of the equal comparison.
+  /// shapes will not be considered as part of the equal comparison. If \p
+  /// allowDifferentScaleOffset is true, scale and offset will not be considered
+  /// as part of the equal comparison.
   bool isEqual(const Type &other, bool allowDifferentShape = false,
-               bool allowDifferentStrides = false) const {
+               bool allowDifferentStrides = false,
+               bool allowDifferentScaleOffset = false) const {
     // Element type must be the same.
     if (elementType_ != other.elementType_) {
       return false;
@@ -697,7 +761,8 @@ struct Type final {
 
     // Compare the scale and offset of integers. Fused types use dummy
     // scale/offset, so can ignore them.
-    if (isQuantizedType() && !isFusedQuantizedType()) {
+    if (isQuantizedType() && !isFusedQuantizedType() &&
+        !allowDifferentScaleOffset) {
       if (scale_ != other.scale_ || offset_ != other.offset_) {
         return false;
       }
@@ -761,6 +826,8 @@ struct Type final {
       return std::is_same<ElemTy, float16_t>::value;
     case ElemKind::BFloat16Ty:
       return std::is_same<ElemTy, bfloat16_t>::value;
+    case ElemKind::Float64Ty:
+      return std::is_same<ElemTy, double>::value;
     case ElemKind::Int8QTy:
       return std::is_same<ElemTy, int8_t>::value;
     case ElemKind::UInt8QTy:
@@ -769,6 +836,10 @@ struct Type final {
       return std::is_same<ElemTy, int16_t>::value;
     case ElemKind::Int32QTy:
       return std::is_same<ElemTy, int32_t>::value;
+    case ElemKind::Int64QTy:
+      return std::is_same<ElemTy, int64_t>::value;
+    case ElemKind::UInt8ITy:
+      return std::is_same<ElemTy, uint8_t>::value;
     case ElemKind::Int32ITy:
       return std::is_same<ElemTy, int32_t>::value;
     case ElemKind::Int64ITy:
@@ -779,10 +850,13 @@ struct Type final {
       return std::is_same<ElemTy, uint8_t>::value;
     case ElemKind::UInt4FusedFP16QTy:
       return std::is_same<ElemTy, uint8_t>::value;
+    case ElemKind::UInt4FusedQTy:
+      return std::is_same<ElemTy, uint8_t>::value;
     case ElemKind::BoolTy:
       return std::is_same<ElemTy, bool>::value;
     }
     LOG(FATAL) << "Invalid type: " << getElementName(Ty).str();
+    return false; // Get rid of compilation warnings.
   }
 
   /// \returns true if the type of this Tensor is one of the quantized types.
@@ -829,6 +903,8 @@ struct Type final {
       return sizeof(float16_t);
     case ElemKind::BFloat16Ty:
       return sizeof(bfloat16_t);
+    case ElemKind::Float64Ty:
+      return sizeof(double);
     case ElemKind::Int8QTy:
       return sizeof(int8_t);
     case ElemKind::UInt8QTy:
@@ -837,6 +913,10 @@ struct Type final {
       return sizeof(int16_t);
     case ElemKind::Int32QTy:
       return sizeof(int32_t);
+    case ElemKind::Int64QTy:
+      return sizeof(int64_t);
+    case ElemKind::UInt8ITy:
+      return sizeof(uint8_t);
     case ElemKind::Int32ITy:
       return sizeof(int32_t);
     case ElemKind::Int64ITy:
@@ -846,6 +926,8 @@ struct Type final {
     case ElemKind::UInt8FusedFP16QTy:
       return sizeof(uint8_t);
     case ElemKind::UInt4FusedFP16QTy:
+      return sizeof(uint8_t);
+    case ElemKind::UInt4FusedQTy:
       return sizeof(uint8_t);
     case ElemKind::BoolTy:
       return sizeof(bool);
@@ -865,45 +947,24 @@ struct Type final {
   /// \return the textual name of the element \p Ty.
   static llvm::StringRef getElementName(ElemKind Ty) {
     static const char *names[] = {
-        "float",        "float16",      "bfloat16", "i8",      "ui8",
-        "i16",          "i32",          "index32",  "index64", "ui8fused",
-        "ui8fusedfp16", "ui4fusedfp16", "bool",
+        "float",   "float16",  "bfloat16",     "float64",      "i8",
+        "ui8",     "i16",      "i32",          "uindex8",      "index32",
+        "index64", "ui8fused", "ui8fusedfp16", "ui4fusedfp16", "ui4fused",
+        "bool",    "i64",
     };
     return names[(int)Ty];
   }
 
   /// \return the textual name of the element for CCodeGenerator \p Ty.
   static llvm::StringRef getElementTypeName(ElemKind Ty) {
-    if (Ty == ElemKind::FloatTy) {
-      return "float";
-    } else if (Ty == ElemKind::Float16Ty) {
-      return "float";
-    } else if (Ty == ElemKind::BFloat16Ty) {
-      return "float";
-    } else if (Ty == ElemKind::Int8QTy) {
-      return "short int";
-    } else if (Ty == ElemKind::UInt8QTy) {
-      return "unsigned short int";
-    } else if (Ty == ElemKind::Int16QTy) {
-      return "short int";
-    } else if (Ty == ElemKind::Int32QTy) {
-      return "int";
-    } else if (Ty == ElemKind::Int32ITy) {
-      return "int";
-    } else if (Ty == ElemKind::Int64ITy) {
-      return "unsigned long int";
-    } else if (Ty == ElemKind::UInt8FusedQTy) {
-      return "unsigned short int";
-    } else if (Ty == ElemKind::UInt8FusedFP16QTy) {
-      return "unsigned short int";
-    } else if (Ty == ElemKind::UInt4FusedFP16QTy) {
-      return "unsigned short int";
-    } else if (Ty == ElemKind::BoolTy) {
-      return "bool";
-    } else {
-      LOG(DFATAL) << "Invalid ElemKind string: " << getElementName(Ty).str();
-      return "bool";
-    }
+    static const char *names[] = {
+        "float",         "float",         "float",         "double",
+        "char",          "unsigned char", "short",         "int",
+        "unsigned char", "int",           "long long",     "unsigned char",
+        "unsigned char", "unsigned char", "unsigned char", "bool",
+        "long long",
+    };
+    return names[(int)Ty];
   }
 
   /// Given a string \p str containing the name of an ElemKind from
@@ -914,6 +975,8 @@ struct Type final {
       return ElemKind::FloatTy;
     } else if (str == Type::getElementName(ElemKind::Float16Ty)) {
       return ElemKind::Float16Ty;
+    } else if (str == Type::getElementName(ElemKind::Float64Ty)) {
+      return ElemKind::Float64Ty;
     } else if (str == Type::getElementName(ElemKind::BFloat16Ty)) {
       return ElemKind::BFloat16Ty;
     } else if (str == Type::getElementName(ElemKind::Int8QTy)) {
@@ -924,6 +987,8 @@ struct Type final {
       return ElemKind::Int16QTy;
     } else if (str == Type::getElementName(ElemKind::Int32QTy)) {
       return ElemKind::Int32QTy;
+    } else if (str == Type::getElementName(ElemKind::UInt8ITy)) {
+      return ElemKind::UInt8ITy;
     } else if (str == Type::getElementName(ElemKind::Int32ITy)) {
       return ElemKind::Int32ITy;
     } else if (str == Type::getElementName(ElemKind::Int64ITy)) {
@@ -934,8 +999,12 @@ struct Type final {
       return ElemKind::UInt8FusedFP16QTy;
     } else if (str == Type::getElementName(ElemKind::UInt4FusedFP16QTy)) {
       return ElemKind::UInt4FusedFP16QTy;
+    } else if (str == Type::getElementName(ElemKind::UInt4FusedQTy)) {
+      return ElemKind::UInt4FusedQTy;
     } else if (str == Type::getElementName(ElemKind::BoolTy)) {
       return ElemKind::BoolTy;
+    } else if (str == Type::getElementName(ElemKind::Int64QTy)) {
+      return ElemKind::Int64QTy;
     } else {
       LOG(DFATAL) << "Invalid ElemKind string: " << str.str();
       return ElemKind::FloatTy;
