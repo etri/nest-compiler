@@ -28,7 +28,7 @@ using llvm::isa;
 std::unique_ptr<DAGNode>
 PartitionerBase::createDAGNodeFromFun(Function *F, NodeToFunctionMap &mapping) {
   std::unique_ptr<DAGNode> DN = glow::make_unique<DAGNode>();
-  DN->name = F->getName();
+  DN->name = F->getName().str();
   DN->logicalDevices = mapping.getLogicalDeviceIDList(F);
   DN->backendName = mapping.getPartitionBackendName(F);
   DN->size = mapping.getGraphMemInfo(F).getTotalMemSize();
@@ -48,7 +48,7 @@ DAGListTy PartitionerBase::doPartitioning(
   DAGNodePtr DAGRoot = glow::make_unique<DAGNode>();
   DAGNodePtrVec nodes;
   DAGRoot->logicalDevices = {0};
-  DAGRoot->name = funcName;
+  DAGRoot->name = funcName.str();
   DAGRoot->module = module;
   DAGNode *root = DAGRoot.get();
 
@@ -197,7 +197,7 @@ void PartitionerBase::dumpDAG(llvm::StringRef dotFilename,
   LOG(INFO) << "Writing dotty graph for DAG after graph partitioning: "
             << dotFilename.str();
   std::ofstream myfile;
-  myfile.open(dotFilename);
+  myfile.open(dotFilename.str());
   myfile << "digraph DAG {\n\trankdir=TB;\n";
   // Dump DAGNodes
   std::vector<DAGNode *> nodes;
