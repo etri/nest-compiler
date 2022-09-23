@@ -20,17 +20,13 @@
 
 #include "glow/Backend/BackendUtils.h"
 #include "glow/CodeGen/MemoryAllocator.h"
+#include "glow/Flags/Flags.h"
 #include "glow/Graph/Graph.h"
 #include "glow/Graph/Nodes.h"
 #include "glow/IR/IR.h"
 #include "glow/IR/Instrs.h"
 #include "glow/Optimizer/IROptimizer/IROptimizer.h"
 
-namespace glow {
-namespace runtime {
-extern unsigned GlowRelayMemory;
-}
-} // namespace glow
 using namespace glow;
 
 Expected<std::unique_ptr<CompiledFunction>>
@@ -59,7 +55,7 @@ Relay::compile(Function *F, const BackendOptions &opts) const {
 
 std::unique_ptr<CompiledFunction>
 Relay::compileIR(std::unique_ptr<IRFunction> IR) const {
-  auto *mod = IR->getGraph()->getParent();
+  auto *mod = IR->getParent();
   auto function = compileIRWithoutConstants(std::move(IR));
   auto IFunction = static_cast<RelayFunction *>(function.get());
   IFunction->collectConstants(mod);
@@ -83,7 +79,8 @@ Relay::compileIRWithoutConstants(std::unique_ptr<IRFunction> IR) const {
 
 bool Relay::isOpSupported(const NodeInfo &NI) const {
   switch (NI.getKind()) {
-  case Kinded::Kind::BatchedReduceMinNodeKind:
+  case Kinded::Kind::BatchedReduceProdNodeKind:
+  case Kinded::Kind::FmodNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
          ElemKind::Int32ITy, ElemKind::Int64ITy});
@@ -91,10 +88,13 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::AddNodeKind:
   case Kinded::Kind::SubNodeKind:
   case Kinded::Kind::MulNodeKind:
+  case Kinded::Kind::DivNodeKind:
   case Kinded::Kind::MaxNodeKind:
   case Kinded::Kind::MinNodeKind:
   case Kinded::Kind::ReluNodeKind:
   case Kinded::Kind::ClipNodeKind:
+  case Kinded::Kind::BatchedReduceMinNodeKind:
+    // case Kinded::Kind::BatchedReduceMaxNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
          ElemKind::Int8QTy, ElemKind::Int32ITy, ElemKind::Int64ITy});
@@ -110,20 +110,78 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
          ElemKind::Int8QTy, ElemKind::Int16QTy, ElemKind::Int32QTy,
          ElemKind::Int32ITy, ElemKind::Int64ITy});
 
+  case Kinded::Kind::BatchNormalizationNodeKind: {
+    auto elemType = NI.getInElemTy(BatchNormalizationNode::InputIdx);
+
+    // input can be int8, float16 or float32
+    bool isNodePrecisionSupported =
+        (elemType == ElemKind::Int8QTy || elemType == ElemKind::FloatTy ||
+         elemType == ElemKind::Float16Ty);
+
+    // parameters have to be float16 or float
+    isNodePrecisionSupported = isNodePrecisionSupported &&
+                               NI.allInputsAndOutputsHaveSameElemKind(
+                                   {ElemKind::FloatTy, ElemKind::Float16Ty},
+                                   {BatchNormalizationNode::InputIdx},
+                                   {BatchNormalizationNode::ResultIdx});
+
+    // input and output element types have to match
+    isNodePrecisionSupported =
+        isNodePrecisionSupported &&
+        NI.allInputsAndOutputsHaveSameElemKind(
+            {elemType},
+            {BatchNormalizationNode::ScaleIdx, BatchNormalizationNode::BiasIdx,
+             BatchNormalizationNode::MeanIdx, BatchNormalizationNode::VarIdx});
+    return isNodePrecisionSupported;
+  }
+
   case Kinded::Kind::AvgPoolNodeKind:
   case Kinded::Kind::AdaptiveAvgPoolNodeKind:
   case Kinded::Kind::BatchedReduceAddNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
-        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
-         ElemKind::Int8QTy});
+        {ElemKind::Int32ITy, ElemKind::FloatTy, ElemKind::Float16Ty,
+         ElemKind::BFloat16Ty, ElemKind::Int8QTy});
+
+  case Kinded::Kind::DynamicQuantizedFullyConnectedNodeKind:
+    return (NI.getInElemTy(DynamicQuantizedFullyConnectedNode::InputIdx) ==
+                ElemKind::Float16Ty ||
+            NI.getInElemTy(DynamicQuantizedFullyConnectedNode::InputIdx) ==
+                ElemKind::FloatTy) &&
+           NI.getInElemTy(DynamicQuantizedFullyConnectedNode::WeightsIdx) ==
+               ElemKind::Int8QTy &&
+           NI.getInElemTy(DynamicQuantizedFullyConnectedNode::BiasIdx) ==
+               ElemKind::FloatTy;
+
+  case Kinded::Kind::DynamicRowwiseQuantizedFullyConnectedNodeKind:
+    return (NI.getInElemTy(
+                DynamicRowwiseQuantizedFullyConnectedNode::InputIdx) ==
+                ElemKind::Float16Ty ||
+            NI.getInElemTy(
+                DynamicRowwiseQuantizedFullyConnectedNode::InputIdx) ==
+                ElemKind::FloatTy) &&
+           NI.getInElemTy(
+               DynamicRowwiseQuantizedFullyConnectedNode::WeightsIdx) ==
+               ElemKind::Int8QTy &&
+           NI.getInElemTy(DynamicRowwiseQuantizedFullyConnectedNode::BiasIdx) ==
+               ElemKind::FloatTy &&
+           NI.getInElemTy(
+               DynamicRowwiseQuantizedFullyConnectedNode::ScalesIdx) ==
+               ElemKind::FloatTy &&
+           NI.getInElemTy(
+               DynamicRowwiseQuantizedFullyConnectedNode::OffsetsIdx) ==
+               ElemKind::Int32ITy;
 
   case Kinded::Kind::MatMulNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
          ElemKind::Int8QTy, ElemKind::Int16QTy});
 
+  case Kinded::Kind::BatchMatMulNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty});
+
   case Kinded::Kind::FullyConnectedNodeKind:
-    if (!NI.getInTy(ConvolutionNode::InputIdx)->isQuantizedType()) {
+    if (!NI.getInTy(FullyConnectedNode::InputIdx)->isQuantizedType()) {
       return NI.allInputsAndOutputsHaveSameElemKind(
           {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty});
     }
@@ -151,25 +209,35 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::ArgMaxNodeKind:
   case Kinded::Kind::ArgMinNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
-               {ElemKind::FloatTy, ElemKind::Int8QTy}, {},
+               {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy}, {},
                {ArgMaxNode::ResultIdx}) &&
            (NI.getOutElemTy(ArgMaxNode::ResultIdx) == ElemKind::Int64ITy ||
             NI.getOutElemTy(ArgMaxNode::ResultIdx) == ElemKind::Int32ITy);
 
+    // case Kinded::Kind::AcosNodeKind:
+    // case Kinded::Kind::AsinNodeKind:
+    // case Kinded::Kind::AtanNodeKind:
+    //   return NI.allInputsAndOutputsHaveSameElemKind(
+    //       {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy});
+
   case Kinded::Kind::PowNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
+         ElemKind::Int8QTy});
   case Kinded::Kind::LocalResponseNormalizationNodeKind:
+  case Kinded::Kind::LayerNormalizationNodeKind:
   case Kinded::Kind::LogNodeKind:
   case Kinded::Kind::TanhNodeKind:
   case Kinded::Kind::ExpNodeKind:
   case Kinded::Kind::SigmoidNodeKind:
+  case Kinded::Kind::SoftPlusNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty});
   case Kinded::Kind::SliceNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
          ElemKind::Int8QTy, ElemKind::Int32QTy, ElemKind::Int64ITy,
-         ElemKind::Int32ITy});
-  case Kinded::Kind::DivNodeKind:
+         ElemKind::Int32ITy, ElemKind::BoolTy});
   case Kinded::Kind::SpaceToDepthNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
@@ -181,9 +249,11 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::ConcatNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
-         ElemKind::Int8QTy, ElemKind::Int32ITy, ElemKind::Int64ITy,
-         ElemKind::BoolTy});
-
+         ElemKind::Int8QTy, ElemKind::Int16QTy, ElemKind::Int32ITy,
+         ElemKind::Int64ITy, ElemKind::BoolTy});
+  case Kinded::Kind::NonZeroNodeKind:
+    return NI.getInElemTy(NonZeroNode::CondIdx) == ElemKind::BoolTy &&
+           NI.getOutElemTy(NonZeroNode::ResultIdx) == ElemKind::Int32ITy;
   case Kinded::Kind::SelectNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
@@ -197,18 +267,34 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::XorNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::BoolTy});
 
-  case Kinded::Kind::AbsNodeKind:
-  case Kinded::Kind::NegNodeKind:
+  // case Kinded::Kind::SignNodeKind:
   case Kinded::Kind::FloorNodeKind:
   case Kinded::Kind::CeilNodeKind:
   case Kinded::Kind::RoundNodeKind:
   case Kinded::Kind::SqrtNodeKind:
   case Kinded::Kind::RsqrtNodeKind:
   case Kinded::Kind::ReciprocalNodeKind:
-  case Kinded::Kind::SinNodeKind:
-  case Kinded::Kind::CosNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Int8QTy});
+
+  case Kinded::Kind::SinNodeKind:
+  case Kinded::Kind::CosNodeKind:
+  case Kinded::Kind::ErfNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy});
+
+  case Kinded::Kind::AbsNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy});
+
+  case Kinded::Kind::NegNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Int32ITy, ElemKind::Int8QTy});
+
+  // case Kinded::Kind::FloorNodeKind:
+  case Kinded::Kind::TruncateNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::Int8QTy});
 
   case Kinded::Kind::CmpEQNodeKind:
   case Kinded::Kind::CmpNEQNodeKind:
@@ -216,7 +302,8 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::CmpLTENodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
-                ElemKind::Int8QTy, ElemKind::Int32ITy, ElemKind::Int64ITy},
+                ElemKind::Int8QTy, ElemKind::Int16QTy, ElemKind::Int32ITy,
+                ElemKind::Int64ITy},
                {}, {CmpEQNode::ResultIdx}) &&
            (NI.getOutElemTy(CmpEQNode::ResultIdx) == ElemKind::BoolTy);
 
@@ -226,6 +313,13 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
                {}, {IsNaNNode::ResultIdx}) &&
            (NI.getOutElemTy(IsNaNNode::ResultIdx) == ElemKind::BoolTy);
 
+  case Kinded::Kind::BitwiseAndNodeKind:
+  case Kinded::Kind::BitwiseOrNodeKind:
+  case Kinded::Kind::BitwiseXorNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::BoolTy, ElemKind::Int32ITy, ElemKind::Int64ITy});
+
+  case Kinded::Kind::BitwiseNotNodeKind:
   case Kinded::Kind::ModuloNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::Int32ITy, ElemKind::Int64ITy});
@@ -343,13 +437,25 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
            (NI.getInElemTy(SparseLengthsWeightedSumNode::LengthsIdx) ==
             ElemKind::Int32ITy);
 
-  case Kinded::Kind::EmbeddingBagNodeKind:
+  case Kinded::Kind::EmbeddingNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty},
-               {EmbeddingBagNode::IndicesIdx, EmbeddingBagNode::OffsetsIdx}) &&
-           (NI.getInElemTy(EmbeddingBagNode::IndicesIdx) ==
-            ElemKind::Int64ITy) &&
-           (NI.getInElemTy(EmbeddingBagNode::OffsetsIdx) == ElemKind::Int64ITy);
+               {EmbeddingNode::IndicesIdx}) &&
+           (NI.getInElemTy(EmbeddingNode::IndicesIdx) == ElemKind::Int64ITy ||
+            NI.getInElemTy(EmbeddingNode::IndicesIdx) == ElemKind::Int32ITy);
+
+  case Kinded::Kind::EmbeddingBagNodeKind:
+    return (NI.allInputsAndOutputsHaveSameElemKind(
+                {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty},
+                {EmbeddingBagNode::IndicesIdx, EmbeddingBagNode::OffsetsIdx}) &&
+            (((NI.getInElemTy(EmbeddingBagNode::IndicesIdx) ==
+               ElemKind::Int64ITy) &&
+              (NI.getInElemTy(EmbeddingBagNode::OffsetsIdx) ==
+               ElemKind::Int64ITy)) ||
+             ((NI.getInElemTy(EmbeddingBagNode::IndicesIdx) ==
+               ElemKind::Int32ITy) &&
+              (NI.getInElemTy(EmbeddingBagNode::OffsetsIdx) ==
+               ElemKind::Int32ITy))));
 
   case Kinded::Kind::SparseLengthsWeightedSumGradNodeKind:
     // GradOfInputNamedIndicesIdx and GradOfInputNamedLengthsIdx do not need to
@@ -386,10 +492,14 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
             ElemKind::Int32ITy);
 
   case Kinded::Kind::EmbeddingBagByteRowwiseOffsetsNodeKind: {
-    if (NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::IndicesIdx) !=
-            ElemKind::Int64ITy ||
-        NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::OffsetsIdx) !=
-            ElemKind::Int64ITy) {
+    if (!((NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::IndicesIdx) ==
+               ElemKind::Int32ITy &&
+           NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::OffsetsIdx) ==
+               ElemKind::Int32ITy) ||
+          (NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::IndicesIdx) ==
+               ElemKind::Int64ITy &&
+           NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::OffsetsIdx) ==
+               ElemKind::Int64ITy))) {
       return false;
     }
 
@@ -401,10 +511,16 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
              (NI.getOutElemTy(EmbeddingBagByteRowwiseOffsetsNode::ResultIdx) ==
               ElemKind::Float16Ty);
     case ElemKind::UInt8FusedQTy:
-      return (NI.getInElemTy(EmbeddingBagByteRowwiseOffsetsNode::WeightsIdx) ==
-              ElemKind::FloatTy) &&
-             (NI.getOutElemTy(EmbeddingBagByteRowwiseOffsetsNode::ResultIdx) ==
-              ElemKind::FloatTy);
+      return (
+          (((NI.getInElemTy(FusedRowwiseQuantizedSparseLengthsWeightedSumNode::
+                                WeightsIdx) == ElemKind::FloatTy) &&
+            (NI.getOutElemTy(FusedRowwiseQuantizedSparseLengthsWeightedSumNode::
+                                 ResultIdx) == ElemKind::FloatTy))) ||
+          ((NI.getInElemTy(FusedRowwiseQuantizedSparseLengthsWeightedSumNode::
+                               WeightsIdx) == ElemKind::Float16Ty) &&
+           (NI.getOutElemTy(
+                FusedRowwiseQuantizedSparseLengthsWeightedSumNode::ResultIdx) ==
+            ElemKind::Float16Ty)));
     default:
       return false;
     }
@@ -434,6 +550,7 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
              (NI.getOutElemTy(
                   FusedRowwiseQuantizedSparseLengthsWeightedSumNode::
                       ResultIdx) == ElemKind::Float16Ty);
+    case ElemKind::UInt4FusedQTy:
     case ElemKind::UInt8FusedQTy:
       if ((NI.getInElemTy(
                FusedRowwiseQuantizedSparseLengthsWeightedSumNode::WeightsIdx) ==
@@ -460,6 +577,18 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::Int32ITy});
 
   case Kinded::Kind::GatherNodeKind:
+    // Note: Data and Result can be any data type, but must match.
+    return (NI.getInElemTy(GatherNode::DataIdx) ==
+            NI.getOutElemTy(GatherNode::ResultIdx)) &&
+           ((NI.getInElemTy(GatherNode::IndicesIdx) == ElemKind::Int32ITy) ||
+            (NI.getInElemTy(GatherNode::IndicesIdx) == ElemKind::Int64ITy));
+
+  case Kinded::Kind::GatherNDNodeKind:
+    // Note: Data and Result can be any data type, but must match.
+    return ((NI.getInElemTy(GatherNDNode::IndicesIdx) == ElemKind::Int32ITy) ||
+            (NI.getInElemTy(GatherNDNode::IndicesIdx) == ElemKind::Int64ITy));
+
+  case Kinded::Kind::GatherElementsNodeKind:
     // Note: Data and Result can be any data type, but must match.
     return (NI.getInElemTy(GatherNode::DataIdx) ==
             NI.getOutElemTy(GatherNode::ResultIdx)) &&
@@ -517,7 +646,8 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
         {ElemKind::Int8QTy, ElemKind::Int16QTy, ElemKind::Int32QTy});
 
   case Kinded::Kind::IntLookupTableNodeKind:
-    return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::Int8QTy});
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::Int8QTy, ElemKind::Int16QTy});
 
   case Kinded::Kind::ConvertToNodeKind: {
     auto isConversionSupportedFor = [](ElemKind kind) {
@@ -551,8 +681,10 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
             (NI.getOutElemTy(TopKNode::IndicesIdx) == ElemKind::Int32ITy));
 
   case Kinded::Kind::ScatterDataNodeKind:
-    return (NI.getInElemTy(ScatterDataNode::IndicesIdx) ==
-            ElemKind::Int64ITy) &&
+    return ((NI.getInElemTy(ScatterDataNode::IndicesIdx) ==
+             ElemKind::Int32ITy) ||
+            (NI.getInElemTy(ScatterDataNode::IndicesIdx) ==
+             ElemKind::Int64ITy)) &&
            (NI.getOutElemTy(ScatterDataNode::ResultIdx) ==
             NI.getInElemTy(ScatterDataNode::DataIdx)) &&
            (NI.getOutElemTy(ScatterDataNode::ResultIdx) ==
@@ -566,6 +698,13 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
                {SoftMaxNode::SelectedIdx}) &&
            (NI.getInElemTy(SoftMaxNode::SelectedIdx) == ElemKind::Int32ITy ||
             NI.getInElemTy(SoftMaxNode::SelectedIdx) == ElemKind::Int64ITy);
+
+  case Kinded::Kind::LogSoftMaxNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+               {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty},
+               {LogSoftMaxNode::SelectedIdx}) &&
+           (NI.getInElemTy(LogSoftMaxNode::SelectedIdx) == ElemKind::Int32ITy ||
+            NI.getInElemTy(LogSoftMaxNode::SelectedIdx) == ElemKind::Int64ITy);
 
   case Kinded::Kind::GatherRangesNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -592,13 +731,29 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
                {LengthsSumNode::LengthsIdx}) &&
            (NI.getInElemTy(LengthsSumNode::LengthsIdx) == ElemKind::Int32ITy);
 
-  case Kinded::Kind::SparseToDenseNodeKind:
+  case Kinded::Kind::BatchSparseToDenseNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
-               {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
-                ElemKind::Int64ITy},
-               {SparseToDenseNode::IndicesIdx}) &&
-           (NI.getInElemTy(SparseToDenseNode::IndicesIdx) ==
-            ElemKind::Int64ITy);
+               {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty},
+               {BatchSparseToDenseNode::LengthsIdx,
+                BatchSparseToDenseNode::IndicesIdx}) &&
+           (NI.getInElemTy(BatchSparseToDenseNode::LengthsIdx) ==
+                ElemKind::Int64ITy ||
+            NI.getInElemTy(BatchSparseToDenseNode::LengthsIdx) ==
+                ElemKind::Int32ITy) &&
+           (NI.getInElemTy(BatchSparseToDenseNode::IndicesIdx) ==
+                ElemKind::Int64ITy ||
+            NI.getInElemTy(BatchSparseToDenseNode::IndicesIdx) ==
+                ElemKind::Int32ITy);
+
+  case Kinded::Kind::FillExamplesWithIndicatorNodeKind:
+    return (NI.getInElemTy(FillExamplesWithIndicatorNode::DataIdx) ==
+            NI.getOutElemTy(FillExamplesWithIndicatorNode::ResultIdx)) &&
+           ((NI.getInElemTy(FillExamplesWithIndicatorNode::IndicatorIdx) ==
+             ElemKind::Int32ITy) ||
+            (NI.getInElemTy(FillExamplesWithIndicatorNode::IndicatorIdx) ==
+             ElemKind::Int64ITy) ||
+            (NI.getInElemTy(FillExamplesWithIndicatorNode::IndicatorIdx) ==
+             ElemKind::BoolTy));
 
   case Kinded::Kind::SparseToDenseMaskNodeKind:
     return (NI.getInElemTy(SparseToDenseMaskNode::IndicesIdx) ==
@@ -610,6 +765,18 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
            (NI.getInElemTy(SparseToDenseMaskNode::ValuesIdx) ==
             NI.getOutElemTy(SparseToDenseMaskNode::ResultIdx));
 
+  case Kinded::Kind::SparseLabelSplitNodeKind:
+    return (NI.getInElemTy(SparseLabelSplitNode::LengthsIdx) ==
+            ElemKind::Int32ITy) &&
+           (NI.getInElemTy(SparseLabelSplitNode::IndicesIdx) ==
+            ElemKind::Int64ITy) &&
+           (NI.getInElemTy(SparseLabelSplitNode::ValuesIdx) ==
+            NI.getOutElemTy(SparseLabelSplitNode::LabelValuesIdx)) &&
+           (NI.getOutElemTy(SparseLabelSplitNode::ExampleIdsIdx) ==
+            ElemKind::Int32ITy) &&
+           (NI.getOutElemTy(SparseLabelSplitNode::GradientOffsetMapIdx) ==
+            ElemKind::Int32ITy);
+
   case Kinded::Kind::TraceEventNodeKind:
     return NI.getInElemTy(TraceEventNode::DataIdx) == ElemKind::Int64ITy;
 
@@ -619,6 +786,9 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::FlipNodeKind:
     // These work regardless of the underlying type.
     return true;
+
+  case Kinded::Kind::GaussianFillNodeKind:
+    return NI.getOutElemTy(GaussianFillNode::ResultIdx) == ElemKind::Float16Ty;
 
   case Kinded::Kind::NonMaxSuppressionNodeKind:
     return NI.getInElemTy(NonMaxSuppressionNode::BoxesIdx) ==
@@ -639,6 +809,27 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
                 NonMaxSuppressionNode::NumberOfSelectedIndicesIdx) ==
             NI.getOutElemTy(NonMaxSuppressionNode::IndicesIdx));
 
+  case Kinded::Kind::TFLiteDetectionPostProcessNodeKind:
+    return NI.getInElemTy(TFLiteDetectionPostProcessNode::BoxesIdx) ==
+               ElemKind::FloatTy &&
+           NI.getInElemTy(TFLiteDetectionPostProcessNode::ScoresIdx) ==
+               ElemKind::FloatTy &&
+           NI.getInElemTy(TFLiteDetectionPostProcessNode::AnchorsIdx) ==
+               ElemKind::FloatTy &&
+           NI.getOutElemTy(TFLiteDetectionPostProcessNode::DetectionBoxesIdx) ==
+               ElemKind::FloatTy &&
+           NI.getOutElemTy(
+               TFLiteDetectionPostProcessNode::DetectionClassesIdx) ==
+               ElemKind::Int32ITy &&
+           NI.getOutElemTy(
+               TFLiteDetectionPostProcessNode::DetectionScoresIdx) ==
+               ElemKind::FloatTy &&
+           NI.getOutElemTy(TFLiteDetectionPostProcessNode::NumDetectionsIdx) ==
+               ElemKind::Int32ITy;
+
+  case Kinded::Kind::TFLiteCustomOperatorNodeKind:
+    return true;
+
   case Kinded::Kind::AudioSpectrogramNodeKind:
     return NI.getInElemTy(AudioSpectrogramNode::InputIdx) ==
                ElemKind::FloatTy &&
@@ -648,6 +839,23 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::MFCCNodeKind:
     return NI.getInElemTy(MFCCNode::SpectrogramIdx) == ElemKind::FloatTy &&
            NI.getOutElemTy(MFCCNode::CoefficientsIdx) == ElemKind::FloatTy;
+
+    // case Kinded::Kind::ROIAlignNodeKind:
+    //   return (NI.getInElemTy(ROIAlignNode::BatchIndicesIdx) ==
+    //               ElemKind::Int32ITy ||
+    //           NI.getInElemTy(ROIAlignNode::BatchIndicesIdx) ==
+    //               ElemKind::Int64ITy) &&
+    //          NI.allInputsAndOutputsHaveSameElemKind(
+    //              {ElemKind::FloatTy, ElemKind::Float16Ty},
+    //              /*ignoreIn*/ {ROIAlignNode::BatchIndicesIdx});
+
+  case Kinded::Kind::CollectRpnProposalsNodeKind:
+    return NI.allInputsAndOutputsHaveSameElemKind(
+        {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty});
+
+    // case Kinded::Kind::BBoxTransformNodeKind:
+    //   return NI.allInputsAndOutputsHaveSameElemKind(
+    //       {ElemKind::FloatTy, ElemKind::Float16Ty});
 
   case Kinded::Kind::SoftMaxGradNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -676,6 +884,104 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::BatchedPairwiseDotProductGradNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy});
 
+  case Kinded::Kind::BucketizeNodeKind:
+    return NI.getInElemTy(BucketizeNode::InputIdx) == ElemKind::FloatTy &&
+           NI.getOutElemTy(BucketizeNode::ResultIdx) == ElemKind::Int32ITy;
+
+  case Kinded::Kind::BatchedUnaryEmbeddingsBagsNodeKind:
+    return (
+        NI.allInputsAndOutputsHaveSameElemKind(
+            {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty},
+            {BatchedUnaryEmbeddingsBagsNode::TableOffsetsIdx,
+             BatchedUnaryEmbeddingsBagsNode::IndicesIdx,
+             BatchedUnaryEmbeddingsBagsNode::OffsetsIdx}) &&
+        (((NI.getInElemTy(BatchedUnaryEmbeddingsBagsNode::TableOffsetsIdx) ==
+           ElemKind::Int64ITy) &&
+          (NI.getInElemTy(BatchedUnaryEmbeddingsBagsNode::IndicesIdx) ==
+           ElemKind::Int64ITy) &&
+          (NI.getInElemTy(BatchedUnaryEmbeddingsBagsNode::OffsetsIdx) ==
+           ElemKind::Int64ITy)) ||
+         ((NI.getInElemTy(BatchedUnaryEmbeddingsBagsNode::TableOffsetsIdx) ==
+           ElemKind::Int32ITy) &&
+          (NI.getInElemTy(BatchedUnaryEmbeddingsBagsNode::IndicesIdx) ==
+           ElemKind::Int32ITy) &&
+          (NI.getInElemTy(BatchedUnaryEmbeddingsBagsNode::OffsetsIdx) ==
+           ElemKind::Int32ITy))));
+
+  case Kinded::Kind::IntNBitSplitEmbeddingBagsNodeKind:
+    return (((NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::IndicesIdx) ==
+              ElemKind::Int64ITy) &&
+             (NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::OffsetsIdx) ==
+              ElemKind::Int64ITy)) ||
+            ((NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::IndicesIdx) ==
+              ElemKind::Int32ITy) &&
+             (NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::OffsetsIdx) ==
+              ElemKind::Int32ITy))) &&
+           NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::DevWeightsIdx) ==
+               ElemKind::UInt8ITy &&
+           NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::UvmWeightsIdx) ==
+               ElemKind::UInt8ITy &&
+           NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::WeightsTysIdx) ==
+               ElemKind::UInt8ITy &&
+           NI.getInElemTy(
+               IntNBitSplitEmbeddingBagsNode::WeightsPlacementsIdx) ==
+               ElemKind::Int32ITy &&
+           (NI.getInElemTy(
+                IntNBitSplitEmbeddingWeightedBagsNode::WeightsOffsetsIdx) ==
+                ElemKind::Int64ITy ||
+            NI.getInElemTy(
+                IntNBitSplitEmbeddingWeightedBagsNode::WeightsOffsetsIdx) ==
+                ElemKind::Int32ITy) &&
+           NI.getInElemTy(IntNBitSplitEmbeddingBagsNode::DimOffsetsIdx) ==
+               ElemKind::Int32ITy;
+
+  case Kinded::Kind::IntNBitSplitEmbeddingWeightedBagsNodeKind:
+    return (((NI.getInElemTy(
+                  IntNBitSplitEmbeddingWeightedBagsNode::IndicesIdx) ==
+              ElemKind::Int64ITy) &&
+             (NI.getInElemTy(
+                  IntNBitSplitEmbeddingWeightedBagsNode::OffsetsIdx) ==
+              ElemKind::Int64ITy)) ||
+            ((NI.getInElemTy(
+                  IntNBitSplitEmbeddingWeightedBagsNode::IndicesIdx) ==
+              ElemKind::Int32ITy) &&
+             (NI.getInElemTy(
+                  IntNBitSplitEmbeddingWeightedBagsNode::OffsetsIdx) ==
+              ElemKind::Int32ITy))) &&
+           NI.getInElemTy(
+               IntNBitSplitEmbeddingWeightedBagsNode::DevWeightsIdx) ==
+               ElemKind::UInt8ITy &&
+           NI.getInElemTy(
+               IntNBitSplitEmbeddingWeightedBagsNode::UvmWeightsIdx) ==
+               ElemKind::UInt8ITy &&
+           NI.getInElemTy(
+               IntNBitSplitEmbeddingWeightedBagsNode::WeightsTysIdx) ==
+               ElemKind::UInt8ITy &&
+           NI.getInElemTy(
+               IntNBitSplitEmbeddingWeightedBagsNode::WeightsPlacementsIdx) ==
+               ElemKind::Int32ITy &&
+           (NI.getInElemTy(
+                IntNBitSplitEmbeddingWeightedBagsNode::WeightsOffsetsIdx) ==
+                ElemKind::Int64ITy ||
+            NI.getInElemTy(
+                IntNBitSplitEmbeddingWeightedBagsNode::WeightsOffsetsIdx) ==
+                ElemKind::Int32ITy) &&
+           NI.getInElemTy(
+               IntNBitSplitEmbeddingWeightedBagsNode::DimOffsetsIdx) ==
+               ElemKind::Int32ITy &&
+           (NI.getInElemTy(
+                IntNBitSplitEmbeddingWeightedBagsNode::IndiceWeightIdx) ==
+                ElemKind::FloatTy ||
+            NI.getInElemTy(
+                IntNBitSplitEmbeddingWeightedBagsNode::IndiceWeightIdx) ==
+                ElemKind::Float16Ty);
+
+  case Kinded::Kind::PermutePooledEmbeddingsNodeKind:
+    return (NI.getInElemTy(PermutePooledEmbeddingsNode::OffsetDimListIdx) ==
+            ElemKind::Int64ITy) &&
+           (NI.getInElemTy(PermutePooledEmbeddingsNode::PermuteListIdx) ==
+            ElemKind::Int64ITy);
+
   default:
     return false;
   }
@@ -697,7 +1003,7 @@ template <typename T,
           std::enable_if_t<has_getLayout<T, ConvolutionLayout>::value, int> = 0>
 static bool checkLayout(const T &I) {
   if (I.getLayout() != NHWC && I.getLayout() != NTHWC) {
-    report("Glow Relay supports only NHWC and NTHWC");
+    report("Relay supports only NHWC and NTHWC");
     return false;
   }
   return true;
@@ -779,7 +1085,13 @@ bool Relay::shouldLower(const Node *N) const {
   case Kinded::Kind::SparseLengthsSumNodeKind:
   case Kinded::Kind::FullyConnectedNodeKind:
   case Kinded::Kind::ReluNodeKind:
+  // case Kinded::Kind::BatchNormalizationNodeKind:
+  case Kinded::Kind::BucketizeNodeKind:
     return false;
+  case Kinded::Kind::LayerNormalizationNodeKind:
+    return interpreter::flags::LowerLayerNormalization;
+  case Kinded::Kind::BatchMatMulNodeKind:
+    return interpreter::flags::LowerBatchMatMul;
   default:
     return true;
   }
@@ -841,13 +1153,13 @@ static bool quantizeRQFCFloatBias(Function *F,
                   "Constant in order to quantize the bias");
 
   auto TQPs = getTensorQuantizationParams(
-      biasC->getPayload(), quantization::Schema::Asymmetric, ElemKind::Int8QTy,
+      biasC->getPayload(), quantization::Schema::Asymmetric, ElemKind::Int32QTy,
       0, biasC->dims()[0]);
 
   DCHECK_EQ(TQPs.size(), 1) << "Should only be one dimension to quantize on";
 
-  auto biasQuantizedT =
-      quantization::quantizeTensor(biasC->getPayload(), TQPs[0]);
+  auto biasQuantizedT = quantization::quantizeTensor(
+      biasC->getPayload(), TQPs[0], ElemKind::Int32QTy);
 
   auto biasQuantizedC = F->getParent()->createConstant(
       biasC->getName(), std::move(biasQuantizedT));
@@ -954,11 +1266,9 @@ Relay::transformPostLowering(Function *F, CompilationContext &cctx,
   return changed;
 }
 
-void Relay::parseBackendSpecificOptions(const BackendOptions &opts) const {
-  auto RelayMaxMemOpt = opts.backendSpecificOpts.find("Relay-memory");
-  if (RelayMaxMemOpt != opts.backendSpecificOpts.end()) {
-    glow::runtime::GlowRelayMemory = std::stoi(RelayMaxMemOpt->second);
-    llvm::outs() << "Relay memory set to " << glow::runtime::GlowRelayMemory
-                 << "\n";
-  }
+void Relay::parseBackendSpecificOptions(const BackendOptions &opts) const {}
+
+Expected<double> Relay::estimateNodeCost(const glow::Node *node) const {
+  // Using default cost from Partitioner which is 1.
+  return 1.0;
 }

@@ -215,8 +215,12 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
     for (auto &ph : virtualPadded) {
       auto oldTensor = context->getPlaceholderBindings()->get(ph);
       Tensor paddedTensor(oldTensor->getType());
-      memcpy(paddedTensor.getUnsafePtr(), oldTensor->getUnsafePtr(),
-             oldTensor->getUnpaddedSizeInBytes());
+      if (oldTensor->getUnsafePtr()) {
+        memcpy(paddedTensor.getUnsafePtr(), oldTensor->getUnsafePtr(),
+               oldTensor->getUnpaddedSizeInBytes());
+      } else {
+        CHECK_EQ(oldTensor->getUnpaddedSizeInBytes(), 0);
+      }
       context->getPlaceholderBindings()->erase(ph);
       context->getPlaceholderBindings()->insert(ph, std::move(paddedTensor));
     }
@@ -238,14 +242,10 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
   for (const auto &I : F->getInstrs()) {
     // Perform custom processing if needed and proceed with standard processing
     // if required.
-
     if (!irInstructionProcessingHandler ||
         !irInstructionProcessingHandler(
             &I, IRInstructionProcessingStage::PROCESSING, this)) {
-      // glow::dbgs()<<I.getName() <<"    : ";
-      // glow::dbgs()<<I.getKindName() <<"\n";
       switch (I.getKind()) {
-
 #define DEF_VALUE(CLASS, NAME)
 #define DEF_INSTR(CLASS, NAME)                                                 \
   case Kinded::Kind::CLASS##Kind: {                                            \

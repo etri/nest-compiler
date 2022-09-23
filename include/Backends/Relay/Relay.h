@@ -14,13 +14,16 @@
  * limitations under the License.
  * Modifications copyright (C) 2022 <ETRI/Yongin Kwon>
  */
-#ifndef GLOW_BACKENDS_Relay_Relay_H
-#define GLOW_BACKENDS_Relay_Relay_H
+#ifndef GLOW_BACKENDS_RELAY_RELAY_H
+#define GLOW_BACKENDS_RELAY_RELAY_H
 
 #include "RelayDeviceManager.h"
 #include "RelayFunction.h"
 
 #include "glow/Backend/Backend.h"
+
+#include <numeric>
+#include <vector>
 
 namespace glow {
 
@@ -42,6 +45,11 @@ public:
   }
   static std::string getName() { return "Relay"; }
   static unsigned numDevices() { return std::thread::hardware_concurrency(); }
+  static std::vector<unsigned> scanDeviceIDs() {
+    std::vector<unsigned> deviceIDs(Relay::numDevices());
+    std::iota(std::begin(deviceIDs), std::end(deviceIDs), 0);
+    return deviceIDs;
+  }
 
   std::unique_ptr<CompiledFunction>
   compileIR(std::unique_ptr<IRFunction> IR) const override;
@@ -71,6 +79,10 @@ public:
   Expected<bool> transformPostLowering(
       Function *F, CompilationContext &cctx,
       const glow::runtime::DeviceInfo *devInfo = nullptr) const override;
+
+  /// \returns a unitless value to be used when comparing Nodes or
+  /// error if no estimate can be generated.
+  Expected<double> estimateNodeCost(const glow::Node *node) const override;
 
   /// @}
   //
@@ -112,4 +124,4 @@ private:
 
 } // namespace glow
 
-#endif // GLOW_BACKENDS_Relay_Relay_H
+#endif // GLOW_BACKENDS_RELAY_RELAY_H

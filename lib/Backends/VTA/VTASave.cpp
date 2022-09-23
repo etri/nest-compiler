@@ -186,6 +186,7 @@ void saveFloatConvolutionInst(const glow::ConvolutionInst *Inst,
                               std::string *bundle, VTASaveContext *ctx) {
   auto pad = Inst->getPads();
   auto strides = Inst->getStrides();
+  auto dilation = Inst->getDilation();
   // TODO group
   // auto group = Inst->getGroup();
   auto src = Inst->getSrc();
@@ -207,6 +208,7 @@ void saveFloatConvolutionInst(const glow::ConvolutionInst *Inst,
 
   int pad_size = pad[0];
   int stride_size = strides[0];
+  int dilation_size = dilation[0];
 
   // save Weight file
   auto vMap = ctx->getVariableMap();
@@ -316,7 +318,7 @@ void saveFloatConvolutionInst(const glow::ConvolutionInst *Inst,
   bundle->append(", ");
   bundle->append(std::to_string(Inst->getGroup()));
   bundle->append(", ");
-  bundle->append(std::to_string(Inst->getDilation()));
+  bundle->append(std::to_string(dilation_size));
   bundle->append(", ");
   bundle->append(std::to_string(Inst->getFusedActivation() ==
                                 RELU)); // Fused Activation Disabled
@@ -341,6 +343,7 @@ void saveNonVTAConvolutionInst(
     VTASaveContext *ctx) { // NON VTA Quantized Convolution
   auto pad = Inst->getPads();
   auto strides = Inst->getStrides();
+  auto dilation = Inst->getDilation();
   // TODO : consider group
   // auto group = Inst->getGroup();
   auto src = Inst->getSrc();
@@ -361,6 +364,7 @@ void saveNonVTAConvolutionInst(
 
   int pad_size = pad[0];
   int stride_size = strides[0];
+  int dilation_size = dilation[0];
 
   bool doRelu = Inst->getFusedActivation() == RELU;
   float inScale = src->getType()->getScale();
@@ -515,7 +519,7 @@ void saveNonVTAConvolutionInst(
   bundle->append(", ");
   bundle->append(std::to_string(Inst->getGroup()));
   bundle->append(", ");
-  bundle->append(std::to_string(Inst->getDilation()));
+  bundle->append(std::to_string(dilation_size));
   bundle->append(", ");
   bundle->append(std::to_string(doRelu));
   bundle->append(", ");
@@ -533,6 +537,7 @@ void saveBNNNonVTAConvolutionInst(
     VTASaveContext *ctx) { // NON VTA Quantized Convolution
   auto pad = Inst->getPads();
   auto strides = Inst->getStrides();
+  auto dilation = Inst->getDilation();
   // TODO : consider group
   // auto group = Inst->getGroup();
   auto src = Inst->getSrc();
@@ -554,6 +559,7 @@ void saveBNNNonVTAConvolutionInst(
 
   int pad_size = pad[0];
   int stride_size = strides[0];
+  int dilation_size = dilation[0];
 
   bool doRelu = Inst->getFusedActivation() == RELU;
   float inScale = src->getType()->getScale();
@@ -696,7 +702,7 @@ void saveBNNNonVTAConvolutionInst(
   bundle->append(", ");
   bundle->append(std::to_string(Inst->getGroup()));
   bundle->append(", ");
-  bundle->append(std::to_string(Inst->getDilation()));
+  bundle->append(std::to_string(dilation_size));
   bundle->append(", ");
   bundle->append(std::to_string(doRelu));
   bundle->append(", ");
