@@ -18,11 +18,24 @@
 #define GLOW_RUNTIME_PROVISIONER_H
 
 #include "glow/Backend/Backend.h"
+#include "glow/Backend/BlockStreamBase.h"
 #include "glow/Backends/DeviceManager.h"
 #include "glow/Runtime/RuntimeTypes.h"
 #include "glow/Support/Error.h"
 
 #include <map>
+
+#if FACEBOOK_INTERNAL
+namespace folly {
+struct dynamic;
+
+} // namespace folly
+namespace glow {
+namespace runtime {
+using FXFunction = folly::dynamic;
+}
+} // namespace glow
+#endif
 
 namespace glow {
 
@@ -39,6 +52,52 @@ struct PartitionerCompileOptions {
 
 namespace runtime {
 
+enum class NetworkType {
+  // FX Network
+  FX_NETWORK,
+  // Glow Module network
+  GLOW_NETWORK,
+};
+
+/// Base struct for passing in a network to Provisioner. It contains all common
+/// elements: DagListTy, Module, and CCTX and a NetworkType denoting what
+/// subclass of network it is.
+struct Network {
+  /// Backend used for this config. It is used in
+  /// checking the type of config before casting to a derived class.
+  const NetworkType networkType;
+
+  /// Dag structure for the network to be added.
+  DAGListTy &networks;
+
+  /// Module containing PH's for the network and in some cases the network.
+  Module &module;
+
+  /// Compilation Context for the network being added.
+  CompilationContext &cctx;
+
+  Network(NetworkType netType, DAGListTy &networks, Module &module,
+          CompilationContext &cctx)
+      : networkType(netType), networks(networks), module(module), cctx(cctx) {}
+  virtual ~Network() = default;
+};
+#if FACEBOOK_INTERNAL
+struct FXNetwork : Network {
+  const FXFunction &FXIR;
+  const llvm::StringMap<const void *> &constants;
+  FXNetwork(DAGListTy &networks, Module &module, CompilationContext &cctx,
+            const FXFunction &FXIR,
+            const llvm::StringMap<const void *> &constants)
+      : Network(NetworkType::FX_NETWORK, networks, module, cctx), FXIR(FXIR),
+        constants(constants) {}
+};
+#endif
+
+struct GlowNetwork : Network {
+  GlowNetwork(DAGListTy &networks, Module &module, CompilationContext &cctx)
+      : Network(NetworkType::GLOW_NETWORK, networks, module, cctx) {}
+};
+
 /// The Provisioner is responsible for assigning networks to an actual device.
 /// It also compiles the networks before passing the compiled functions to the
 /// device.
@@ -46,13 +105,60 @@ class Provisioner final {
 public:
   Provisioner(DeviceManagerMapTy &devices);
 
+  /// Traverses the DAG \p networks and compiles all the node's Functions from
+  /// \p module using \p cctx. Then add compiled functions to assigned devices.
+  ///
+  /// Pseudocode:
+  ///
+  /// generate device assignments
+  /// create map `optsMap`, `compiledFunctions`, `remainingDeviceCount`
+  ///
+  /// for each assignment
+  ///     create vector functionsToCompile
+  ///     create map functionMap
+  ///     for each node in logical device
+  ///         if Function hasn't been compiled before
+  ///             add Function to `functionsToCompile`
+  ///             add Function's BackendOptions to `optsMap`
+  ///             set `remainingDeviceCount` for Function
+  ///         else
+  ///             decrease `remainingDeviceCount` for Function by 1
+  ///
+  ///     call Backend::compiledFunctions with `functionsToCompile` and
+  ///     `optsMap`
+  ///     move compiled functions to `compiledFunctions`
+  ///
+  ///     for each node in logical device
+  ///         add corresponding compiled functions in `compiledFunctions` to
+  ///         `functionMap`
+  ///         add replications to `functionMap` using the same compiled function
+  ///         with a different name
+  ///
+  ///     call DeviceManager::addNetwork with `FunctionMap`
+  ///
+  ///     for each node in logical device
+  ///         if `remainingDeviceCount` for Function is 0
+  ///             free up compilation resources
+  ///             move corresponding compiled function from `compiledFunctions`
+  ///             to `Provisioner::functions_`
+  Error provision(DAGListTy &networks, Module &module,
+                  CompilationContext &cctx);
+
+#if FACEBOOK_INTERNAL
   /// Traverses the DAG \p networks and:
-  ///   1. Retrieves each node's Function from the provided \p module.
+  ///   1. Retrieves each node's Function from the provided \p FXIR.
   ///   2. Compiles it using the provided CompilationContext \p cctx.
   ///   3. Assigns a device and calls addNetwork on the chosen device(s).
   /// \returns a Error indicating if the operation was a success.
-  Error provision(DAGListTy &networks, Module &module,
-                  CompilationContext &cctx);
+  Error provisionFX(DAGListTy &networks, Module &module, const FXFunction &FXIR,
+                    const llvm::StringMap<const void *> &constants,
+                    CompilationContext &cctx);
+#endif
+  // Unified provisioning function, tries to re-use most shared logic between
+  // provision and provisionFX.
+  Error provisionNetwork(std::unique_ptr<Network> network,
+                         std::string bundleDir = "",
+                         std::map<std::string, int> *puIdxMap = nullptr);
   Error provisionForNestPartition(DAGListTy &networks, Module &module,
                                   CompilationContext &cctx,
                                   std::string bundleDir,
@@ -61,7 +167,8 @@ public:
   Error removeFunction(llvm::StringRef name);
 
   /// Evict function from device.
-  Error evictFunction(llvm::StringRef name, DeviceManager *device);
+  Error evictFunction(llvm::StringRef name, DeviceManager *device,
+                      unsigned replicaCount);
 
   /// \returns a reference to the backend with name \p backendName.
   Backend &getBackend(llvm::StringRef backendName) const;
@@ -77,9 +184,17 @@ public:
     deviceMappings_ = mappings;
   }
 
-  void addBackend(std::string backendName,
-                  std::unique_ptr<glow::Backend> &newBackend);
   void setCompileOptions(PartitionerCompileOptions *compileOptions);
+
+  // Extract function streams from functions_ to serializedFunctionMap_,
+  // and return a ptr of serializedFunctionMap_.
+  // Each time this function called, serializedFunctionMap_ will be regenerated.
+  std::unique_ptr<
+      std::unordered_map<std::string, std::unique_ptr<BlockStreamBase>>>
+  getAllSerializedFunctionsMap();
+
+  // Clean up all stored serializedFunctionMap_.
+  void cleanUpSerializedFunctionMap();
 
 private:
   /// Map of backends for all devices, one backend per device type.
@@ -89,9 +204,18 @@ private:
   /// ownership of the functions.
   std::unordered_map<std::string, std::unique_ptr<CompiledFunction>> functions_;
 
+  /// Map of serialized function pointers, storing all serialized functions on
+  /// backends.
+  /// Only used in serialization.
+  std::unordered_map<std::string, std::unique_ptr<BlockStreamBase>>
+      serializedFunctionMap_;
+
   /// Set of active functions - these are functions that are currently being
   /// compiled/added to devices.
   std::set<std::string> activeFunctions_;
+
+  /// Mapping from function name to its number of replications
+  std::unordered_map<std::string, unsigned> functionReplicaCount_;
 
   /// Mutex for functions_ and activeFunctions_ since add/remove can be called
   /// from multiple threads simultaneously.

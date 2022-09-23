@@ -24,6 +24,7 @@
 #include "glow/Partitioner/Partitioner.h"
 #include "glow/Runtime/DeferredWeightLoader.h"
 #include "glow/Runtime/DeviceHealthMonitor.h"
+#include "glow/Runtime/ErrorReporter.h"
 #include "glow/Runtime/Executor/ThreadPoolExecutor.h"
 #include "glow/Runtime/Provisioner/Provisioner.h"
 #include "glow/Runtime/RequestData.h"
@@ -46,6 +47,7 @@
 #include <queue>
 #include <shared_mutex>
 
+constexpr uint64_t P2PInputLimit = 256;
 using namespace glow;
 using namespace runtime;
 
@@ -66,6 +68,7 @@ Error optimizeDAG(DAGListTy &nodeList, const Provisioner &provisioner,
                   Module &mod, const std::vector<DeviceInfo> &devices,
                   CompilationContext &cctx,
                   ConstantFoldingRecordMap &constFoldRecord);
+extern const char *revisionHash;
 #endif /* FACEBOOK_INTERNAL */
 } // namespace glow
 
@@ -76,19 +79,14 @@ llvm::cl::opt<std::string> loadDeviceConfigsFileOpt(
     llvm::cl::value_desc("configs.yaml"), llvm::cl::Optional,
     llvm::cl::cat(hostManagerCat));
 
-/// Allows enabling DRT support.
-llvm::cl::opt<bool, /* ExternalStorage */ true>
-    enableDRT("enable-DRT", llvm::cl::desc("Enabled DRT support"),
-              llvm::cl::Optional,
-              llvm::cl::location(glow::runtime::GlowEnableDRT),
-              llvm::cl::cat(hostManagerCat));
-
-/// Allows enabling P2P support.
-llvm::cl::opt<bool, /* ExternalStorage */ true>
-    enableP2P("enable-P2P", llvm::cl::desc("Enabled P2P support"),
-              llvm::cl::Optional,
-              llvm::cl::location(glow::runtime::GlowEnableP2P),
-              llvm::cl::cat(hostManagerCat));
+/// The value that should be used for device initialization timeout, default:
+/// 5000 milliseconds.
+llvm::cl::opt<unsigned, /* ExternalStorage */ true> deviceInitTimeout(
+    "device_init_timeout_ms",
+    llvm::cl::desc("Set device init timout in milliseconds"),
+    llvm::cl::Optional,
+    llvm::cl::location(glow::runtime::flags::DeviceInitTimeoutMs),
+    llvm::cl::cat(hostManagerCat));
 
 HostManager::HostManager() : HostManager(HostConfig{}) {}
 
@@ -108,12 +106,13 @@ HostManager::HostManager(
     : config_(hostConfig),
       statsExporterRegistry_(StatsExporterRegistry::Stats()) {
   // TODO: move all initialization out of constructor.
-  EXIT_ON_ERR(init(std::move(deviceConfigs)));
+
+  REPORT_AND_EXIT_ON_ERR(init(std::move(deviceConfigs)));
   statsExporterRegistry_->setCounter(kMaxQueueSize, hostConfig.maxQueueSize);
 }
 
 Expected<DAG *> HostManager::getNetworkDAG(llvm::StringRef network) {
-  auto it = networks_.find(network);
+  auto it = networks_.find(network.str());
   if (it == networks_.end()) {
     return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR, "Network not found.");
   }
@@ -121,21 +120,27 @@ Expected<DAG *> HostManager::getNetworkDAG(llvm::StringRef network) {
 }
 
 Error HostManager::startDeviceTrace() {
+  LOG(INFO) << "start device tracing" << std::endl;
   for (auto &dev : devices_) {
     Error err = dev.second->startDeviceTrace(hostTraceContext_.get());
-    if (err) {
-      return err;
-    }
+    RETURN_IF_ERR(err);
   }
   return Error::success();
 }
 
 Error HostManager::stopDeviceTrace() {
+
+  auto *traceContext = hostTraceContext_.get();
+  if (!traceContext) {
+    LOG(INFO) << "No HostManager TraceContext registered, skipping call to "
+                 "stopDeviceTrace";
+    return Error::success();
+  } else {
+    LOG(INFO) << "stop device tracing";
+  }
   for (auto &dev : devices_) {
-    Error err = dev.second->stopDeviceTrace(hostTraceContext_.get());
-    if (err) {
-      return err;
-    }
+    Error err = dev.second->stopDeviceTrace(traceContext);
+    RETURN_IF_ERR(err);
   }
   return Error::success();
 }
@@ -166,25 +171,30 @@ Error HostManager::init(std::vector<std::unique_ptr<DeviceConfig>> configs) {
       devPromise.set_value(std::move(err));
     });
     if (devFuture.wait_for(std::chrono::milliseconds(
-            GlowDeviceInitTimeoutMs)) != std::future_status::timeout) {
+            flags::DeviceInitTimeoutMs)) != std::future_status::timeout) {
       RETURN_IF_ERR(devFuture.get());
     } else {
       // Device initialization is taking longer than expected, return an error.
       return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
-                      "Timout encountered when initializing device: " +
+                      "Timeout encountered when initializing device: " +
                           std::string(config->name));
     }
     availableDevices_.push_back(deviceCount);
     deviceCount++;
   }
+#ifdef FACEBOOK_INTERNAL
+  LOG(INFO) << "Initialized " << deviceCount << " device(s)";
+#endif
+
   provisioner_.reset(new Provisioner(devices_));
   executor_.reset(
       new ThreadPoolExecutor(devices_, config_.executorThreads, "HostManager"));
   exportMemoryCounters();
-  if (GlowAvailableDevices.length()) {
+  if (flags::AvailableDevices.length()) {
     std::vector<unsigned> devices;
-    folly::split<char, std::string, unsigned>(',', GlowAvailableDevices,
-                                              devices, /* ignoreEmpty */ true);
+    folly::split<char, std::string, unsigned>(',', flags::AvailableDevices,
+                                              devices,
+                                              /* ignoreEmpty */ true);
     std::vector<runtime::DeviceIDTy> convertedDevs(devices.begin(),
                                                    devices.end());
     setAvailableDevices(convertedDevs);
@@ -265,6 +275,12 @@ std::vector<DeviceInfo> HostManager::getDeviceInfoList() {
 
 Error HostManager::addNetwork(std::unique_ptr<Module> module,
                               CompilationContext &cctx) {
+#ifdef FACEBOOK_INTERNAL
+  LOG(WARNING) << "Adding Glow network built with revision hash: "
+               << revisionHash;
+
+#endif /* FACEBOOK_INTERNAL */
+  VLOG(1) << "addNetwork";
   ScopeGuard debugDumpDAGGuard([&]() {
     if (cctx.dumpFinalGraph) {
       for (Function *F : module->getFunctions()) {
@@ -289,7 +305,358 @@ Error HostManager::addNetwork(std::unique_ptr<Module> module,
     std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
     auto functions = module->getFunctions();
     for (auto &F : functions) {
-      std::string name = F->getName();
+      std::string name = F->getName().str();
+      auto it = networks_.find(name);
+      if (it != networks_.end() ||
+          processingNetworks_.find(name) != processingNetworks_.end()) {
+        cleanupAddNetwork(names);
+        return MAKE_ERR(
+            ErrorValue::ErrorCode::RUNTIME_ERROR,
+            "Failed to add network: already have a function called " + name);
+      }
+      // Add the network to processingNetworks_ so we know it's being worked on.
+      processingNetworks_.insert(name);
+      names.push_back(name);
+    }
+  }
+
+  // Issue a warning when loading backend specific options from the command line
+  // and the compile context also contains backend specific options.
+  if (!loadBackendSpecificOptionsOpt.empty()) {
+    if (cctx.backendOpts.backendSpecificOpts.size() != 0) {
+      VLOG_EVERY_N(1, 1000) << "Warning: backendSpecificOpts is set via the "
+                               "HostManager, ignoring previously set options.";
+    }
+    cctx.backendOpts.backendSpecificOpts =
+        deserializeStrStrMapFromYaml(loadBackendSpecificOptionsOpt);
+  } else {
+    auto ctxLoadBackendSpecificOpt =
+        cctx.backendOpts.backendSpecificOpts.find("loadBackendSpecificOptions");
+
+    if (ctxLoadBackendSpecificOpt !=
+        cctx.backendOpts.backendSpecificOpts.end()) {
+      cctx.backendOpts.backendSpecificOpts =
+          deserializeStrStrMapFromYaml(ctxLoadBackendSpecificOpt->second);
+    }
+  }
+
+  std::vector<DeviceInfo> deviceInfo;
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    for (auto &device : availableDevices_) {
+      DeviceInfo info = devices_[device]->getDeviceInfo();
+      info.availableMemory = devices_[device]->getAvailableMemory();
+      info.backendName = devices_[device]->getBackendName().str();
+      info.nonSupportedNodes =
+          devices_[device]->getParamByName("nonSupportedNodes").str();
+      info.supportedNodes =
+          devices_[device]->getParamByName("supportedNodes").str();
+      // If p2p is enabled update the inputCount limit.
+      if (cctx.enableP2P) {
+        info.inputCountMax = P2PInputLimit;
+      }
+      deviceInfo.push_back(info);
+    }
+  }
+
+  // Optimize Functions only if we don't have any backendSpecificNodeInfo,
+  // because if we do then the Functions were already optimized and Nodes had
+  // extra info mapped to them, so we don't want to mutate the Function. Also
+  // skip optimizations if we're loading an AOT optimized model.
+  const bool skipOptimizations =
+      cctx.loadingAOTModel || !cctx.backendOpts.backendSpecificNodeInfo.empty();
+
+  // Perform a round of target-independent graph optimizations. This helps the
+  // partitioner to do its job more efficiently.
+  if (!skipOptimizations) {
+    for (Function *F : module->getFunctions()) {
+      auto err = optimizeFunctionBeforeLowering(F, cctx);
+      if (err) {
+        {
+          std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+          cleanupAddNetwork(names);
+        }
+        RETURN_ERR(err);
+      }
+    }
+  }
+  VLOG(1) << "Before partitioner";
+  Partitioner partitioner(module.get(), deviceInfo, skipOptimizations);
+  auto backendName = devices_[0]->getBackendName();
+  const auto &backend = provisioner_->getBackend(backendName);
+  auto contextCount = backend.getContextCount(cctx);
+  partitioner.setContextCount(contextCount);
+  DAGListTy nodeList;
+  auto result = partitioner.partition(cctx);
+  VLOG(1) << "After partitioner";
+  if (result) {
+    nodeList = std::move(result.get());
+  } else {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    cleanupAddNetwork(names);
+    RETURN_ERR(result.takeError());
+  }
+  VLOG(1) << "Before quantmode";
+  if (cctx.precisionConfig.quantMode == QuantizationMode::Profile) {
+    // Since for profiling the provisioner will be reset, we only allow one
+    // network in one HM.
+    if (networks_.size() > 0) {
+      return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
+                      "For quantization profiling flow, there can't be other "
+                      "registered networks before this one");
+    }
+    // For profiling, we use CPU backend. Overwrite Provisioner and Executor
+    // to force the network is compiled and run in profilingBackend. backend.
+    size_t devicesNum = devices_.size();
+    for (size_t i = 0; i < devicesNum; i++) {
+      auto name = devices_[i]->getDeviceConfig().name;
+      auto config = glow::make_unique<DeviceConfig>(profilingBackend, name);
+      devices_[i] = std::unique_ptr<DeviceManager>(
+          DeviceManager::createDeviceManager(*config));
+      RETURN_IF_ERR(devices_[i]->init());
+    }
+    provisioner_.reset(new Provisioner(devices_));
+    executor_.reset(new ThreadPoolExecutor(devices_, config_.executorThreads));
+  }
+
+  VLOG(1) << "Before replace dummy TQPs";
+  // Now that we've partitioned and optimized, do some verification based on the
+  // dummy mode we're using, if any.
+  if (cctx.precisionConfig.replaceDummyTQPs ||
+      cctx.precisionConfig.loadUniquedDummyQParams) {
+    RETURN_IF_ERR(module->verifyDummyQParams(
+        cctx.precisionConfig.loadUniquedDummyQParams));
+  }
+
+  // If we are loading an AOT model where we are replacing dummy TQPs, then we
+  // may need to update Relu output types on FCs, since they should be set to
+  // use zero as min but the correct qparams could not be calculated AOT.
+  if (cctx.loadingAOTModel && cctx.precisionConfig.replaceDummyTQPs) {
+    LOG(INFO) << "Updating quantized Relu types given real TQPs";
+    for (Function *F : module->getFunctions()) {
+      updateQuantReluTypes(F);
+    }
+  }
+
+  VLOG(1) << "Before constant folding";
+  // If we prevented constant modification then run constant folding with
+  // recording now. Record so that if we are going to serialize we can embed the
+  // constant folding subgraphs in the Glow ONNX model.
+  ConstantFoldingRecordMap record;
+  if (cctx.optimizationOpts.delayAndRecordConstantModification) {
+    constModPreventer.deactivateAndCleanup();
+
+    RETURN_ERR_IF_NOT(nodeList.size() == 1, "Expect only one DAG.");
+    const auto &dag = *nodeList.begin();
+    for (auto &dagNode : dag.nodes) {
+      Function *F = module->getFunction(dagNode->name);
+      RETURN_ERR_IF_NOT(
+          F, strFormat("Function %s not found", dagNode->name.data()));
+
+      ConstantFoldingRecordMap currRecord = constantFoldAndRecord(F, cctx);
+      record.insert(currRecord.begin(), currRecord.end());
+      runDCEPass(F, cctx);
+
+      // Verify the Function is valid after constant folding takes place.
+      Backend &B = provisioner_->getBackend(dagNode->backendName);
+      RETURN_ERR_IF_NOT(
+          B.verify(*F, cctx.verboseCompile),
+          "Unsupported node(s) found after delayed constant folding Function " +
+              F->getName().str() + " for backend " + B.getBackendName());
+    }
+  }
+  VLOG(1) << "Before loading AOT";
+  if (!cctx.loadingAOTModel) {
+    if (cctx.callDAGOptimizer) {
+#if FACEBOOK_INTERNAL
+      auto optDagErr = optimizeDAG(nodeList, *provisioner_, *module, deviceInfo,
+                                   cctx, record);
+      if (optDagErr) {
+        std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+        cleanupAddNetwork(names);
+        RETURN_ERR(optDagErr);
+      }
+#endif /* FACEBOOK_INTERNAL */
+    } else {
+      // If not using the DAG optimizer, iterate over the DAGs and call
+      // transformPostOptPipeline() on the Functions.
+      VLOG(1) << "No DAG optimizer";
+      for (const auto &dag : nodeList) {
+        for (auto &dagNode : dag.nodes) {
+          Function *F = module->getFunction(dagNode->name);
+          RETURN_ERR_IF_NOT(
+              F, strFormat("Function %s not found", dagNode->name.data()));
+
+          if (cctx.optimizationOpts.onlyLowerFuns.count(F)) {
+            continue;
+          }
+
+          Backend &B = provisioner_->getBackend(dagNode->backendName);
+          RETURN_IF_EXPECTED_IS_ERR(B.transformPostOptPipeline(F, cctx));
+
+          RETURN_ERR_IF_NOT(
+              B.verify(*F, cctx.verboseCompile),
+              "Unsupported node(s) found after transformPostOptPipeline() " +
+                  F->getName().str() + " for backend " + B.getBackendName());
+        }
+      }
+    }
+  }
+
+  VLOG(1) << "Before serialize compile DAG";
+  // If requested, serialize the resulting DAG that was just optimized and
+  // partitioned.
+  if (cctx.serializeCompiledDAG) {
+    std::string loc;
+    char *envSpecifiedSerializationPath = getenv("GLOW_DAG_SERIALIZATION_LOC");
+    if (!envSpecifiedSerializationPath) {
+      loc = nodeList.begin()->root->name + ".onnxtxt";
+    } else {
+      loc = std::string(envSpecifiedSerializationPath);
+    }
+
+    LOG(INFO) << "Serializing final compiled DAG to " << loc;
+    {
+      llvm::StringMap<std::string> extraMetadataProps;
+      if (cctx.precisionConfig.originNameToTQPMap) {
+        RETURN_IF_ERR(ONNXModelWriter::insertLoaderNameUniqueOffsetMetadata(
+            extraMetadataProps, *cctx.precisionConfig.originNameToTQPMap));
+      }
+      if (cctx.precisionConfig.clipQuantRangeToFP16) {
+        extraMetadataProps[clipQuantRangeToFP16Key] = "1";
+      }
+      Error writeErr = Error::empty();
+      // Note: If cctx.skipProvisioning then we want to serialize all meta info
+      // as we are likely doing AOT optimization. Otherwise do not provide the
+      // meta info as the model does not need to be reloaded.
+      ONNXModelWriter onnxWR(
+          loc, nodeList, 7, 9, &writeErr,
+          /* textMode */ true,
+          /* zipMode */ cctx.useZipModeForSerializeCompiledDAG,
+          /* includeConstantData */ cctx.saveConstantInSerializeCompiledDAG,
+          extraMetadataProps, record, cctx.backendOpts.backendSpecificNodeInfo,
+          cctx.skipProvisioning ? &cctx.loadedPHNames : nullptr,
+          cctx.skipProvisioning ? &cctx.staticPlaceholderTypesForAOT : nullptr,
+          cctx.returnGlowSerializedModelStr
+              ? cctx.glowAOTSerializationModelStrPtr.get()
+              : nullptr);
+      RETURN_IF_ERR(writeErr);
+    }
+
+    // If we're using AOT DAG optimizer then skip provisioning.
+    if (cctx.skipProvisioning ||
+        (cctx.callDAGOptimizer && cctx.useDAGOptimizerAOTMode)) {
+      LOG(INFO) << "Host manager skipping provisioning";
+      {
+        std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+        cleanupAddNetwork(names);
+      }
+      debugDumpDAGGuard.dismiss();
+      cleanupConstantFolding(*module, record);
+      if (cctx.dumpFinalGraph) {
+        for (Function *F : module->getFunctions()) {
+          auto fname =
+              strFormat("%sfinal_graph_aot_%s.dot", cctx.dumpGraphPath.c_str(),
+                        F->getName().data());
+          LOG(INFO) << "Dumping final graph to " << fname;
+          F->dumpDAG(fname);
+        }
+      }
+      return Error::success();
+    }
+  }
+
+  // Now that we've serialized the model if requested, cleanup the temporary
+  // Functions and PHs used for constant folding.
+  cleanupConstantFolding(*module, record);
+  VLOG(1) << "Before provisioning";
+  auto err = provisioner_->provision(nodeList, *module, cctx);
+  if (err) {
+    if (err.peekErrorValue()->isFatalError()) {
+      statsExporterRegistry_->setCounter(kDeviceFatalError, 1);
+    }
+    {
+      std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+      cleanupAddNetwork(names);
+    }
+    RETURN_ERR(err);
+  }
+  debugDumpDAGGuard.dismiss();
+  VLOG(1) << "Calculation of maxActiveRequests";
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    /// Calculate networkMaxActive requests. Then update
+    /// config_.maxActiveRequests This will be maxActiveRequestsPerInstance *
+    /// instanceCount * minReplications or config_.maxActiveRequests whichever
+    /// is smaller.
+
+    // Find the minimum on device replication.
+    unsigned minReplications{1};
+    for (auto &node : nodeList) {
+      for (auto &dag : node.nodes) {
+        minReplications = std::min(dag->replicationCount, minReplications);
+      }
+    }
+    unsigned product{0};
+    if (nodeList.size() && nodeList[0].nodes.size()) {
+      product = nodeList[0].nodes[0]->instanceCount *
+                cctx.maxActiveRequestsPerInstance * minReplications;
+    } else {
+      return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
+                      "NodeList is empty.");
+    }
+    unsigned maxActiveRequests = config_.maxActiveRequests;
+    config_.maxActiveRequests = std::min(product, maxActiveRequests);
+
+    // Create pool of cachedExecutionStates.
+    for (auto &node : nodeList) {
+      // Note: currently getNextNetworkExecutionState assumes that pool size is
+      // >= currentInFlight requests, so we set pool size to maxActiveRequests.
+      executor_->createPool(node.root.get(), config_.maxActiveRequests,
+                            cctx.enableP2P, cctx.enableDRT);
+    }
+  }
+  // Clear constants contents from the module then put it in a
+  // shared_ptr to be shared between all of the networks created from each
+  // function in the module.
+  auto targetBackendName = std::string(devices_[0]->getBackendName());
+  const auto &targetBackend = provisioner_->getBackend(targetBackendName);
+  if (targetBackend.shouldStripModule() && !cctx.skipModuleStrip) {
+    module->strip();
+  }
+  VLOG(1) << "Cleanup";
+  auto sharedModule = std::shared_ptr<Module>(std::move(module));
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    for (auto &node : nodeList) {
+#if FACEBOOK_INTERNAL
+      LOG(INFO) << "Successfully compiled and provisioned " << node.root->name;
+#endif
+      auto &networkData = networks_[(node.root)->name];
+      networkData.dag = std::move(node);
+      networkData.module = sharedModule;
+    }
+    cleanupAddNetwork(names);
+  }
+  VLOG(1) << "After cleanup";
+  return Error::success();
+}
+
+#if FACEBOOK_INTERNAL
+Error HostManager::addNetworkFX(
+    std::unique_ptr<Module> module, CompilationContext &cctx,
+    DAGListTy &networks, const folly::dynamic &FXIR,
+    const llvm::StringMap<const void *> &constants) {
+
+  LOG(INFO) << "Adding Glow network built with revision hash: " << revisionHash;
+  VLOG(1) << "addNetwork";
+
+  std::vector<std::string> names;
+  {
+    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+    auto functions = module->getFunctions();
+    for (auto &F : functions) {
+      const auto name = F->getName().str();
       auto it = networks_.find(name);
       if (it != networks_.end() ||
           processingNetworks_.find(name) != processingNetworks_.end()) {
@@ -334,213 +701,29 @@ Error HostManager::addNetwork(std::unique_ptr<Module> module,
       info.nonSupportedNodes =
           devices_[device]->getParamByName("nonSupportedNodes");
       info.supportedNodes = devices_[device]->getParamByName("supportedNodes");
+      // If p2p is enabled update the inputCount limit.
+      if (cctx.enableP2P) {
+        info.inputCountMax = P2PInputLimit;
+      }
       deviceInfo.push_back(info);
     }
   }
 
-  // Optimize Functions only if we don't have any backendSpecificNodeInfo,
-  // because if we do then the Functions were already optimized and Nodes had
-  // extra info mapped to them, so we don't want to mutate the Function. Also
-  // skip optimizations if we're loading an AOT optimized model.
-  const bool skipOptimizations =
-      cctx.loadingAOTModel || !cctx.backendOpts.backendSpecificNodeInfo.empty();
-
-  // Flag to check whether we are in profiling mode.
-  bool profilingMode =
-      (cctx.precisionConfig.quantMode == QuantizationMode::Profile);
-
-  // Perform a round of target-independent graph optimizations. This helps the
-  // partitioner to do its job more efficiently.
-  // When profiling we skip the optimization since in order for the quantization
-  // to be done properly same optimizations must be performed until the lowering
-  // stage for both the profiling and quantization path. Since the quantization
-  // for Ahead Of Time mode lacks this optimization we must disable it also.
-  if (!skipOptimizations && !profilingMode) {
-    for (Function *F : module->getFunctions()) {
-      auto err = optimizeFunctionBeforeLowering(F, cctx);
-      if (err) {
-        {
-          std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-          cleanupAddNetwork(names);
-        }
-        return err;
-      }
-    }
-  }
-  Partitioner partitioner(module.get(), deviceInfo, skipOptimizations);
-  if (cctx.enableP2P || cctx.enableDRT) {
-    partitioner.setContextCount(cctx.maxActiveRequestsPerInstance);
-  } else {
-    partitioner.setContextCount(2);
-  }
-  DAGListTy nodeList;
-  auto result = partitioner.partition(cctx);
-  if (result) {
-    nodeList = std::move(result.get());
-  } else {
-    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-    cleanupAddNetwork(names);
-    return result.takeError();
-  }
-
-  if (cctx.precisionConfig.quantMode == QuantizationMode::Profile) {
-    // Since for profiling the provisioner will be reset, we only allow one
-    // network in one HM.
-    if (networks_.size() > 0) {
-      return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
-                      "For quantization profiling flow, there can't be other "
-                      "registered networks before this one");
-    }
-    // For profiling, we use CPU backend. Overwrite Provisioner and Executor
-    // to force the network is compiled and run in profilingBackend. backend.
-    size_t devicesNum = devices_.size();
-    for (size_t i = 0; i < devicesNum; i++) {
-      auto name = devices_[i]->getDeviceConfig().name;
-      auto config = glow::make_unique<DeviceConfig>(profilingBackend, name);
-      devices_[i] = std::unique_ptr<DeviceManager>(
-          DeviceManager::createDeviceManager(*config));
-      RETURN_IF_ERR(devices_[i]->init());
-    }
-    provisioner_.reset(new Provisioner(devices_));
-    executor_.reset(new ThreadPoolExecutor(devices_, config_.executorThreads));
-  }
-
-  // Now that we've partitioned and optimized, do some verification based on the
-  // dummy mode we're using, if any.
-  if (cctx.precisionConfig.replaceDummyTQPs ||
-      cctx.precisionConfig.loadUniquedDummyQParams) {
-    RETURN_IF_ERR(module->verifyDummyQParams(
-        cctx.precisionConfig.loadUniquedDummyQParams));
-  }
-
-  // If we prevented constant modification then run constant folding with
-  // recording now. Record so that if we are going to serialize we can embed the
-  // constant folding subgraphs in the Glow ONNX model.
-  ConstantFoldingRecordMap record;
-  if (cctx.optimizationOpts.delayAndRecordConstantModification) {
-    constModPreventer.deactivateAndCleanup();
-
-    RETURN_ERR_IF_NOT(nodeList.size() == 1, "Expect only one DAG.");
-    const auto &dag = *nodeList.begin();
-    for (auto &dagNode : dag.nodes) {
-      Function *F = module->getFunction(dagNode->name);
-      RETURN_ERR_IF_NOT(
-          F, strFormat("Function %s not found", dagNode->name.data()));
-
-      ConstantFoldingRecordMap currRecord = constantFoldAndRecord(F, cctx);
-      record.insert(currRecord.begin(), currRecord.end());
-      runDCEPass(F, cctx);
-
-      // Verify the Function is valid after constant folding takes place.
-      Backend &B = provisioner_->getBackend(dagNode->backendName);
-      RETURN_ERR_IF_NOT(
-          B.verify(*F, cctx.verboseCompile),
-          "Unsupported node(s) found after delayed constant folding Function " +
-              F->getName().str() + " for backend " + B.getBackendName());
-    }
-  }
-
-  if (!cctx.loadingAOTModel) {
-    if (cctx.callDAGOptimizer) {
-#if FACEBOOK_INTERNAL
-      auto optDagErr = optimizeDAG(nodeList, *provisioner_, *module, deviceInfo,
-                                   cctx, record);
-      if (optDagErr) {
-        std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-        cleanupAddNetwork(names);
-        return optDagErr;
-      }
-#endif /* FACEBOOK_INTERNAL */
-    } else {
-      // If not using the DAG optimizer, iterate over the DAGs and call
-      // transformPostOptPipeline() on the Functions.
-      for (const auto &dag : nodeList) {
-        for (auto &dagNode : dag.nodes) {
-          Function *F = module->getFunction(dagNode->name);
-          RETURN_ERR_IF_NOT(
-              F, strFormat("Function %s not found", dagNode->name.data()));
-
-          if (cctx.optimizationOpts.onlyLowerFuns.count(F)) {
-            continue;
-          }
-
-          Backend &B = provisioner_->getBackend(dagNode->backendName);
-          RETURN_IF_EXPECTED_IS_ERR(B.transformPostOptPipeline(F, cctx));
-
-          RETURN_ERR_IF_NOT(
-              B.verify(*F, cctx.verboseCompile),
-              "Unsupported node(s) found after transformPostOptPipeline() " +
-                  F->getName().str() + " for backend " + B.getBackendName());
-        }
-      }
-    }
-  }
-
-  // If requested, serialize the resulting DAG that was just optimized and
-  // partitioned.
-  if (cctx.serializeCompiledDAG) {
-    std::string loc;
-    char *envSpecifiedSerializationPath = getenv("GLOW_DAG_SERIALIZATION_LOC");
-    if (!envSpecifiedSerializationPath) {
-      loc = nodeList.begin()->root->name + ".onnxtxt";
-    } else {
-      loc = std::string(envSpecifiedSerializationPath);
-    }
-
-    LOG(INFO) << "Serializing final compiled DAG to " << loc;
-    {
-      llvm::StringMap<std::string> extraMetadataProps;
-      if (cctx.precisionConfig.originNameToTQPMap) {
-        RETURN_IF_ERR(ONNXModelWriter::insertLoaderNameUniqueOffsetMetadata(
-            extraMetadataProps, *cctx.precisionConfig.originNameToTQPMap));
-      }
-      Error writeErr = Error::empty();
-      ONNXModelWriter onnxWR(
-          loc, nodeList, 7, 9, &writeErr,
-          /* textMode */ true, /* zipMode */ false,
-          /* includeConstantData */ false, extraMetadataProps, record,
-          cctx.backendOpts.backendSpecificNodeInfo, &cctx.loadedPHNames,
-          &cctx.staticPlaceholderTypesForAOT);
-      RETURN_IF_ERR(writeErr);
-    }
-
-    // If we're using AOT DAG optimizer then skip provisioning.
-    if (cctx.callDAGOptimizer && cctx.useDAGOptimizerAOTMode) {
-      LOG(INFO) << "Skipping provisioning because DAG optimizer and AOT mode "
-                   "were enabled.";
-      {
-        std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-        cleanupAddNetwork(names);
-      }
-      debugDumpDAGGuard.dismiss();
-      cleanupConstantFolding(*module, record);
-      if (cctx.dumpFinalGraph) {
-        for (Function *F : module->getFunctions()) {
-          auto fname =
-              strFormat("%sfinal_graph_aot_%s.dot", cctx.dumpGraphPath.c_str(),
-                        F->getName().data());
-          LOG(INFO) << "Dumping final graph to " << fname;
-          F->dumpDAG(fname);
-        }
-      }
-      return Error::success();
-    }
-  }
-
-  // Now that we've serialized the model if requested, cleanup the temporary
-  // Functions and PHs used for constant folding.
-  cleanupConstantFolding(*module, record);
-
-  auto err = provisioner_->provision(nodeList, *module, cctx);
+  VLOG(1) << "Before provisioning";
+  auto err =
+      provisioner_->provisionFX(networks, *module, FXIR, constants, cctx);
   if (err) {
+    if (err.peekErrorValue()->isFatalError()) {
+      statsExporterRegistry_->setCounter(kDeviceFatalError, 1);
+    }
     {
       std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
       cleanupAddNetwork(names);
     }
-    return err;
+    RETURN_ERR(err);
   }
-  debugDumpDAGGuard.dismiss();
 
+  VLOG(1) << "Calculation of maxActiveRequests";
   {
     std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
     /// Calculate networkMaxActive requests. Then update
@@ -550,14 +733,14 @@ Error HostManager::addNetwork(std::unique_ptr<Module> module,
 
     // Find the minimum on device replication.
     unsigned minReplications{1};
-    for (auto &node : nodeList) {
+    for (auto &node : networks) {
       for (auto &dag : node.nodes) {
         minReplications = std::min(dag->replicationCount, minReplications);
       }
     }
     unsigned product{0};
-    if (nodeList.size() && nodeList[0].nodes.size()) {
-      product = nodeList[0].nodes[0]->instanceCount *
+    if (networks.size() && networks[0].nodes.size()) {
+      product = networks[0].nodes[0]->instanceCount *
                 cctx.maxActiveRequestsPerInstance * minReplications;
     } else {
       return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_ERROR,
@@ -567,24 +750,26 @@ Error HostManager::addNetwork(std::unique_ptr<Module> module,
     config_.maxActiveRequests = std::min(product, maxActiveRequests);
 
     // Create pool of cachedExecutionStates.
-    for (auto &node : nodeList) {
+    for (auto &node : networks) {
       // Note: currently getNextNetworkExecutionState assumes that pool size is
       // >= currentInFlight requests, so we set pool size to maxActiveRequests.
       executor_->createPool(node.root.get(), config_.maxActiveRequests,
-                            cctx.enableP2P || GlowEnableP2P,
-                            cctx.enableDRT || GlowEnableDRT);
+                            cctx.enableP2P, cctx.enableDRT);
     }
   }
   // Clear constants contents from the module then put it in a
   // shared_ptr to be shared between all of the networks created from each
   // function in the module.
-  if (!cctx.skipModuleStrip) {
+  auto targetBackendName = std::string(devices_[0]->getBackendName());
+  const auto &targetBackend = provisioner_->getBackend(targetBackendName);
+  if (targetBackend.shouldStripModule() && !cctx.skipModuleStrip) {
     module->strip();
   }
+  VLOG(1) << "Cleanup";
   auto sharedModule = std::shared_ptr<Module>(std::move(module));
   {
     std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-    for (auto &node : nodeList) {
+    for (auto &node : networks) {
       LOG(INFO) << "Successfully compiled and provisioned " << node.root->name;
       auto &networkData = networks_[(node.root)->name];
       networkData.dag = std::move(node);
@@ -592,14 +777,15 @@ Error HostManager::addNetwork(std::unique_ptr<Module> module,
     }
     cleanupAddNetwork(names);
   }
-
+  VLOG(1) << "After cleanup";
   return Error::success();
 }
+#endif
 
 std::unordered_map<std::string, std::vector<DeviceIDTy>>
 HostManager::getDevicePartitionMapping(llvm::StringRef network) {
   std::unordered_map<std::string, std::vector<DeviceIDTy>> mapping;
-  auto it = networks_.find(network);
+  auto it = networks_.find(network.str());
   if (it != networks_.end()) {
     auto &nodeList = it->second.dag.nodes;
     for (auto &node : nodeList) {
@@ -618,6 +804,12 @@ Error HostManager::addNetworkForNestPartition(
     std::string profilePath, std::string partitionPlanFile,
     std::string bundleDir, std::string quantFileName, int profileMode,
     int partitionExe) {
+#ifdef FACEBOOK_INTERNAL
+  LOG(WARNING) << "Adding Glow network built with revision hash: "
+               << revisionHash;
+
+#endif /* FACEBOOK_INTERNAL */
+  VLOG(1) << "addNetwork";
   ScopeGuard debugDumpDAGGuard([&]() {
     if (cctx.dumpFinalGraph) {
       for (Function *F : module->getFunctions()) {
@@ -642,7 +834,7 @@ Error HostManager::addNetworkForNestPartition(
     std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
     auto functions = module->getFunctions();
     for (auto &F : functions) {
-      std::string name = F->getName();
+      std::string name = F->getName().str();
       auto it = networks_.find(name);
       if (it != networks_.end() ||
           processingNetworks_.find(name) != processingNetworks_.end()) {
@@ -678,19 +870,29 @@ Error HostManager::addNetworkForNestPartition(
   }
 
   std::vector<DeviceInfo> deviceInfo = getDeviceInfoList();
-  //  {
-  //    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-  //    for (auto &device : availableDevices_) {
-  //      DeviceInfo info = devices_[device]->getDeviceInfo();
-  //      info.availableMemory = devices_[device]->getAvailableMemory();
-  //      info.backendName = devices_[device]->getBackendName();
-  //      info.nonSupportedNodes =
-  //          devices_[device]->getParamByName("nonSupportedNodes");
-  //      info.supportedNodes =
-  //      devices_[device]->getParamByName("supportedNodes");
-  //      deviceInfo.push_back(info);
-  //    }
-  //  }
+  for (auto &info : deviceInfo) {
+    // If p2p is enabled update the inputCount limit.
+    if (cctx.enableP2P) {
+      info.inputCountMax = P2PInputLimit;
+    }
+  }
+  // {
+  //   std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+  //   for (auto &device : availableDevices_) {
+  //     DeviceInfo info = devices_[device]->getDeviceInfo();
+  //     info.availableMemory = devices_[device]->getAvailableMemory();
+  //     info.backendName = devices_[device]->getBackendName().str();
+  //     info.nonSupportedNodes =
+  //         devices_[device]->getParamByName("nonSupportedNodes").str();
+  //     info.supportedNodes =
+  //         devices_[device]->getParamByName("supportedNodes").str();
+  //     // If p2p is enabled update the inputCount limit.
+  //     if (cctx.enableP2P) {
+  //       info.inputCountMax = P2PInputLimit;
+  //     }
+  //     deviceInfo.push_back(info);
+  //   }
+  // }
 
   // Optimize Functions only if we don't have any backendSpecificNodeInfo,
   // because if we do then the Functions were already optimized and Nodes had
@@ -699,17 +901,9 @@ Error HostManager::addNetworkForNestPartition(
   const bool skipOptimizations =
       cctx.loadingAOTModel || !cctx.backendOpts.backendSpecificNodeInfo.empty();
 
-  // Flag to check whether we are in profiling mode.
-  bool profilingMode =
-      (cctx.precisionConfig.quantMode == QuantizationMode::Profile);
-
   // Perform a round of target-independent graph optimizations. This helps the
   // partitioner to do its job more efficiently.
-  // When profiling we skip the optimization since in order for the quantization
-  // to be done properly same optimizations must be performed until the lowering
-  // stage for both the profiling and quantization path. Since the quantization
-  // for Ahead Of Time mode lacks this optimization we must disable it also.
-  if (!skipOptimizations && !profilingMode) {
+  if (!skipOptimizations) {
     for (Function *F : module->getFunctions()) {
       auto err = optimizeFunctionBeforeLowering(F, cctx);
       if (err) {
@@ -717,17 +911,17 @@ Error HostManager::addNetworkForNestPartition(
           std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
           cleanupAddNetwork(names);
         }
-        return err;
+        RETURN_ERR(err);
       }
     }
   }
+  VLOG(1) << "Before partitioner";
   NestPartitioner partitioner(module.get(), deviceInfo, skipOptimizations,
                               PartitionConfig(), quantFileName);
-  if (cctx.enableP2P || cctx.enableDRT) {
-    partitioner.setContextCount(cctx.maxActiveRequestsPerInstance);
-  } else {
-    partitioner.setContextCount(2);
-  }
+  auto backendName = devices_[0]->getBackendName();
+  const auto &backend = provisioner_->getBackend(backendName);
+  auto contextCount = backend.getContextCount(cctx);
+  partitioner.setContextCount(contextCount);
   DAGListTy nodeList;
   // auto result = partitioner.partition(cctx);
   std::cout << "bundle dir = " << bundleDir << std::endl;
@@ -737,14 +931,15 @@ Error HostManager::addNetworkForNestPartition(
   auto result =
       partitioner.partition(cctx, exeType, profilePath, partitionPlanFile,
                             profileMode, partitionExe, &puIdxMap);
+  VLOG(1) << "After partitioner";
   if (result) {
     nodeList = std::move(result.get());
   } else {
     std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
     cleanupAddNetwork(names);
-    return result.takeError();
+    RETURN_ERR(result.takeError());
   }
-
+  VLOG(1) << "Before quantmode";
   if (cctx.precisionConfig.quantMode == QuantizationMode::Profile) {
     // Since for profiling the provisioner will be reset, we only allow one
     // network in one HM.
@@ -767,6 +962,7 @@ Error HostManager::addNetworkForNestPartition(
     executor_.reset(new ThreadPoolExecutor(devices_, config_.executorThreads));
   }
 
+  VLOG(1) << "Before replace dummy TQPs";
   // Now that we've partitioned and optimized, do some verification based on the
   // dummy mode we're using, if any.
   if (cctx.precisionConfig.replaceDummyTQPs ||
@@ -775,6 +971,17 @@ Error HostManager::addNetworkForNestPartition(
         cctx.precisionConfig.loadUniquedDummyQParams));
   }
 
+  // If we are loading an AOT model where we are replacing dummy TQPs, then we
+  // may need to update Relu output types on FCs, since they should be set to
+  // use zero as min but the correct qparams could not be calculated AOT.
+  if (cctx.loadingAOTModel && cctx.precisionConfig.replaceDummyTQPs) {
+    LOG(INFO) << "Updating quantized Relu types given real TQPs";
+    for (Function *F : module->getFunctions()) {
+      updateQuantReluTypes(F);
+    }
+  }
+
+  VLOG(1) << "Before constant folding";
   // If we prevented constant modification then run constant folding with
   // recording now. Record so that if we are going to serialize we can embed the
   // constant folding subgraphs in the Glow ONNX model.
@@ -801,7 +1008,7 @@ Error HostManager::addNetworkForNestPartition(
               F->getName().str() + " for backend " + B.getBackendName());
     }
   }
-
+  VLOG(1) << "Before loading AOT";
   if (!cctx.loadingAOTModel) {
     if (cctx.callDAGOptimizer) {
 #if FACEBOOK_INTERNAL
@@ -810,12 +1017,13 @@ Error HostManager::addNetworkForNestPartition(
       if (optDagErr) {
         std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
         cleanupAddNetwork(names);
-        return optDagErr;
+        RETURN_ERR(optDagErr);
       }
 #endif /* FACEBOOK_INTERNAL */
     } else {
       // If not using the DAG optimizer, iterate over the DAGs and call
       // transformPostOptPipeline() on the Functions.
+      VLOG(1) << "No DAG optimizer";
       for (const auto &dag : nodeList) {
         for (auto &dagNode : dag.nodes) {
           Function *F = module->getFunction(dagNode->name);
@@ -838,6 +1046,7 @@ Error HostManager::addNetworkForNestPartition(
     }
   }
 
+  VLOG(1) << "Before serialize compile DAG";
   // If requested, serialize the resulting DAG that was just optimized and
   // partitioned.
   if (cctx.serializeCompiledDAG) {
@@ -856,20 +1065,31 @@ Error HostManager::addNetworkForNestPartition(
         RETURN_IF_ERR(ONNXModelWriter::insertLoaderNameUniqueOffsetMetadata(
             extraMetadataProps, *cctx.precisionConfig.originNameToTQPMap));
       }
+      if (cctx.precisionConfig.clipQuantRangeToFP16) {
+        extraMetadataProps[clipQuantRangeToFP16Key] = "1";
+      }
       Error writeErr = Error::empty();
+      // Note: If cctx.skipProvisioning then we want to serialize all meta info
+      // as we are likely doing AOT optimization. Otherwise do not provide the
+      // meta info as the model does not need to be reloaded.
       ONNXModelWriter onnxWR(
           loc, nodeList, 7, 9, &writeErr,
-          /* textMode */ true, /* zipMode */ false,
-          /* includeConstantData */ false, extraMetadataProps, record,
-          cctx.backendOpts.backendSpecificNodeInfo, &cctx.loadedPHNames,
-          &cctx.staticPlaceholderTypesForAOT);
+          /* textMode */ true,
+          /* zipMode */ cctx.useZipModeForSerializeCompiledDAG,
+          /* includeConstantData */ cctx.saveConstantInSerializeCompiledDAG,
+          extraMetadataProps, record, cctx.backendOpts.backendSpecificNodeInfo,
+          cctx.skipProvisioning ? &cctx.loadedPHNames : nullptr,
+          cctx.skipProvisioning ? &cctx.staticPlaceholderTypesForAOT : nullptr,
+          cctx.returnGlowSerializedModelStr
+              ? cctx.glowAOTSerializationModelStrPtr.get()
+              : nullptr);
       RETURN_IF_ERR(writeErr);
     }
 
     // If we're using AOT DAG optimizer then skip provisioning.
-    if (cctx.callDAGOptimizer && cctx.useDAGOptimizerAOTMode) {
-      LOG(INFO) << "Skipping provisioning because DAG optimizer and AOT mode "
-                   "were enabled.";
+    if (cctx.skipProvisioning ||
+        (cctx.callDAGOptimizer && cctx.useDAGOptimizerAOTMode)) {
+      LOG(INFO) << "Host manager skipping provisioning";
       {
         std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
         cleanupAddNetwork(names);
@@ -892,19 +1112,22 @@ Error HostManager::addNetworkForNestPartition(
   // Now that we've serialized the model if requested, cleanup the temporary
   // Functions and PHs used for constant folding.
   cleanupConstantFolding(*module, record);
-
+  VLOG(1) << "Before provisioning";
   // auto err = provisioner_->provision(nodeList, *module, cctx);
   auto err = provisioner_->provisionForNestPartition(nodeList, *module, cctx,
                                                      bundleDir, &puIdxMap);
   if (err) {
+    if (err.peekErrorValue()->isFatalError()) {
+      statsExporterRegistry_->setCounter(kDeviceFatalError, 1);
+    }
     {
       std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
       cleanupAddNetwork(names);
     }
-    return err;
+    RETURN_ERR(err);
   }
   debugDumpDAGGuard.dismiss();
-
+  VLOG(1) << "Calculation of maxActiveRequests";
   {
     std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
     /// Calculate networkMaxActive requests. Then update
@@ -935,39 +1158,44 @@ Error HostManager::addNetworkForNestPartition(
       // Note: currently getNextNetworkExecutionState assumes that pool size is
       // >= currentInFlight requests, so we set pool size to maxActiveRequests.
       executor_->createPool(node.root.get(), config_.maxActiveRequests,
-                            cctx.enableP2P || GlowEnableP2P,
-                            cctx.enableDRT || GlowEnableDRT);
+                            cctx.enableP2P, cctx.enableDRT);
     }
   }
   // Clear constants contents from the module then put it in a
   // shared_ptr to be shared between all of the networks created from each
   // function in the module.
-  if (!cctx.skipModuleStrip) {
+  auto targetBackendName = std::string(devices_[0]->getBackendName());
+  const auto &targetBackend = provisioner_->getBackend(targetBackendName);
+  if (targetBackend.shouldStripModule() && !cctx.skipModuleStrip) {
     module->strip();
   }
+  VLOG(1) << "Cleanup";
   auto sharedModule = std::shared_ptr<Module>(std::move(module));
   {
     std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
     for (auto &node : nodeList) {
+#if FACEBOOK_INTERNAL
       LOG(INFO) << "Successfully compiled and provisioned " << node.root->name;
+#endif
       auto &networkData = networks_[(node.root)->name];
       networkData.dag = std::move(node);
       networkData.module = sharedModule;
     }
     cleanupAddNetwork(names);
   }
-
+  VLOG(1) << "After cleanup";
   return Error::success();
 }
 
 Error HostManager::removeNetwork(llvm::StringRef networkName) {
   std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-  auto networkIterator = networks_.find(networkName);
+  auto networkIterator = networks_.find(networkName.str());
   if (networkIterator == networks_.end()) {
     return Error::success();
   }
 
-  if (processingNetworks_.find(networkName) != processingNetworks_.end()) {
+  if (processingNetworks_.find(networkName.str()) !=
+      processingNetworks_.end()) {
     // Return an error, the network is in an incomplete state likely because
     // it is still being added by a different call.
     return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_NET_BUSY,
@@ -992,8 +1220,8 @@ Error HostManager::removeNetwork(llvm::StringRef networkName) {
   executor_->freePool(networkIterator->second.dag.root.get());
   for (auto &node : nodes) {
     for (auto device : node->deviceRuntimeInfos) {
-      Error evictErr =
-          provisioner_->evictFunction(node->name, devices_[device.first].get());
+      Error evictErr = provisioner_->evictFunction(
+          node->name, devices_[device.first].get(), node->replicationCount);
       err.set(std::move(evictErr));
     }
     // Also remove compiledFunction from Provisioner.
@@ -1001,12 +1229,12 @@ Error HostManager::removeNetwork(llvm::StringRef networkName) {
   }
   networks_.erase(networkIterator);
   exportMemoryCounters();
-  return err.get();
+  RETURN_ERR(err.get());
 }
 
 bool HostManager::networkAdded(llvm::StringRef networkName) {
   std::shared_lock<std::shared_timed_mutex> networkLock(networkLock_);
-  return networks_.find(networkName) != networks_.end();
+  return networks_.find(networkName.str()) != networks_.end();
 }
 
 Error HostManager::clearHost() {
@@ -1033,7 +1261,7 @@ Error HostManager::clearHost() {
   statsExporterRegistry_->setCounter(kDeviceMemoryAvailable, 0);
   statsExporterRegistry_->setCounter(kDeviceMemoryMax, 0);
 
-  return errContainer.get();
+  RETURN_ERR(errContainer.get());
 }
 
 Error HostManager::runNetworkBlocking(llvm::StringRef networkName,
@@ -1144,23 +1372,24 @@ HostManager::runNetwork(llvm::StringRef networkName,
                         ResultCBTy callback, uint64_t priority) {
   DCHECK(callback != nullptr);
 
-  TRACE_EVENT_SCOPE(context->getTraceContext(), TraceLevel::RUNTIME,
-                    "HostManager::runNetwork");
+  TRACE_EVENT_SCOPE_NAMED(context->getTraceContext(), TraceLevel::RUNTIME,
+                          "HostManager::runNetwork", traceBlock);
   auto currentRun = totalRequestCount_++;
+  traceBlock.addArg("glowRequestId", llvm::formatv("{0}", currentRun).str());
   uint64_t requestReceived = TraceEvent::now();
   size_t queueSize = 0;
 
   NetworkData *network = nullptr;
   {
     std::shared_lock<std::shared_timed_mutex> networkLock(networkLock_);
-    auto it = networks_.find(networkName);
+    auto it = networks_.find(networkName.str());
     if (it != networks_.end()) {
       network = &it->second;
       network->refcount++;
     }
 
     if (network == nullptr) {
-      TRACE_EVENT_SCOPE_END();
+      TRACE_EVENT_SCOPE_END_NAMED(traceBlock);
       callback(
           currentRun,
           MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_NET_NOT_FOUND,
@@ -1175,7 +1404,7 @@ HostManager::runNetwork(llvm::StringRef networkName,
       if (queueSize >= config_.maxQueueSize) {
         // The queue is full, return an error.
         network->refcount--;
-        TRACE_EVENT_SCOPE_END();
+        TRACE_EVENT_SCOPE_END_NAMED(traceBlock);
         callback(
             currentRun,
             MAKE_ERR(
@@ -1190,11 +1419,11 @@ HostManager::runNetwork(llvm::StringRef networkName,
     }
     reportCurrentQueueSize(queueSize);
     // Setup the request
-    InferRequest queuedRequest(networkName, std::move(context), callback,
+    InferRequest queuedRequest(networkName.str(), std::move(context), callback,
                                priority, currentRun, requestReceived);
     {
       std::unique_lock<std::shared_timed_mutex> lock(inferQueueLock_);
-      TRACE_EVENT_SCOPE_END();
+      TRACE_EVENT_SCOPE_END_NAMED(traceBlock);
       inferQueue_.push(std::move(queuedRequest));
     }
   }
@@ -1273,10 +1502,27 @@ runtime::generateDeviceConfigs(unsigned int numDevices,
   if (!loadDeviceConfigsFromFile(configs, memSize)) {
     // If there is no device config file, use numDevices to generate the
     // configs.
+    std::vector<unsigned> available_device_ids;
+    if (glow::flags::ScanDevices) {
+      const auto &factories =
+          FactoryRegistry<std::string, Backend>::factories();
+      auto it = factories.find(backendName.str());
+      if (it != factories.end()) {
+        available_device_ids = it->second->scanDeviceIDs();
+      }
+      CHECK_GE(available_device_ids.size(), 0) << "No devices found.";
+      CHECK_GE(available_device_ids.size(), numDevices)
+          << "Not enough devices found.";
+    }
     for (unsigned int i = 0; i < numDevices; ++i) {
       auto config = glow::make_unique<runtime::DeviceConfig>(backendName);
       config->setDeviceMemory(memSize);
-      config->deviceID = i;
+      if (glow::flags::ScanDevices) {
+        config->deviceID = available_device_ids.back();
+        available_device_ids.pop_back();
+      } else {
+        config->deviceID = i;
+      }
       configs.push_back(std::move(config));
     }
   }
@@ -1298,6 +1544,7 @@ bool runtime::loadDeviceConfigsFromFile(
     auto parameters = getBackendParams(lists[i].parameters_.str);
     auto config = glow::make_unique<runtime::DeviceConfig>(configBackendName,
                                                            name, parameters);
+    config->deviceID = i;
     // msyu
     // config->setDeviceMemory(memSize);
     config->setDeviceMemory(stoi(lists[i].dramMemory_));
@@ -1312,6 +1559,12 @@ Backend &HostManager::getBackend(llvm::StringRef backendName) const {
 
 Expected<Backend *> HostManager::getBackend() const {
   return provisioner_->getBackend();
+}
+
+std::unique_ptr<
+    std::unordered_map<std::string, std::unique_ptr<BlockStreamBase>>>
+HostManager::getAllSerializedFunctions() {
+  return provisioner_->getAllSerializedFunctionsMap();
 }
 
 HostManager *HostManagerRegistry::getHostManager() { return hostManager_; }

@@ -33,6 +33,12 @@
 #include <unordered_map>
 #include <vector>
 
+#if FACEBOOK_INTERNAL
+namespace folly {
+struct dynamic;
+}
+#endif
+
 namespace glow {
 
 struct PartitionerCompileOptions;
@@ -154,6 +160,10 @@ class HostManager final {
   static constexpr const char *kDeviceMemoryMax =
       "glow.devices.maximum_memory.total";
 
+  /// String const for logging device fatal errors.
+  static constexpr const char *kDeviceFatalError =
+      "glow.devices.fatal_compilation_error";
+
   /// Helper function to handle cleanup if an error occurs during addNetwork.
   /// This must be called while holding the a lock on networkLock_.
   void cleanupAddNetwork(llvm::ArrayRef<std::string> names);
@@ -212,6 +222,19 @@ public:
     provisioner_->setCompileOptions(compileOptions);
   }
 
+/// Adds the already partitioned FX \p FXIR network to the host and does the
+/// necessary setup work. This includes provisioning, compiling and
+/// initializing backends. Requires a  DAG \p networks to be provided.
+/// \returns an Error containing the results of the operation. This function
+/// consumes the \p module so any pointers to data contained within the module
+/// should be considered invalid. The function is optimized based on \p cctx.
+/// Constants are provided with a stringmap \p constants.
+#if FACEBOOK_INTERNAL
+  Error addNetworkFX(std::unique_ptr<Module> module, CompilationContext &cctx,
+                     DAGListTy &networks, const folly::dynamic &FXIR,
+                     const llvm::StringMap<const void *> &constants);
+#endif
+
   /// Given \p networkName removes that network from the host. This also
   /// removes the network from any backends setup to execute it.
   /// \returns an Error indicating success or failure of the operation.
@@ -219,6 +242,12 @@ public:
 
   /// Update the list of available devices.
   void setAvailableDevices(const std::vector<DeviceIDTy> &devices);
+
+  /// Returns a string map containing the name and block-stream for all
+  /// serialized functions.
+  std::unique_ptr<
+      std::unordered_map<std::string, std::unique_ptr<BlockStreamBase>>>
+  getAllSerializedFunctions();
 
   /// For a given \p network returns all partitions of that network and the
   /// devices each partition is assigned to.
