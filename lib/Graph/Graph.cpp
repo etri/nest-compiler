@@ -16,6 +16,7 @@
  */
 #include "glow/Graph/Graph.h"
 #include "glow/Backend/Backend.h"
+#include "glow/Flags/Flags.h"
 #include "glow/Graph/Nodes.h"
 #include "glow/Graph/PlaceholderBindings.h"
 #include "glow/Graph/TensorLayout.h"
@@ -29,6 +30,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
 #ifdef WIN32
@@ -314,7 +316,7 @@ protected:
       os << "|";
       std::vector<std::string> names(N->getNumResults());
       for (size_t i = 0; i < names.size(); i++) {
-        names[i] = N->getOutputName(i).str();
+        names[i] = N->getOutputName(i);
       }
       dumpLabelForRow(names, os);
     }
@@ -420,7 +422,7 @@ class ModuleDottyPrinter : public AbstractDottyPrinter {
           continue;
 
         std::ostringstream edge;
-        edge << uniqueVertexName(to) << ":" << to->getOutputName(resNo).str()
+        edge << uniqueVertexName(to) << ":" << to->getOutputName(resNo)
              << " -> " << uniqueVertexName(F);
         dumpEdgeStyle(&N, i, to, edge);
         edges_.insert(edge.str());
@@ -455,8 +457,13 @@ void Module::dumpDAG(llvm::StringRef dotFilename) {
   DP.visitModule(this);
 
   std::ofstream myfile;
-  myfile.open(dotFilename);
-  DP.dumpAll(myfile);
+  myfile.open(dotFilename.str());
+  if (myfile.fail()) {
+    LOG(ERROR) << "Unable to open " << dotFilename.str()
+               << ", reason: " << strerror(errno);
+  } else {
+    DP.dumpAll(myfile);
+  }
   myfile.close();
 }
 
@@ -553,6 +560,17 @@ TypeRef Module::uniqueTypeWithNewShape(TypeRef T, llvm::ArrayRef<dim_t> dims,
 
 TypeRef Module::uniqueTypeWithNewShape(TypeRef T, TypeRef shapeType) {
   return uniqueType(Type::newShape(*T, shapeType));
+}
+
+TypeRef Module::uniqueTypeWithNewStrides(TypeRef T, llvm::ArrayRef<dim_t> dims,
+                                         llvm::ArrayRef<dim_t> strides) {
+  return uniqueType(Type::newStrides(*T, strides));
+}
+
+TypeRef Module::uniqueTypeWithNewQuantParams(TypeRef T,
+                                             TypeRef quantParamType) {
+  return uniqueType(Type::newQuantparams(*T, quantParamType->getScale(),
+                                         quantParamType->getOffset()));
 }
 
 TypeRef Module::uniqueType(const Type &T) {
@@ -665,7 +683,7 @@ Constant *Module::createConstant(llvm::StringRef name, Tensor &&tensor,
 }
 
 std::string Module::getPrefix(llvm::StringRef name) {
-  std::string prefix = name;
+  std::string prefix = name.str();
   size_t delim = name.rfind("__");
   if (delim != std::string::npos &&
       std::all_of(name.begin() + (delim + 2), name.end(),
@@ -803,11 +821,11 @@ static void assertConvDims(NodeValue input, NodeValue filter, NodeValue bias,
   ShapeNHWC filterDims(filter.dims());
   (void)filterDims;
 
-  //  assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
-  //         filterDims.w == kdim.width && filterDims.c == idim.c / group &&
-  //         "Invalid filter dims");
-  //
-  //  assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
+  // assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
+  //        filterDims.w == kdim.width && filterDims.c == idim.c / group &&
+  //        "Invalid filter dims");
+
+  // assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
 }
 
 #ifdef GLOW_WITH_VTA
@@ -830,13 +848,12 @@ static void assertVTAConvDims(NodeValue input, NodeValue filter, NodeValue bias,
   // batch size. The rest of the dimensions are representative of the input
   // dimensions to the convolution.
   // ShapeNHWC filterDims(filter.dims());
-  //(void)filterDims;
+  // (void)filterDims;
 
-  /*
-  assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
-         filterDims.w == kdim.width && filterDims.c == idim.c / group &&
-         "Invalid filter dims");
-*/
+  // assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
+  //       filterDims.w == kdim.width && filterDims.c == idim.c / group &&
+  //       "Invalid filter dims");
+
   // assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
 }
 #endif
@@ -872,7 +889,9 @@ ConvolutionNode *Function::createConv(
     llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
     TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
+    ConvolutionLayout layout) {
+  // assertConvDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
 
   // If the input is quantized but the bias is not then auto-quantize the
@@ -896,7 +915,7 @@ ConvolutionNode *Function::createConv(
 
   return addNode(new ConvolutionNode(name, OT, input, filter, bias, kernels,
                                      strides, pads, group, dilation, layout,
-                                     FusedActivation::NONE));
+                                     FusedActivation::NONE, {}));
 }
 
 #ifdef GLOW_WITH_VTA
@@ -904,7 +923,8 @@ VTAConvolutionNode *Function::createVTAConv(
     llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
     TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
+    ConvolutionLayout layout) {
   assertConvDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
 
@@ -936,7 +956,8 @@ VTAConvolutionNode *
 Function::createVTAConv(llvm::StringRef name, NodeValue input, NodeValue filter,
                         NodeValue bias, TypeRef outTy, unsigned_t kernel,
                         unsigned_t stride, unsigned_t pad, unsigned_t group,
-                        unsigned_t dilation, ConvolutionLayout layout) {
+                        llvm::ArrayRef<unsigned_t> dilation,
+                        ConvolutionLayout layout) {
   llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
   llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
@@ -948,7 +969,8 @@ VTAInterpreterConvolutionNode *Function::createVTAInterpreterConv(
     llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
     TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
+    ConvolutionLayout layout) {
   assertConvDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
 
@@ -979,7 +1001,8 @@ VTAInterpreterConvolutionNode *Function::createVTAInterpreterConv(
 VTAInterpreterConvolutionNode *Function::createVTAInterpreterConv(
     llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
     TypeRef outTy, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-    unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
+    ConvolutionLayout layout) {
   llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
   llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
@@ -992,7 +1015,8 @@ ConvolutionNode *Function::createConv(llvm::StringRef name, NodeValue input,
                                       NodeValue filter, NodeValue bias,
                                       TypeRef outTy, unsigned_t kernel,
                                       unsigned_t stride, unsigned_t pad,
-                                      unsigned_t group, unsigned_t dilation,
+                                      unsigned_t group,
+                                      llvm::ArrayRef<unsigned_t> dilation,
                                       ConvolutionLayout layout) {
   llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
@@ -1050,7 +1074,7 @@ ConvTransposeNode *Function::createConvTranspose(
     llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
     TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t group, unsigned_t dilation) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation) {
   assertConvTransposeDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
   return addNode(new ConvTransposeNode(name, OT, input, filter, bias, kernels,
@@ -1060,7 +1084,7 @@ ConvTransposeNode *Function::createConvTranspose(
 ConvTransposeNode *Function::createConvTranspose(
     llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
     TypeRef outTy, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-    unsigned_t group, unsigned_t dilation) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation) {
   llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
   llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
@@ -1219,6 +1243,30 @@ GemmNode *Function::createGemm(llvm::StringRef name, TypeRef outTy, NodeValue A,
       new GemmNode(name, OT, A, B, C, alpha, beta, transposeA, transposeB));
 }
 
+DynamicQuantizedFullyConnectedNode *
+Function::createDynamicQuantizedFullyConnected(llvm::StringRef name,
+                                               NodeValue input, NodeValue W,
+                                               NodeValue B, bool isSymmetric,
+                                               bool isPerBatchElement) {
+  TypeRef T = input.getType();
+  TypeRef OT =
+      getParent()->uniqueTypeWithNewShape(T, {input.dims()[0], B.dims()[0]});
+  return addNode(new DynamicQuantizedFullyConnectedNode(
+      name, OT, input, W, B, isSymmetric, isPerBatchElement));
+}
+
+DynamicRowwiseQuantizedFullyConnectedNode *
+Function::createDynamicRowwiseQuantizedFullyConnected(
+    llvm::StringRef name, NodeValue input, NodeValue W, NodeValue B,
+    NodeValue scales, NodeValue offsets, bool isSymmetric,
+    bool isPerBatchElement) {
+  TypeRef T = input.getType();
+  TypeRef OT =
+      getParent()->uniqueTypeWithNewShape(T, {input.dims()[0], B.dims()[0]});
+  return addNode(new DynamicRowwiseQuantizedFullyConnectedNode(
+      name, OT, input, W, B, scales, offsets, isSymmetric, isPerBatchElement));
+}
+
 FullyConnectedNode *Function::createFullyConnected(llvm::StringRef name,
                                                    NodeValue input, Storage *W,
                                                    Storage *B,
@@ -1246,7 +1294,6 @@ FullyConnectedNode *Function::createFullyConnected(llvm::StringRef name,
                                                    NodeValue B, TypeRef outTy,
                                                    unsigned_t axis) {
   assert(outTy->dims().size() == 2 && "Invalid number of dimensions");
-  assert(outTy->dims()[0] == input.dims()[0] && "Invalid dimensions");
 
   // FC always uses 2D input; flatten if necessary.
   if (input.dims().size() != 2) {
@@ -1259,7 +1306,7 @@ FullyConnectedNode *Function::createFullyConnected(llvm::StringRef name,
 
 RowwiseQuantizedFullyConnectedNode *
 Function::createRowwiseQuantizedFullyConnected(llvm::StringRef name,
-                                               NodeValue input, Constant *W,
+                                               NodeValue input, NodeValue W,
                                                Constant *scales,
                                                Constant *offsets, NodeValue B,
                                                TypeRef outTy) {
@@ -1269,7 +1316,7 @@ Function::createRowwiseQuantizedFullyConnected(llvm::StringRef name,
 
 RowwiseQuantizedFullyConnectedNode *
 Function::createRowwiseQuantizedFullyConnected(llvm::StringRef name,
-                                               NodeValue input, Constant *W,
+                                               NodeValue input, NodeValue W,
                                                NodeValue B, TypeRef outTy,
                                                quantization::Schema schema,
                                                bool transposeWeight) {
@@ -1277,10 +1324,13 @@ Function::createRowwiseQuantizedFullyConnected(llvm::StringRef name,
   // The quantized data is in qWeights, the scale of each row is in scales,
   // and the offset of each row is in offsets.
   Constant *weights = llvm::cast<Constant>(W);
-  dim_t numRows =
-      transposeWeight ? W->getType()->dims()[1] : W->getType()->dims()[0];
-  dim_t numCols =
-      transposeWeight ? W->getType()->dims()[0] : W->getType()->dims()[1];
+  CHECK(weights)
+      << "Expected RowwiseQuantizedFullyConnected weights to be a Constant";
+
+  dim_t numRows = transposeWeight ? weights->getType()->dims()[1]
+                                  : weights->getType()->dims()[0];
+  dim_t numCols = transposeWeight ? weights->getType()->dims()[0]
+                                  : weights->getType()->dims()[1];
 
   // So far, if we want to create a storage with Int8QTy/Int16QTy,
   // it is assumed to be quantized data and the scale and offset should be
@@ -1314,17 +1364,30 @@ Function::createRowwiseQuantizedFullyConnected(llvm::StringRef name,
       name, outTy, input, qWeights, scales, offsets, B));
 }
 
-ReluNode *Function::createRELU(llvm::StringRef name, NodeValue input,
-                               TypeRef outTy) {
+ReluNode *Function::createRelu(llvm::StringRef name, TypeRef outTy,
+                               NodeValue input) {
   return addNode(new ReluNode(name, outTy, input));
 }
 
-ReluNode *Function::createRELU(llvm::StringRef name, NodeValue input) {
-  return addNode(new ReluNode(name, input.getType(), input));
+ReluNode *Function::createRELU(llvm::StringRef name, NodeValue input,
+                               TypeRef outTy) {
+  return createRelu(name, outTy, input);
 }
 
-Node *Function::createGELU(llvm::StringRef name, NodeValue input) {
+ReluNode *Function::createRelu(llvm::StringRef name, NodeValue input) {
+  return createRelu(name, input.getType(), input);
+}
+
+ReluNode *Function::createRELU(llvm::StringRef name, NodeValue input) {
+  return createRelu(name, input);
+}
+
+GeluNode *Function::createGelu(llvm::StringRef name, NodeValue input) {
   return addNode(new GeluNode(name, input.getType(), input));
+}
+
+GeluNode *Function::createGELU(llvm::StringRef name, NodeValue input) {
+  return createGelu(name, input);
 }
 
 PReluNode *Function::createPRELU(llvm::StringRef name, NodeValue input,
@@ -1346,12 +1409,38 @@ SigmoidNode *Function::createSigmoid(llvm::StringRef name, NodeValue input) {
   return createSigmoid(name, input.getType(), input);
 }
 
+SwishNode *Function::createSwish(llvm::StringRef name, NodeValue input) {
+  return createSwish(name, getParent()->uniqueType(*input.getType()), input);
+}
+
+SwishNode *Function::createSwish(llvm::StringRef name, TypeRef OT,
+                                 NodeValue input) {
+  return addNode(new SwishNode(name, OT, input));
+}
+
 SwishNode *Function::createSwish(llvm::StringRef name, NodeValue input,
                                  TypeRef OT) {
-  if (!OT) {
-    OT = getParent()->uniqueType(*input.getType());
-  }
-  return addNode(new SwishNode(name, OT, input));
+  return createSwish(name, OT, input);
+}
+
+ClipNode *Function::createHardSigmoid(llvm::StringRef name, TypeRef outTy,
+                                      NodeValue input, float alpha,
+                                      float beta) {
+  auto ty = input.getType();
+
+  // max(0, min(1, alpha * x + beta))
+  auto *alphaSplat = createSplat(name.str() + ".alpha", ty, alpha);
+  auto *betaSplat = createSplat(name.str() + ".beta", ty, beta);
+
+  auto *mul = createMul(name.str() + ".mul", alphaSplat, input);
+  auto *add = createAdd(name.str() + ".add", mul, betaSplat);
+
+  return createClip(name.str() + ".clip", add, outTy, 0, 1);
+}
+
+ClipNode *Function::createHardSigmoid(llvm::StringRef name, NodeValue input,
+                                      float alpha, float beta) {
+  return createHardSigmoid(name, input.getType(), input, alpha, beta);
 }
 
 TanhNode *Function::createTanh(llvm::StringRef name, TypeRef outTy,
@@ -1363,12 +1452,20 @@ TanhNode *Function::createTanh(llvm::StringRef name, NodeValue input) {
   return createTanh(name, input.getType(), input);
 }
 
+SoftPlusNode *Function::createSoftPlus(llvm::StringRef name, NodeValue input,
+                                       TypeRef outTy) {
+  if (!outTy) {
+    outTy = getParent()->uniqueType(*input.getType());
+  }
+  return addNode(new SoftPlusNode(name, outTy, input));
+}
+
 SoftMaxNode *Function::createSoftMax(llvm::StringRef name, NodeValue input,
                                      NodeValue selected, TypeRef outTy,
                                      float beta) {
   // Create input multiplier with beta.
   if (beta != 1.0) {
-    auto *splat = createSplat(name, input.getType(), 1);
+    auto *splat = createSplat(name, input.getType(), beta);
     input = createMul(name, input, splat);
   }
   // By default, pick the input type.
@@ -1376,6 +1473,21 @@ SoftMaxNode *Function::createSoftMax(llvm::StringRef name, NodeValue input,
     outTy = getParent()->uniqueType(*input.getType());
   }
   return addNode(new SoftMaxNode(name, outTy, input, selected));
+}
+
+LogSoftMaxNode *Function::createLogSoftMax(llvm::StringRef name,
+                                           NodeValue input, NodeValue selected,
+                                           TypeRef outTy, float beta) {
+  // Create input multiplier with beta.
+  if (beta != 1.0) {
+    auto *splat = createSplat(name, input.getType(), beta);
+    input = createMul(name, input, splat);
+  }
+  // By default, pick the input type.
+  if (!outTy) {
+    outTy = getParent()->uniqueType(*input.getType());
+  }
+  return addNode(new LogSoftMaxNode(name, outTy, input, selected));
 }
 
 CrossEntropyLossNode *Function::createCrossEntropyLoss(llvm::StringRef name,
@@ -1408,7 +1520,8 @@ ReshapeNode *Function::createReshape(llvm::StringRef name, NodeValue input,
   auto TR = getParent()->uniqueTypeWithNewShape(input.getType(), shape);
   DCHECK_EQ(TR->size(), input.getType()->size())
       << "Reshape to a different size";
-  return addNode(new ReshapeNode(name, TR, input, shape.vec(), layout));
+  return addNode(
+      new ReshapeNode(name.str(), TR, input, shape.vec(), layout.str()));
 }
 
 TransposeNode *Function::createTranspose(llvm::StringRef name, NodeValue input,
@@ -1457,54 +1570,58 @@ FlipNode *Function::createFlip(llvm::StringRef name, NodeValue input,
   return addNode(new FlipNode(name, OT, input, axis));
 }
 
-Node *Function::createBroadcast(llvm::StringRef name, NodeValue input,
-                                UnsignedArrayRef newShape, unsigned_t axis) {
-  const auto &origDims = input.dims();
+BroadcastNode *Function::createBroadcast(llvm::StringRef name, NodeValue input,
+                                         UnsignedArrayRef newShape,
+                                         unsigned_t axis) {
+  auto OT = getParent()->uniqueTypeWithNewShape(input.getType(), newShape);
+  return addNode(new BroadcastNode(name, OT, input, axis, newShape.vec()));
+}
 
-  assert(axis + origDims.size() <= newShape.size() &&
-         "Axis must fit inside the newShape.");
+std::array<Node *, 2> Function::createRMSNorm(llvm::StringRef name, NodeValue X,
+                                              NodeValue gamma, NodeValue beta,
+                                              float epsilon) {
+  // np.square(X)
+  auto square = createSquare(name.str() + ".square", X);
 
-  // Iterate over the new shape; if the original shape had a dimension here
-  // (when considering the axis) then verify the dimension either matches the
-  // new shape (no action taken) or == 1 (broadcast in that direction). Else
-  // the original shape had no dimensions here (after considering axis), so
-  // add the new dimension and broadcast in that direction.
-  dim_t reshapeDims[max_tensor_dimensions];
-  for (dim_t i = 0; i < newShape.size(); i++) {
-    if (i >= axis && i < origDims.size() + axis) {
-      const int origIdx = i - axis;
-      if (origDims[origIdx] == newShape[i]) {
-        // Keep original dimensions; they are compatible.
-        reshapeDims[i] = origDims[origIdx];
-      } else if (origDims[origIdx] == 1) {
-        // Will broadcast this dimension to size from newShape.
-        reshapeDims[i] = 1;
-      } else {
-        // Incompatible dimensions for broadcasting
-        llvm_unreachable("Cannot broadcast with these dimensions.");
-      }
-    } else {
-      // Will broadcast this dimension to size from newShape.
-      reshapeDims[i] = 1;
-    }
-  }
+  // np.mean(np.square(X), axis=1)
+  auto mean = createBatchedReduceMean(name.str() + ".mean", square, {1});
 
-  // Reshape the input node to same number of dimensions as new shape, but
-  // with 1s in place of to-be-broadcasted dimensions.
-  Node *currNode =
-      createReshape(name.str() + ".reshape", input,
-                    llvm::ArrayRef<dim_t>(reshapeDims, newShape.size()));
+  // np.mean(np.square(X), axis=1) + eps
+  auto eps = getParent()->createConstant(ElemKind::FloatTy, 1, "eps");
+  eps->getPayloadMutable() = {epsilon};
+  auto bcastEps =
+      createBroadcast(name.str() + ".bcastEps", eps, {X.dims()[0]}, 0);
+  auto addEps = createAdd(name.str() + ".addEps", mean, bcastEps);
 
-  // Create a Tile (which is really a Concat) in each direction that needs to
-  // be broadcasted.
-  for (size_t i = 0; i < newShape.size(); i++) {
-    if (reshapeDims[i] == 1 && newShape[i] != 1) {
-      currNode = createTile(name.str() + ".tile" + std::to_string(i), currNode,
-                            newShape[i], i);
-    }
-  }
+  // np.sqrt(np.mean(np.square(X), axis=1) + eps)
+  auto sqrt = createPow(name.str() + ".sqrt", addEps, 0.5f);
 
-  return currNode;
+  // rrms = 1.0 / np.sqrt(np.mean(np.square(X), axis=1) + eps)
+  auto one = getParent()->createConstant(ElemKind::FloatTy, 1, "one");
+  one->getPayloadMutable() = {1};
+  auto bcastOne =
+      createBroadcast(name.str() + ".bcastOne", one, {X.dims()[0]}, 0);
+  auto rrms = createDiv(name.str() + ".rrms", bcastOne, sqrt);
+
+  // np.expand_dims(rrms, axis=1)
+  auto reshape = createReshape(name.str() + ".expandD", rrms, {X.dims()[0], 1});
+  auto bcastReshape =
+      createBroadcast(name.str() + ".bcastReshape", reshape, X.dims(), 0);
+
+  // X * np.expand_dims(rrms, axis=1)
+  auto mul = createMul(name.str() + "mul", X, bcastReshape);
+
+  // X * np.expand_dims(rrms, axis=1) * gamma
+  auto bcastGamma =
+      createBroadcast(name.str() + ".bcastGamma", gamma, X.dims(), 1);
+  auto mulGamma = createMul(name.str() + ".mulGamma", mul, bcastGamma);
+
+  // Y = X * np.expand_dims(rrms, axis=1) * gamma + beta
+  auto bcastBeta =
+      createBroadcast(name.str() + ".bcastBeta", beta, X.dims(), 1);
+  auto Y = createAdd(name.str() + ".Y", mulGamma, bcastBeta);
+
+  return {Y, rrms};
 }
 
 /// \returns true if \p T1 and T2 has the exact same type except for dimension
@@ -1596,6 +1713,22 @@ TileNode *Function::createTile(llvm::StringRef name, NodeValue input,
   }
 
   return addNode(new TileNode(name, outTy, input, tiles, axis));
+}
+
+TileNode *Function::createTile(llvm::StringRef name, NodeValue input,
+                               llvm::ArrayRef<unsigned_t> tiles,
+                               llvm::ArrayRef<unsigned_t> axes) {
+  assert(tiles.size() && "The array of tiles is empty!");
+  assert(axes.size() && "The array of axes is empty!");
+  assert(tiles.size() == axes.size() &&
+         "The array for tiles and axes must be equal!");
+  TileNode *tileNode = nullptr;
+  for (size_t idx = 0; idx < tiles.size(); ++idx) {
+    tileNode = createTile(name.str() + "." + std::to_string(idx),
+                          tileNode ? tileNode->getResult() : input, tiles[idx],
+                          axes[idx]);
+  }
+  return tileNode;
 }
 
 InsertTensorNode *Function::createInsertTensor(llvm::StringRef name,
@@ -1725,7 +1858,22 @@ ReshapeNode *Function::createExpandDims(llvm::StringRef name, NodeValue input,
 
 ReshapeNode *Function::createFlatten(llvm::StringRef name, NodeValue input,
                                      unsigned_t axis) {
-  auto xDim = flattenCdr(input.getType()->dims(), axis);
+  std::pair<dim_t, dim_t> xDim;
+  if (axis == 0) {
+    dim_t d = 1;
+    for (auto dim : input.getType()->dims()) {
+      d *= dim;
+    }
+    xDim = {1, d};
+  } else {
+    xDim = flattenCdr(input.getType()->dims(), axis);
+  }
+  return createReshape(name, input, {xDim.first, xDim.second});
+}
+
+ReshapeNode *Function::createFlattenV1(llvm::StringRef name, NodeValue input,
+                                       unsigned_t axis) {
+  auto xDim = collapseShape(input.getType()->dims(), axis);
   return createReshape(name, input, {xDim.first, xDim.second});
 }
 
@@ -1760,19 +1908,28 @@ void Function::createSplit(llvm::StringRef name, NodeValue input,
 }
 
 BatchNormalizationNode *Function::createBatchNormalization(
-    llvm::StringRef name, NodeValue input, NodeValue beta, NodeValue scale,
-    NodeValue mean, NodeValue var, unsigned_t channelIdx, float epsilon,
-    float momentum) {
-  return addNode(new BatchNormalizationNode(name, input, scale, beta, mean, var,
-                                            channelIdx, epsilon, momentum));
+    llvm::StringRef name, TypeRef resType, NodeValue input, NodeValue beta,
+    NodeValue scale, NodeValue mean, NodeValue var, unsigned_t channelIdx,
+    float epsilon, float momentum) {
+  return addNode(new BatchNormalizationNode(name, resType, input, scale, beta,
+                                            mean, var, channelIdx, epsilon,
+                                            momentum));
 }
 
-LayerNormalizationNode *Function::createLayerNormalization(llvm::StringRef name,
-                                                           NodeValue input,
-                                                           NodeValue scale,
-                                                           NodeValue bias,
-                                                           float epsilon) {
-  return addNode(new LayerNormalizationNode(name, input, scale, bias, epsilon));
+InstanceNormalizationNode *
+Function::createInstanceNormalization(llvm::StringRef name, NodeValue input,
+                                      NodeValue beta, NodeValue scale,
+                                      unsigned_t channelIdx, float epsilon) {
+  return addNode(new InstanceNormalizationNode(name, input, scale, beta,
+                                               channelIdx, epsilon));
+}
+
+LayerNormalizationNode *
+Function::createLayerNormalization(llvm::StringRef name, TypeRef outTy,
+                                   NodeValue input, NodeValue scale,
+                                   NodeValue bias, float epsilon) {
+  return addNode(
+      new LayerNormalizationNode(name, outTy, input, scale, bias, epsilon));
 }
 
 BucketizeNode *Function::createBucketizeNode(llvm::StringRef name,
@@ -1802,6 +1959,12 @@ NotNode *Function::createNot(llvm::StringRef name, NodeValue input) {
   return addNode(new NotNode(name, OT, input));
 }
 
+BitwiseNotNode *Function::createBitwiseNot(llvm::StringRef name,
+                                           NodeValue input) {
+  TypeRef OT = getParent()->uniqueType(*input.getType());
+  return addNode(new BitwiseNotNode(name, OT, input));
+}
+
 #define UNARY_ARITHMETIC_FUN_DEF(NODE_NAME_)                                   \
   NODE_NAME_##Node *Function::create##NODE_NAME_(llvm::StringRef name,         \
                                                  NodeValue input) {            \
@@ -1823,6 +1986,9 @@ UNARY_ARITHMETIC_FUN_DEF(Rsqrt)
 UNARY_ARITHMETIC_FUN_DEF(Reciprocal)
 UNARY_ARITHMETIC_FUN_DEF(Sin)
 UNARY_ARITHMETIC_FUN_DEF(Cos)
+UNARY_ARITHMETIC_FUN_DEF(Erf)
+UNARY_ARITHMETIC_FUN_DEF(Truncate)
+UNARY_ARITHMETIC_FUN_DEF(HardSwish)
 #undef UNARY_ARITHMETIC_FUN_DEF
 
 #define ARITHMETIC_FUN_DEF(NODE_NAME_)                                         \
@@ -1833,7 +1999,9 @@ UNARY_ARITHMETIC_FUN_DEF(Cos)
   NODE_NAME_##Node *Function::create##NODE_NAME_(                              \
       llvm::StringRef name, TypeRef T, NodeValue LHS, NodeValue RHS) {         \
     DCHECK(LHS.dims() == RHS.dims())                                           \
-        << "Invalid operand shapes " << LHS.dims() << " vs " << RHS.dims();    \
+        << "Invalid operand shapes LHS:" << LHS.getNode()->getName().str()     \
+        << " RHS: " << RHS.getNode()->getName().str() << " " << LHS.dims()     \
+        << " vs " << RHS.dims();                                               \
     TypeRef OT = getParent()->uniqueType(*T);                                  \
     return addNode(new NODE_NAME_##Node(name, OT, LHS, RHS));                  \
   }
@@ -1841,13 +2009,16 @@ ARITHMETIC_FUN_DEF(Add);
 ARITHMETIC_FUN_DEF(Mul);
 ARITHMETIC_FUN_DEF(Sub);
 ARITHMETIC_FUN_DEF(Div);
-ARITHMETIC_FUN_DEF(FloorDiv);
 ARITHMETIC_FUN_DEF(Max);
 ARITHMETIC_FUN_DEF(Min);
 ARITHMETIC_FUN_DEF(Pow);
 ARITHMETIC_FUN_DEF(And);
 ARITHMETIC_FUN_DEF(Or);
 ARITHMETIC_FUN_DEF(Xor);
+ARITHMETIC_FUN_DEF(BitwiseAnd);
+ARITHMETIC_FUN_DEF(BitwiseOr);
+ARITHMETIC_FUN_DEF(BitwiseXor);
+ARITHMETIC_FUN_DEF(Fmod);
 #undef ARITHMETIC_FUN_DEF
 
 #define TRIGONOMETRIC_FUN_DEF(NODE_NAME_)                                      \
@@ -1865,6 +2036,40 @@ TRIGONOMETRIC_FUN_DEF(Acos)
 TRIGONOMETRIC_FUN_DEF(Asin)
 TRIGONOMETRIC_FUN_DEF(Atan)
 #undef TRIGONOMETRIC_FUN_DEF
+
+FloorDivNode *Function::createFloorDiv(llvm::StringRef name, NodeValue LHS,
+                                       NodeValue RHS, bool truncate) {
+  return createFloorDiv(name, LHS.getType(), LHS, RHS, truncate);
+}
+
+FloorDivNode *Function::createFloorDiv(llvm::StringRef name, TypeRef outTy,
+                                       NodeValue LHS, NodeValue RHS,
+                                       bool truncate) {
+  DCHECK(LHS.dims() == RHS.dims())
+      << "Invalid operand shapes LHS:" << LHS.getNode()->getName().str()
+      << " RHS: " << RHS.getNode()->getName().str() << " " << LHS.dims()
+      << " vs " << RHS.dims();
+  TypeRef OT = getParent()->uniqueType(*outTy);
+  return addNode(new FloorDivNode(name, OT, LHS, RHS, truncate));
+}
+
+FloorDivNode *Function::createFloorDivWithBroadcast(llvm::StringRef name,
+                                                    int axis, NodeValue LHS,
+                                                    NodeValue RHS,
+                                                    bool truncate) {
+  std::vector<NodeValue> inputs = broadcastInputs(axis, {LHS, RHS});
+  return createFloorDiv(name, inputs[0].getType(), inputs[0], inputs[1],
+                        truncate);
+}
+
+FloorDivNode *Function::createFloorDivWithBroadcast(llvm::StringRef name,
+                                                    int axis, TypeRef outTy,
+                                                    NodeValue LHS,
+                                                    NodeValue RHS,
+                                                    bool truncate) {
+  std::vector<NodeValue> inputs = broadcastInputs(axis, {LHS, RHS});
+  return createFloorDiv(name, outTy, inputs[0], inputs[1], truncate);
+}
 
 CmpLTENode *Function::createCmpLTE(llvm::StringRef name, NodeValue LHS,
                                    NodeValue RHS) {
@@ -1942,9 +2147,18 @@ PowNode *Function::createPow(llvm::StringRef name, NodeValue base, float exp) {
   return createPow(name, base, SP);
 }
 
+LogNode *Function::createLog(llvm::StringRef name, NodeValue input) {
+  return createLog(name, input.getType(), input);
+}
+
+LogNode *Function::createLog(llvm::StringRef name, TypeRef outTy,
+                             NodeValue input) {
+  return addNode(new LogNode(name, outTy, input));
+}
+
 LogNode *Function::createLog(llvm::StringRef name, NodeValue input,
                              TypeRef outTy) {
-  return addNode(new LogNode(name, outTy ? outTy : input.getType(), input));
+  return createLog(name, outTy, input);
 }
 
 ExpNode *Function::createExp(llvm::StringRef name, NodeValue input) {
@@ -1959,6 +2173,11 @@ ExpNode *Function::createExp(llvm::StringRef name, TypeRef outTy,
 LogitNode *Function::createLogit(llvm::StringRef name, NodeValue input,
                                  float eps) {
   return addNode(new LogitNode(name, input.getType(), input, eps));
+}
+
+NonZeroNode *Function::createNonZero(llvm::StringRef name, NodeValue Cond) {
+  auto outTy = getParent()->uniqueType(ElemKind::Int32ITy, {Cond.dims()[0], 1});
+  return addNode(new NonZeroNode(name, outTy, Cond));
 }
 
 SelectNode *Function::createSelect(llvm::StringRef name, TypeRef outTy,
@@ -2010,11 +2229,23 @@ MatMulNode *Function::createMatMul(llvm::StringRef name, NodeValue lhs,
 
 BatchMatMulNode *Function::createBatchMatMul(llvm::StringRef name,
                                              NodeValue LHS, NodeValue RHS) {
+  const size_t numDimsLHS = LHS.dims().size();
+  if (numDimsLHS > 3) {
+    const size_t numDimsRHS = RHS.dims().size();
+    std::vector<dim_t> newLHSShape = {0, LHS.dims()[numDimsLHS - 2],
+                                      LHS.dims()[numDimsLHS - 1]};
+    newLHSShape[0] = LHS.getType()->size() / (newLHSShape[1] * newLHSShape[2]);
+    LHS = createReshape(name.str() + ".reshapeLHS3D", LHS, newLHSShape);
+    std::vector<dim_t> newRHSShape = {0, RHS.dims()[numDimsRHS - 2],
+                                      RHS.dims()[numDimsRHS - 1]};
+    newRHSShape[0] = RHS.getType()->size() / (newRHSShape[1] * newRHSShape[2]);
+    RHS = createReshape(name.str() + ".reshapeRHS3D", RHS, newRHSShape);
+  }
+
   const size_t numDimsRHS = RHS.dims().size();
   assert(LHS.dims().size() == 3 && "LHS must be 3 dimensional.");
   assert((numDimsRHS == 2 || numDimsRHS == 3) &&
          "RHS must be 2 or 3 dimensional.");
-
   // If necessary, expand the RHS input to be 3D by adding initial leading
   // dim.
   if (numDimsRHS == 2) {
@@ -2059,6 +2290,32 @@ Function::createBatchedReduceAdd(llvm::StringRef name, TypeRef outTy,
   return addNode(new BatchedReduceAddNode(name, OT, batch, axis));
 }
 
+BatchedReduceSumSquareNode *
+Function::createBatchedReduceSumSquare(llvm::StringRef name, NodeValue batch,
+                                       llvm::ArrayRef<unsigned_t> axes) {
+  auto outDims = getNewShapeWithoutAxes(batch.dims(), axes);
+  auto OT = getParent()->uniqueTypeWithNewShape(batch.getType(), outDims);
+  return createBatchedReduceSumSquare(name, OT, batch, axes);
+}
+
+BatchedReduceSumSquareNode *
+Function::createBatchedReduceSumSquare(llvm::StringRef name, TypeRef outTy,
+                                       NodeValue batch,
+                                       llvm::ArrayRef<unsigned_t> axes) {
+  assert(axes.size() == 1 && "Only supporting single reduction for now.");
+  auto axis = axes[0];
+
+  // Calculate the expected total number of elements in the output tensor
+  // based on the number of elements in the batch divided by the axis
+  // dimension.
+  const size_t outNumElements = batch.getType()->size() / batch.dims()[axis];
+  (void)outNumElements;
+  assert(outTy->size() == outNumElements &&
+         "Incorrect number of elements in the output type.");
+  auto OT = getParent()->uniqueType(*outTy);
+  return addNode(new BatchedReduceSumSquareNode(name, OT, batch, axis));
+}
+
 BatchedReduceAddNode *
 Function::createBatchedReduceAdd(llvm::StringRef name, NodeValue batch,
                                  llvm::ArrayRef<unsigned_t> axes) {
@@ -2085,6 +2342,14 @@ Function::createBatchedReduceMean(llvm::StringRef name, NodeValue batch,
 }
 
 BatchedReduceMinNode *
+Function::createBatchedReduceMin(llvm::StringRef name, TypeRef outTy,
+                                 NodeValue batch,
+                                 llvm::ArrayRef<unsigned_t> axes) {
+  auto OT = getParent()->uniqueType(*outTy);
+  return addNode(new BatchedReduceMinNode(name, OT, batch, axes));
+}
+
+BatchedReduceMinNode *
 Function::createBatchedReduceMin(llvm::StringRef name, NodeValue batch,
                                  llvm::ArrayRef<unsigned_t> axes) {
   // Create new shape with specified dimensions either reduced or removed.
@@ -2094,12 +2359,46 @@ Function::createBatchedReduceMin(llvm::StringRef name, NodeValue batch,
 }
 
 BatchedReduceMaxNode *
+Function::createBatchedReduceMax(llvm::StringRef name, TypeRef outTy,
+                                 NodeValue batch,
+                                 llvm::ArrayRef<unsigned_t> axes) {
+  auto OT = getParent()->uniqueType(*outTy);
+  return addNode(new BatchedReduceMaxNode(name, OT, batch, axes));
+}
+
+BatchedReduceMaxNode *
 Function::createBatchedReduceMax(llvm::StringRef name, NodeValue batch,
                                  llvm::ArrayRef<unsigned_t> axes) {
   // Create new shape with specified dimensions either reduced or removed.
   auto outDims = getNewShapeWithoutAxes(batch.dims(), axes);
   auto OT = getParent()->uniqueType(batch.getType()->getElementType(), outDims);
   return addNode(new BatchedReduceMaxNode(name, OT, batch, axes));
+}
+
+BatchedReduceProdNode *
+Function::createBatchedReduceProd(llvm::StringRef name, TypeRef outTy,
+                                  NodeValue batch,
+                                  llvm::ArrayRef<unsigned_t> axes) {
+  assert(axes.size() == 1 && "Only supporting single reduction for now.");
+  auto axis = axes[0];
+
+  // Calculate the expected total number of elements in the output tensor
+  // based on the number of elements in the batch divided by the axis
+  // dimension.
+  const size_t outNumElements = batch.getType()->size() / batch.dims()[axis];
+  (void)outNumElements;
+  assert(outTy->size() == outNumElements &&
+         "Incorrect number of elements in the output type.");
+  auto OT = getParent()->uniqueType(*outTy);
+  return addNode(new BatchedReduceProdNode(name, OT, batch, axis));
+}
+
+BatchedReduceProdNode *
+Function::createBatchedReduceProd(llvm::StringRef name, NodeValue batch,
+                                  llvm::ArrayRef<unsigned_t> axes) {
+  auto outDims = getNewShapeWithoutAxes(batch.dims(), axes);
+  auto OT = getParent()->uniqueTypeWithNewShape(batch.getType(), outDims);
+  return createBatchedReduceProd(name, OT, batch, axes);
 }
 
 BatchedAddNode *Function::createBatchedAdd(llvm::StringRef name,
@@ -2125,9 +2424,9 @@ BatchedMulNode *Function::createBatchedMul(llvm::StringRef name, TypeRef outTy,
 }
 
 CumSumNode *Function::createCumSum(llvm::StringRef name, NodeValue input,
-                                   bool exclusive, bool reverse) {
+                                   int64_t dim, bool exclusive, bool reverse) {
   return addNode(
-      new CumSumNode(name, input.getType(), input, exclusive, reverse));
+      new CumSumNode(name, input.getType(), input, dim, exclusive, reverse));
 }
 
 LengthsSumNode *Function::createLengthsSum(llvm::StringRef name, NodeValue data,
@@ -2267,7 +2566,8 @@ Function::createRowwiseQuantizedSparseLengthsSum(
 /// type, using inputs \p data and \p segmentsDim to compute output dimensions.
 static TypeRef
 getOutputTypeOfFusedRowwiseQuantizedSLS(Function *F, NodeValue data,
-                                        llvm::ArrayRef<dim_t> segmentsDim) {
+                                        llvm::ArrayRef<dim_t> segmentsDim,
+                                        bool forceFP16Output = false) {
   ShapeVector outDims(data.dims().begin(), data.dims().end());
   outDims[0] = segmentsDim[0];
   // The output column count is the same as the input column count, but
@@ -2275,17 +2575,22 @@ getOutputTypeOfFusedRowwiseQuantizedSLS(Function *F, NodeValue data,
   // fused.
   CHECK(isFusedQuantizedElemKind(data.getElementType()))
       << "Must use a fused ElemKind for data.";
-  outDims[1] -= 2 * ((data.getElementType() == ElemKind::UInt8FusedQTy)
+  outDims[1] -= 2 * ((data.getElementType() == ElemKind::UInt8FusedQTy ||
+                      data.getElementType() == ElemKind::UInt4FusedQTy)
                          ? sizeof(float)
                          : sizeof(float16_t));
   // If using 4-bit quantization, then the input data has packed two 4-bit
   // elements into one byte, so we need to double the outDims.
-  if (data.getElementType() == ElemKind::UInt4FusedFP16QTy) {
+  if (data.getElementType() == ElemKind::UInt4FusedFP16QTy ||
+      data.getElementType() == ElemKind::UInt4FusedQTy) {
     outDims[1] *= 2;
   }
-  const ElemKind outputK = (data.getElementType() == ElemKind::UInt8FusedQTy)
-                               ? ElemKind::FloatTy
-                               : ElemKind::Float16Ty;
+  const ElemKind outputK =
+      forceFP16Output ? ElemKind::Float16Ty
+                      : (data.getElementType() == ElemKind::UInt8FusedQTy ||
+                         data.getElementType() == ElemKind::UInt4FusedQTy)
+                            ? ElemKind::FloatTy
+                            : ElemKind::Float16Ty;
   return F->getParent()->uniqueType(outputK, outDims);
 }
 
@@ -2358,6 +2663,18 @@ static Constant *quantizeDataForFusedRowwiseQuantizedSparseLengthsWeightedSum(
         fData, rwqData->getPayloadMutable());
     return rwqData;
   }
+  case ElemKind::UInt4FusedQTy: {
+    // We pack 4-bit values into bytes, so given the input size in float we
+    // divide by two and take the ceiling to make sure we have enough space for
+    // all elements.
+    const dim_t outerDim =
+        std::ceil(((float)fDims.second) / 2) + 2 * sizeof(float);
+    Constant *rwqData = F->getParent()->createConstant(
+        precision, {fDims.first, outerDim}, 0.0, 0, "data");
+    quantization::tensorFusedRowwiseQuantization<float>(
+        fData, rwqData->getPayloadMutable());
+    return rwqData;
+  }
   default:
     llvm_unreachable("Invalid type for FusedRowwiswQuantization.");
   }
@@ -2389,6 +2706,24 @@ Function::createFusedRowwiseQuantizedSparseLengthsSum(
       avgLength);
 }
 
+EmbeddingNode *Function::createEmbedding(llvm::StringRef name,
+                                         NodeValue weights, NodeValue indices,
+                                         int32_t padIdx, bool scale,
+                                         bool sparse) {
+  auto indDims = indices.dims();
+  auto wtDims = weights.dims();
+
+  assert(wtDims.size() == 2 && "weights must be a 2D tensor");
+
+  ShapeVector outDims(indDims.begin(), indDims.end());
+  dim_t embedding_dim = wtDims[1];
+  outDims.push_back(embedding_dim);
+
+  auto outTy = getParent()->uniqueTypeWithNewShape(weights.getType(), outDims);
+  return addNode(
+      new EmbeddingNode(name, outTy, weights, indices, padIdx, scale, sparse));
+}
+
 EmbeddingBagNode *
 Function::createEmbeddingBag(llvm::StringRef name, NodeValue data,
                              NodeValue weights, NodeValue indices,
@@ -2407,27 +2742,29 @@ EmbeddingBagByteRowwiseOffsetsNode *
 Function::createEmbeddingBagByteRowwiseOffsets(
     llvm::StringRef name, Tensor &data, NodeValue weights, NodeValue indices,
     NodeValue offsets, ElemKind fusedElemKind, bool useFP16Accumulation,
-    bool hasEndOffset, LengthsMode lengthsMode, float avgLength) {
+    bool hasEndOffset, LengthsMode lengthsMode, float avgLength,
+    bool forceFP16Output) {
   Constant *rwqData =
       quantizeDataForFusedRowwiseQuantizedSparseLengthsWeightedSum(
           this, data, fusedElemKind);
   return createEmbeddingBagByteRowwiseOffsets(
       name, rwqData, weights, indices, offsets, useFP16Accumulation,
-      hasEndOffset, lengthsMode, avgLength);
+      hasEndOffset, lengthsMode, avgLength, forceFP16Output);
 }
 
 EmbeddingBagByteRowwiseOffsetsNode *
 Function::createEmbeddingBagByteRowwiseOffsets(
     llvm::StringRef name, NodeValue data, NodeValue weights, NodeValue indices,
     NodeValue offsets, bool useFP16Accumulation, bool hasEndOffset,
-    LengthsMode lengthsMode, float avgLength) {
+    LengthsMode lengthsMode, float avgLength, bool forceFP16Output) {
   std::vector<dim_t> segmentDims(offsets.dims().begin(), offsets.dims().end());
   // If hasEndOffset the last offset is just for marking the end of the last
   // segment.
   if (hasEndOffset) {
     segmentDims[0] -= 1;
   }
-  auto outTy = getOutputTypeOfFusedRowwiseQuantizedSLS(this, data, segmentDims);
+  auto outTy = getOutputTypeOfFusedRowwiseQuantizedSLS(this, data, segmentDims,
+                                                       forceFP16Output);
   return addNode(new EmbeddingBagByteRowwiseOffsetsNode(
       name, outTy, data, weights, indices, offsets, useFP16Accumulation,
       hasEndOffset, lengthsMode, avgLength));
@@ -2448,16 +2785,35 @@ Function::createLengthsRangeFill(llvm::StringRef name, NodeValue lengths,
   return addNode(new LengthsRangeFillNode(name, outTy, lengths));
 }
 
-SparseToDenseNode *Function::createSparseToDense(llvm::StringRef name,
-                                                 NodeValue indices,
-                                                 NodeValue values,
-                                                 NodeValue dataToInferDim) {
-  // The dimensions of the output are the same as the values tensor except for
-  // the first dimension, which should match that of dataToInferDim.
-  ShapeVector outDims(values.dims().begin(), values.dims().end());
-  outDims[0] = dataToInferDim.dims()[0];
+GaussianFillNode *Function::createGaussianFill(llvm::StringRef name,
+                                               NodeValue input, float mean,
+                                               float scale, float seed) {
+  auto outTy = getParent()->uniqueType(ElemKind::Float16Ty, input.dims());
+
+  return addNode(new GaussianFillNode(name, outTy, input, mean, scale, seed));
+}
+
+BatchSparseToDenseNode *Function::createBatchSparseToDense(
+    llvm::StringRef name, NodeValue lengths, NodeValue indices,
+    NodeValue values, float defaultValue, unsigned_t denseLastDim) {
+  // The output is a 2-D tensor with first dim = number of lengths and second
+  // dim = denseLastDim
+  ShapeVector outDims({lengths.dims()[0], denseLastDim});
   auto outTy = getParent()->uniqueTypeWithNewShape(values.getType(), outDims);
-  return addNode(new SparseToDenseNode(name, outTy, indices, values));
+  return addNode(new BatchSparseToDenseNode(
+      name, outTy, lengths, indices, values, defaultValue, denseLastDim));
+}
+
+FillExamplesWithIndicatorNode *
+Function::createFillExamplesWithIndicator(llvm::StringRef name, NodeValue data,
+                                          NodeValue indicator) {
+  ShapeVector outDims({indicator.dims()[0]});
+  if (data.dims().size() > 1) {
+    outDims.insert(outDims.end(), data.dims().begin() + 1, data.dims().end());
+  }
+  auto outTy = getParent()->uniqueTypeWithNewShape(data.getType(), outDims);
+  return addNode(
+      new FillExamplesWithIndicatorNode(name, outTy, data, indicator));
 }
 
 SparseToDenseMaskNode *Function::createSparseToDenseMask(
@@ -2474,6 +2830,25 @@ SparseToDenseMaskNode *Function::createSparseToDenseMask(
   auto outTy = getParent()->uniqueTypeWithNewShape(values.getType(), outDims);
   return addNode(new SparseToDenseMaskNode(name, outTy, indices, values,
                                            defaultValue, lengths, mask));
+}
+
+SparseLabelSplitNode *Function::createSparseLabelSplit(llvm::StringRef name,
+                                                       NodeValue lengths,
+                                                       NodeValue indices,
+                                                       NodeValue values,
+                                                       dim_t numLabels) {
+  const auto numItems = indices.dims()[0];
+  // The assumption here is that all output tensors (excluding offsetMap)
+  // will have the same number of elements, i.e. numItems / numLabels.
+  auto labelValuesTy = getParent()->uniqueTypeWithNewShape(
+      values.getType(), {numLabels, numItems / numLabels});
+  auto exampleIdsTy = getParent()->uniqueType(
+      ElemKind::Int32ITy, {numLabels, numItems / numLabels});
+  auto gradientOffsetMapTy =
+      getParent()->uniqueType(ElemKind::Int32ITy, {indices.dims()[0]});
+  return addNode(new SparseLabelSplitNode(name, labelValuesTy, exampleIdsTy,
+                                          gradientOffsetMapTy, lengths, indices,
+                                          values, numLabels));
 }
 
 SaveNode *Function::createSave(llvm::StringRef name, NodeValue input) {
@@ -2516,74 +2891,94 @@ Function::createQuantizationProfile(PlaceholderBindings &bindings,
       input.getNode()->getName().str(), input.getResNo()));
 }
 
+template <typename T>
 IntLookupTableNode *
 Function::createIntLookupTable(llvm::StringRef name, NodeValue input,
-                               llvm::ArrayRef<int8_t> initValues,
-                               TypeRef outTy) {
-  auto *mapping = getParent()->createConstant(
-      ElemKind::Int8QTy, {(dim_t)initValues.size()}, outTy->getScale(),
-      outTy->getOffset(), "mapping");
-  mapping->getHandle<int8_t>() = initValues;
+                               llvm::ArrayRef<T> initValues, TypeRef outTy) {
+  assert(initValues.size() == input.getType()->getQuantizedValueCount() &&
+         "Lookup table length must match input type!");
+  assert(outTy->isType<T>() && "Lookup table element must match output type!");
+  if (std::is_same<T, int8_t>::value) {
+    // Create INT8 lookup table.
+    auto *mapping = getParent()->createConstant(
+        ElemKind::Int8QTy, {(dim_t)initValues.size()}, outTy->getScale(),
+        outTy->getOffset(), "mapping");
+    mapping->getHandle<T>() = initValues;
+    return addNode(new IntLookupTableNode(name, outTy, input, mapping));
+  } else if (std::is_same<T, int16_t>::value) {
+    // Create INT16 lookup table.
+    auto *mapping = getParent()->createConstant(
+        ElemKind::Int16QTy, {(dim_t)initValues.size()}, outTy->getScale(),
+        outTy->getOffset(), "mapping");
+    mapping->getHandle<T>() = initValues;
+    return addNode(new IntLookupTableNode(name, outTy, input, mapping));
+  } else if (std::is_same<T, int32_t>::value) {
+    // Create INT32 lookup table.
+    auto *mapping = getParent()->createConstant(
+        ElemKind::Int32QTy, {(dim_t)initValues.size()}, outTy->getScale(),
+        outTy->getOffset(), "mapping");
+    mapping->getHandle<T>() = initValues;
+    return addNode(new IntLookupTableNode(name, outTy, input, mapping));
+  } else {
+    llvm_unreachable("Lookup table type not supported.");
+  }
+}
 
-  return addNode(new IntLookupTableNode(name, outTy, input, mapping));
+IntLookupTableNode *
+Function::createIntLookupTable(llvm::StringRef name, NodeValue input,
+                               std::function<float(float)> func,
+                               TypeRef outTy) {
+  if (outTy->isType<int8_t>()) {
+    std::vector<int8_t> initValues =
+        quantization::createMapping<int8_t>(input.getType(), outTy, func);
+    return createIntLookupTable<int8_t>(name, input, initValues, outTy);
+  } else if (outTy->isType<int16_t>()) {
+    std::vector<int16_t> initValues =
+        quantization::createMapping<int16_t>(input.getType(), outTy, func);
+    return createIntLookupTable<int16_t>(name, input, initValues, outTy);
+  } else if (outTy->isType<int32_t>()) {
+    std::vector<int32_t> initValues =
+        quantization::createMapping<int32_t>(input.getType(), outTy, func);
+    return createIntLookupTable<int32_t>(name, input, initValues, outTy);
+  } else {
+    llvm_unreachable("Lookup table type not supported.");
+  }
+}
+
+LookupTableNode *Function::createLookupTable(
+    llvm::StringRef name, NodeValue input, LUTOperator lutOperator,
+    std::vector<float> &lutOperatorArgs, NodeValue table, NodeValue idxTable,
+    TypeRef outTy) {
+  return addNode(new LookupTableNode(name, outTy, input, table, idxTable,
+                                     lutOperator, lutOperatorArgs));
+}
+
+IntLookupTableNode *Function::createIntLog(llvm::StringRef name,
+                                           NodeValue input, TypeRef outTy) {
+  auto inputRange = input.getType()->getQuantizedValueRange();
+  (void)inputRange;
+  assert(inputRange.first >= 0 &&
+         "Input range must not be negative since this is input to log().");
+  auto func = [](float x) -> float {
+    return (x == 0.0) ? std::log(std::numeric_limits<float>::min()) : log(x);
+  };
+  return createIntLookupTable(name, input, func, outTy);
+}
+
+IntLookupTableNode *Function::createIntExp(llvm::StringRef name,
+                                           NodeValue input, TypeRef outTy) {
+  return createIntLookupTable(name, input, expf, outTy);
 }
 
 IntLookupTableNode *Function::createIntTanh(llvm::StringRef name,
                                             NodeValue input, TypeRef outTy) {
-  static int8_t mapping[] = {
-      -128, -127, -126, -126, -126, -126, -126, -126, -126, -126, -126, -126,
-      -126, -126, -126, -126, -126, -126, -126, -126, -125, -125, -125, -125,
-      -125, -125, -125, -125, -125, -125, -125, -124, -124, -124, -124, -124,
-      -124, -124, -123, -123, -123, -123, -123, -123, -122, -122, -122, -122,
-      -121, -121, -121, -120, -120, -120, -120, -119, -119, -118, -118, -118,
-      -117, -117, -116, -116, -115, -115, -114, -114, -113, -112, -112, -111,
-      -110, -109, -109, -108, -107, -106, -105, -104, -103, -102, -101, -100,
-      -99,  -98,  -96,  -95,  -94,  -92,  -91,  -89,  -88,  -86,  -85,  -83,
-      -81,  -79,  -77,  -76,  -74,  -72,  -69,  -67,  -65,  -63,  -61,  -58,
-      -56,  -53,  -51,  -48,  -46,  -43,  -41,  -38,  -35,  -32,  -29,  -27,
-      -24,  -21,  -18,  -15,  -12,  -9,   -6,   -3,   0,    3,    6,    9,
-      12,   15,   18,   21,   24,   27,   29,   32,   35,   38,   41,   43,
-      46,   48,   51,   53,   56,   58,   61,   63,   65,   67,   69,   72,
-      74,   76,   77,   79,   81,   83,   85,   86,   88,   89,   91,   92,
-      94,   95,   96,   98,   99,   100,  101,  102,  103,  104,  105,  106,
-      107,  108,  109,  109,  110,  111,  112,  112,  113,  114,  114,  115,
-      115,  116,  116,  117,  117,  118,  118,  118,  119,  119,  120,  120,
-      120,  120,  121,  121,  121,  122,  122,  122,  122,  123,  123,  123,
-      123,  123,  123,  124,  124,  124,  124,  124,  124,  124,  125,  125,
-      125,  125,  125,  125,  125,  125,  125,  125,  125,  126,  126,  126,
-      126,  126,  126,  126,  126,  126,  126,  126,  126,  126,  126,  126,
-      126,  126,  126,  127};
-
-  return createIntLookupTable(name, input, mapping, outTy);
+  return createIntLookupTable(name, input, tanhf, outTy);
 }
 
 IntLookupTableNode *Function::createIntSigmoid(llvm::StringRef name,
                                                NodeValue input, TypeRef outTy) {
-  static int8_t mapping[] = {
-      -128, -127, -127, -127, -127, -127, -127, -127, -127, -127, -127, -127,
-      -127, -127, -127, -127, -127, -127, -127, -126, -126, -126, -126, -126,
-      -126, -126, -126, -126, -126, -126, -125, -125, -125, -125, -125, -125,
-      -125, -125, -124, -124, -124, -124, -124, -123, -123, -123, -123, -122,
-      -122, -122, -122, -121, -121, -121, -120, -120, -120, -119, -119, -118,
-      -118, -118, -117, -117, -116, -115, -115, -114, -114, -113, -112, -112,
-      -111, -110, -109, -109, -108, -107, -106, -105, -104, -103, -102, -101,
-      -99,  -98,  -97,  -96,  -94,  -93,  -91,  -90,  -88,  -87,  -85,  -83,
-      -82,  -80,  -78,  -76,  -74,  -72,  -70,  -68,  -66,  -63,  -61,  -59,
-      -56,  -54,  -51,  -49,  -46,  -44,  -41,  -38,  -36,  -33,  -30,  -27,
-      -24,  -21,  -18,  -15,  -12,  -9,   -6,   -3,   -1,   2,    5,    8,
-      11,   14,   17,   20,   23,   26,   29,   32,   35,   37,   40,   43,
-      45,   48,   50,   53,   55,   58,   60,   62,   65,   67,   69,   71,
-      73,   75,   77,   79,   81,   82,   84,   86,   87,   89,   90,   92,
-      93,   95,   96,   97,   98,   100,  101,  102,  103,  104,  105,  106,
-      107,  108,  108,  109,  110,  111,  111,  112,  113,  113,  114,  114,
-      115,  116,  116,  117,  117,  117,  118,  118,  119,  119,  119,  120,
-      120,  120,  121,  121,  121,  121,  122,  122,  122,  122,  123,  123,
-      123,  123,  123,  124,  124,  124,  124,  124,  124,  124,  124,  125,
-      125,  125,  125,  125,  125,  125,  125,  125,  125,  125,  126,  126,
-      126,  126,  126,  126,  126,  126,  126,  126,  126,  126,  126,  126,
-      126,  126,  126,  127};
-
-  return createIntLookupTable(name, input, mapping, outTy);
+  auto func = [](float x) -> float { return 1.0f / (1.0f + expf(-x)); };
+  return createIntLookupTable(name, input, func, outTy);
 }
 
 TopKNode *Function::createTopK(llvm::StringRef name, NodeValue input,
@@ -2632,18 +3027,95 @@ VectorNormNode *Function::createVectorNorm(llvm::StringRef name,
   return addNode(new VectorNormNode(name, OT, input, axis, p));
 }
 
+CollectRpnProposalsNode *Function::createCollectRpnProposals(
+    llvm::StringRef name, std::vector<NodeValue> &roisIn,
+    std::vector<NodeValue> &roiProbsIn, int64_t rpnMaxLevel,
+    int64_t rpnMinLevel, unsigned_t rpnPostNmsTopN) {
+
+  auto boxDim = roisIn[0].dims()[1];
+
+  assert(rpnPostNmsTopN > 0 && "RpnPostNmsTopN should be greater than zero");
+
+  ShapeVector outDims{rpnPostNmsTopN, boxDim};
+
+  auto OT = getParent()->uniqueTypeWithNewShape(roisIn[0].getType(), outDims);
+  return addNode(new CollectRpnProposalsNode(
+      name, OT, roisIn, roiProbsIn, rpnMaxLevel, rpnMinLevel, rpnPostNmsTopN));
+}
+
 GatherNode *Function::createGather(llvm::StringRef name, NodeValue data,
-                                   NodeValue indices, unsigned_t batchDims) {
+                                   NodeValue indices, unsigned_t axis) {
   auto dDims = data.dims();
   auto iDims = indices.dims();
-  assert(dDims.size() > batchDims);
+  assert(dDims.size() > axis);
   ShapeVector outDims;
-  outDims.insert(outDims.end(), dDims.begin(), dDims.begin() + batchDims);
+  outDims.insert(outDims.end(), dDims.begin(), dDims.begin() + axis);
   outDims.insert(outDims.end(), iDims.begin(), iDims.end());
-  outDims.insert(outDims.end(), dDims.begin() + batchDims + 1, dDims.end());
+  outDims.insert(outDims.end(), dDims.begin() + axis + 1, dDims.end());
   return addNode(new GatherNode(
       name, getParent()->uniqueTypeWithNewShape(data.getType(), outDims), data,
-      indices, batchDims));
+      indices, axis));
+}
+
+GatherNDNode *Function::createGatherND(llvm::StringRef name, NodeValue data,
+                                       NodeValue indices,
+                                       unsigned_t batchDims) {
+  auto dataDims = data.dims();
+  auto indicesDims = indices.dims();
+  size_t indicesDimLast = indicesDims.back();
+
+  // Validate the input dimensions.
+  assert(dataDims.size() >= 1 && "Input data rank must be >= 1.");
+  assert(indicesDims.size() >= 1 && "Input indices rank must be >= 1.");
+  for (size_t idx = 0; idx < batchDims; ++idx) {
+    assert(dataDims[idx] == indicesDims[idx] &&
+           "Batch dimensions of data and indices must be the same!");
+  }
+  assert(batchDims < std::min(dataDims.size(), indicesDims.size()) &&
+         "The number of batch dimensions must be smaller than both the input "
+         "data and indices rank!");
+  assert(indicesDimLast >= 1 &&
+         "Last dimension of indices must be at least 1!");
+  assert(indicesDimLast <= (dataDims.size() - batchDims) &&
+         "Last dimension of indices must be at most rank of data without batch "
+         "dimensions!");
+
+  // Compute the output dimensions.
+  size_t outRank =
+      dataDims.size() + indicesDims.size() - indicesDimLast - 1 - batchDims;
+  std::vector<dim_t> outDims(outRank);
+  size_t outIdx = 0;
+  for (size_t idx = 0; idx < batchDims; ++idx) {
+    outDims[outIdx++] = dataDims[idx];
+  }
+  for (size_t idx = batchDims; idx < indicesDims.size() - 1; ++idx) {
+    outDims[outIdx++] = indicesDims[idx];
+  }
+  for (size_t idx = batchDims + indicesDimLast; idx < dataDims.size(); ++idx) {
+    outDims[outIdx++] = dataDims[idx];
+  }
+  auto outTy = getParent()->uniqueTypeWithNewShape(data.getType(), outDims);
+  return addNode(new GatherNDNode(name, outTy, data, indices, batchDims));
+}
+
+GatherElementsNode *Function::createGatherElements(llvm::StringRef name,
+                                                   NodeValue data,
+                                                   NodeValue indices,
+                                                   unsigned_t dim = 0) {
+  const auto iDims = indices.dims();
+  const auto dRank = data.dims().size();
+  const auto iRank = iDims.size();
+  (void)dRank;
+  (void)iRank;
+  assert((dim < 0 ? dim >= -dRank : dim < dRank) &&
+         "[GatherElements] dim must in the range [-rank, rank-1].");
+  assert(iRank == dRank &&
+         "[GatherElements] Data and indices rank must be equal.");
+  assert(dRank > 0 && "[GatherElements] Data and indices rank must be >= 1.");
+
+  return addNode(new GatherElementsNode(
+      name, getParent()->uniqueTypeWithNewShape(data.getType(), iDims), data,
+      indices, dim));
 }
 
 GatherRangesNode *Function::createGatherRanges(llvm::StringRef name,
@@ -2690,33 +3162,34 @@ SpaceToDepthNode *Function::createSpaceToDepth(llvm::StringRef name,
   return addNode(new SpaceToDepthNode(name, outTy, input, blockSize));
 }
 
-ReshapeNode *Function::createUpsample(llvm::StringRef name, NodeValue input,
-                                      dim_t numLeadingDims) {
-  auto dims = input.dims();
-  DCHECK_LE(numLeadingDims, dims.size())
-      << "numLeadingDims " << numLeadingDims
-      << " must be less than total num dims " << dims.size();
-  dim_t dim0Dims = 1;
-  dim_t dim1Dims = 1;
-  for (dim_t d = 0; d < dims.size(); d++) {
-    dim0Dims *= dims[d];
+ReshapeNode *Function::createDepthToSpace(llvm::StringRef name, NodeValue input,
+                                          unsigned blockSize, bool isCRD) {
+  assert(blockSize > 0 && "Block size must be >= 1.");
+
+  auto inputDim = input.dims();
+  assert(inputDim.size() == 4 && "Dimension size of 4 is expected.");
+  dim_t N = inputDim[0];
+  dim_t H = inputDim[1];
+  dim_t W = inputDim[2];
+  dim_t C = inputDim[3];
+  assert(C % (blockSize * blockSize) == 0 &&
+         "Depth should be divisible by block size squared.");
+
+  llvm::SmallVector<unsigned_t, 6> shuffle;
+  llvm::SmallVector<dim_t, 6> tmpShape;
+  llvm::SmallVector<dim_t, 4> outShape = {N, H * blockSize, W * blockSize,
+                                          C / (blockSize * blockSize)};
+  if (isCRD) {
+    tmpShape = {N, H, W, C / (blockSize * blockSize), blockSize, blockSize};
+    shuffle = D2S_CRD;
+  } else {
+    tmpShape = {N, H, W, blockSize, blockSize, C / (blockSize * blockSize)};
+    shuffle = D2S_DCR;
   }
 
-  Node *cur = input;
-  for (dim_t d = 0; d < numLeadingDims; d++) {
-    auto *reshaped =
-        createReshape(name.str() + "_dim_reshape", cur, {dim0Dims, dim1Dims});
-    cur =
-        createTile(name.str() + "_tile", reshaped, /* tiles */ 2, /* axis */ 1);
-    dim_t sz = dims[dims.size() - d - 1];
-    dim0Dims /= sz;
-    dim1Dims *= 2 * sz;
-  }
-  std::vector<dim_t> outDims(dims.begin(), dims.end());
-  for (dim_t d = dims.size() - numLeadingDims; d < dims.size(); d++) {
-    outDims[d] *= 2;
-  }
-  return createReshape(name.str() + "_last_reshape", cur, outDims);
+  auto *RN1 = createReshape(name.str() + "_reshape_in", input, tmpShape);
+  auto *TN = createTranspose(name.str() + "_transpose", RN1, shuffle);
+  return createReshape(name.str() + "_reshape_out", TN, outShape);
 }
 
 ResizeNearestNode *Function::createResizeNearest(llvm::StringRef name,
@@ -2921,16 +3394,89 @@ ClipNode *Function::createClip(llvm::StringRef name, NodeValue input, float min,
 
 ClipNode *Function::createClipMinMaxFP16(llvm::StringRef name,
                                          NodeValue input) {
-  constexpr float float16Min = -65504.0f;
-  constexpr float float16Max = 65504.0f;
-  return createClip(name, input, float16Min, float16Max);
+  return createClip(name, input, kMinFP16, kMaxFP16);
 }
 
 ClipNode *Function::createClipMinMaxBFloat16(llvm::StringRef name,
                                              NodeValue input) {
-  constexpr float float16Min = FLT_MIN;
-  constexpr float float16Max = FLT_MAX;
-  return createClip(name, input, float16Min, float16Max);
+  constexpr float bfloat16Min = FLT_MIN;
+  constexpr float bfloat16Max = FLT_MAX;
+  return createClip(name, input, bfloat16Min, bfloat16Max);
+}
+
+BatchedUnaryEmbeddingsBagsNode *Function::createBatchedUnaryEmbeddingsBags(
+    llvm::StringRef name, NodeValue weights, NodeValue tableOffsets,
+    NodeValue indices, NodeValue offsets) {
+  auto inDims = weights.dims();
+  ShapeVector outDims(inDims.begin(), inDims.end());
+  outDims[0] = weights.dims()[0];
+  outDims[2] = tableOffsets.dims()[0] - 1;
+  outDims[1] = (offsets.dims()[0] - 1) / outDims[2];
+
+  auto outTy = getParent()->uniqueTypeWithNewShape(weights.getType(), outDims);
+  return addNode(new BatchedUnaryEmbeddingsBagsNode(
+      name, outTy, weights, tableOffsets, offsets, indices));
+}
+
+IntNBitSplitEmbeddingBagsNode *Function::createIntNBitSplitEmbeddingBags(
+    llvm::StringRef name, NodeValue devWeights, NodeValue uvmWeights,
+    NodeValue weightsPlacements, NodeValue weightsOffsets, NodeValue weightsTys,
+    NodeValue dimOffsets, int64_t totalDims, NodeValue indices,
+    NodeValue offsets, SplitEmbeddingPoolingMode poolingMode,
+    SplitEmbeddingSparseType outputDtype) {
+  ShapeVector outDims;
+  outDims.insert(outDims.end(),
+                 (offsets.dims()[0] - 1) / (dimOffsets.dims()[0] - 1));
+  outDims.insert(outDims.end(), totalDims);
+
+  auto outTy = getParent()->uniqueType(
+      outputDtype == SplitEmbeddingSparseType::EST_FLOAT ? ElemKind::FloatTy
+                                                         : ElemKind::Float16Ty,
+      outDims);
+
+  return addNode(new IntNBitSplitEmbeddingBagsNode(
+      name, outTy, devWeights, uvmWeights, weightsPlacements, weightsOffsets,
+      weightsTys, dimOffsets, indices, offsets, totalDims, poolingMode,
+      outputDtype));
+}
+
+IntNBitSplitEmbeddingWeightedBagsNode *
+Function::createIntNBitSplitEmbeddingWeightedBags(
+    llvm::StringRef name, NodeValue devWeights, NodeValue uvmWeights,
+    NodeValue weightsPlacements, NodeValue weightsOffsets, NodeValue weightsTys,
+    NodeValue dimOffsets, int64_t totalDims, NodeValue indices,
+    NodeValue offsets, SplitEmbeddingPoolingMode poolingMode,
+    SplitEmbeddingSparseType outputDtype, NodeValue indiceWeights) {
+  ShapeVector outDims;
+  outDims.insert(outDims.end(),
+                 (offsets.dims()[0] - 1) / (dimOffsets.dims()[0] - 1));
+  outDims.insert(outDims.end(), totalDims);
+
+  auto outTy = getParent()->uniqueType(
+      outputDtype == SplitEmbeddingSparseType::EST_FLOAT ? ElemKind::FloatTy
+                                                         : ElemKind::Float16Ty,
+      outDims);
+
+  return addNode(new IntNBitSplitEmbeddingWeightedBagsNode(
+      name, outTy, devWeights, uvmWeights, weightsPlacements, weightsOffsets,
+      weightsTys, dimOffsets, indices, offsets, indiceWeights, totalDims,
+      poolingMode, outputDtype));
+}
+
+PermutePooledEmbeddingsNode *Function::createPermutePooledEmbeddingsNode(
+    llvm::StringRef name, NodeValue pooledEmbeddings, NodeValue listOffsetDim,
+    NodeValue listPermute, NodeValue listInvOffsetDim,
+    NodeValue listInvPermute) {
+  ShapeVector outDims;
+  outDims.insert(outDims.end(), pooledEmbeddings.dims()[0]);
+  outDims.insert(outDims.end(), pooledEmbeddings.dims()[1]);
+
+  auto outTy =
+      getParent()->uniqueTypeWithNewShape(pooledEmbeddings.getType(), outDims);
+
+  return addNode(new PermutePooledEmbeddingsNode(
+      name, outTy, pooledEmbeddings, listOffsetDim, listPermute,
+      listInvOffsetDim, listInvPermute));
 }
 
 //===----------------------------------------------------------------------===//
@@ -2963,15 +3509,18 @@ BatchNormalizationNode *Function::createBatchNormalization(
   bindings.allocate(variance)->init(Tensor::InitKind::Broadcast, 1.0,
                                     getPRNG());
 
-  return createBatchNormalization(name, input, beta, scale, mean, variance,
-                                  channelIdx, epsilon, momentum);
+  auto resultType = getParent()->uniqueType(inputTy, input.dims());
+
+  return createBatchNormalization(name, resultType, input, beta, scale, mean,
+                                  variance, channelIdx, epsilon, momentum);
 }
 
 ConvolutionNode *Function::createConv(
     PlaceholderBindings &bindings, llvm::StringRef name, NodeValue input,
     dim_t outChannels, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
+    ConvolutionLayout layout) {
   ShapeNHWC idim = ShapeNHWC(input.dims());
   ShapeHW kdim(kernels);
   PaddingTLBR pdim(pads);
@@ -3011,14 +3560,15 @@ ConvolutionNode *Function::createConv(
 
   return addNode(new ConvolutionNode(name, OT, input, filter, bias, kernels,
                                      strides, pads, group, dilation, layout,
-                                     FusedActivation::NONE));
+                                     FusedActivation::NONE, {}));
 }
 
 ConvolutionNode *Function::createConv(PlaceholderBindings &bindings,
                                       llvm::StringRef name, NodeValue input,
                                       dim_t outChannels, unsigned_t kernel,
                                       unsigned_t stride, unsigned_t pad,
-                                      unsigned_t group, unsigned_t dilation,
+                                      unsigned_t group,
+                                      llvm::ArrayRef<unsigned_t> dilation,
                                       ConvolutionLayout layout) {
   llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
@@ -3091,7 +3641,7 @@ ChannelwiseQuantizedConvolutionNode *Function::createChannelwiseQuantizedConv(
     NodeValue filterScales, NodeValue filterOffsets, NodeValue biasScales,
     NodeValue biasOffsets, TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t group, unsigned_t dilation, bool quantizeFilter,
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation, bool quantizeFilter,
     bool quantizeBias, quantization::Schema schema, ElemKind filterElemQTy,
     ElemKind biasElemQTy) {
 
@@ -3118,13 +3668,6 @@ ChannelwiseQuantizedConvolutionNode *Function::createChannelwiseQuantizedConv(
       << "Unsupported element type for ChannelwiseQuantizedConvolution "
       << "filter: " << Type::getElementName(filterElemKind).str();
 
-  DCHECK(dyn_cast<Constant>(bias.getNode()))
-      << "Bias input to ChannelwiseQuantizedConvolutionNode must be a Constant";
-
-  DCHECK(dyn_cast<Constant>(filter.getNode()))
-      << "Filter input to ChannelwiseQuantizedConvolutionNode must be a "
-         "Constant";
-
   DCHECK(!filterScales.getNode() || dyn_cast<Constant>(filterScales.getNode()))
       << "Filter scales input to ChannelwiseQuantizedConvolutionNode must be "
          "null or Constant";
@@ -3147,14 +3690,21 @@ ChannelwiseQuantizedConvolutionNode *Function::createChannelwiseQuantizedConv(
   dim_t qDim = 0;
   dim_t qStep = 1;
 
+  // Whether filter/bias quantization parameters were explicitly provided.
+  bool filterQParamsGiven = filterScales.getNode() && filterOffsets.getNode();
+  bool biasQParamsGiven = biasScales.getNode() && biasOffsets.getNode();
+
   // If input filter is FLOAT and filterScales/filterOffsets are NOT provided
   // then compute them automatically for given schema and filterElemQTy.
   // If input filter is QUANTIZED then filterScales/filterOffsets are mandatory.
-  if (!filterScales.getNode() || !filterOffsets.getNode()) {
+  if (!filterQParamsGiven) {
     DCHECK(filterElemKind == ElemKind::FloatTy)
         << "ChannelwiseQuantizedConvolution: If the input filter is "
         << "quantized then the filter scales/offsets must be provided!";
     Constant *filterC = dyn_cast<Constant>(filter.getNode());
+    DCHECK(filterC)
+        << "Filter input to ChannelwiseQuantizedConvolutionNode must be a "
+           "Constant to quantize it";
     Constant *filterScalesC = getParent()->createConstant(
         ElemKind::FloatTy, {numChannels}, "filterScales");
     Constant *filterOffsetsC = getParent()->createConstant(
@@ -3168,27 +3718,16 @@ ChannelwiseQuantizedConvolutionNode *Function::createChannelwiseQuantizedConv(
     filterOffsets = NodeValue(filterOffsetsC);
   }
 
-  // If input filter is FLOAT then quantize channel wise to filterElemQTy.
-  if (quantizeFilter && filterElemKind == ElemKind::FloatTy) {
-    Constant *filterC = dyn_cast<Constant>(filter.getNode());
-    Constant *filterCQ = getParent()->createConstant(
-        filterElemQTy, filterC->getType()->dims(), 1.0, 0, "filter");
-    Constant *filterScalesC = dyn_cast<Constant>(filterScales.getNode());
-    Constant *filterOffsetsC = dyn_cast<Constant>(filterOffsets.getNode());
-    // Quantize filter channelwise.
-    filterCQ->getPayloadMutable() = quantization::quantizeTensor(
-        filterC->getPayload(), filterScalesC->getPayload(),
-        filterOffsetsC->getPayload(), filterElemQTy, qDim, qStep);
-    filter = NodeValue(filterCQ);
-  }
-
   // If input bias is FLOAT and biasScales/biasOffsets are NOT provided
   // then compute them automatically for given schema and biasElemQTy.
   // If input bias is QUANTIZED and biasScales/biasOffsets are NOT provided
   // then assume the channel wise quantization parameters are implicitly:
   // biasScales[i] = inputScale * filterScales[i] and biasOffsets[i] = 0.
-  if (!biasScales.getNode() || !biasOffsets.getNode()) {
+  if (!biasQParamsGiven) {
     Constant *biasC = dyn_cast<Constant>(bias.getNode());
+    DCHECK(biasC)
+        << "Bias input to ChannelwiseQuantizedConvolutionNode must be a "
+           "Constant to quantize it";
     Constant *biasScalesC = getParent()->createConstant(
         ElemKind::FloatTy, {numChannels}, "biasScales");
     Constant *biasOffsetsC = getParent()->createConstant(
@@ -3202,19 +3741,32 @@ ChannelwiseQuantizedConvolutionNode *Function::createChannelwiseQuantizedConv(
     auto inputScale = input.getType()->getScale();
     auto inputOffset = input.getType()->getOffset();
     if (biasElemKind == ElemKind::FloatTy) {
+      auto biasH = biasC->getPayload().getHandle<float>();
       // Get bias channelwise TensorQuantizationParams.
       quantization::getTensorQuantizationParams(
           biasC->getPayload(), biasScalesC->getPayloadMutable(),
           biasOffsetsC->getPayloadMutable(), schema, biasElemQTy, qDim, qStep);
       // Specialize the bias channelwise TensorQuantizationParams.
       for (dim_t idx = 0; idx < numChannels; idx++) {
-        auto biasTQPNew = specializeBiasQuantizationParams(
-            {biasScalesH.raw(idx), biasOffsetsH.raw(idx)},
-            {inputScale, inputOffset},
-            {filterScalesH.raw(idx), filterOffsetsH.raw(idx)}, schema,
-            biasElemQTy);
-        biasScalesH.raw(idx) = biasTQPNew.scale;
-        biasOffsetsH.raw(idx) = biasTQPNew.offset;
+        bool biasZero = (biasH.raw(idx) == 0.f);
+        TensorQuantizationParams biasTQP = {biasScalesH.raw(idx),
+                                            biasOffsetsH.raw(idx)};
+        TensorQuantizationParams inputTQP = {inputScale, inputOffset};
+        TensorQuantizationParams filterTQP = {filterScalesH.raw(idx),
+                                              filterOffsetsH.raw(idx)};
+        if (filterQParamsGiven) {
+          // Specialize only bias quantization parameters.
+          biasTQP = specializeBiasQuantizationParams(
+              biasTQP, inputTQP, filterTQP, schema, biasElemQTy, biasZero);
+        } else {
+          // Specialize bias and weights quantization parameters.
+          specializeBiasWeightsQuantizationParams(
+              biasTQP, inputTQP, filterTQP, schema, biasElemQTy, biasZero);
+        }
+        biasScalesH.raw(idx) = biasTQP.scale;
+        biasOffsetsH.raw(idx) = biasTQP.offset;
+        filterScalesH.raw(idx) = filterTQP.scale;
+        filterOffsetsH.raw(idx) = filterTQP.offset;
       }
     } else {
       // Set implicit bias channelwise TensorQuantizationParams.
@@ -3228,9 +3780,29 @@ ChannelwiseQuantizedConvolutionNode *Function::createChannelwiseQuantizedConv(
     biasOffsets = NodeValue(biasOffsetsC);
   }
 
+  // If input filter is FLOAT then quantize channel wise to filterElemQTy.
+  if (quantizeFilter && filterElemKind == ElemKind::FloatTy) {
+    Constant *filterC = dyn_cast<Constant>(filter.getNode());
+    DCHECK(filterC)
+        << "Filter input to ChannelwiseQuantizedConvolutionNode must be a "
+           "Constant to quantize it";
+    Constant *filterCQ = getParent()->createConstant(
+        filterElemQTy, filterC->getType()->dims(), 1.0, 0, "filter");
+    Constant *filterScalesC = dyn_cast<Constant>(filterScales.getNode());
+    Constant *filterOffsetsC = dyn_cast<Constant>(filterOffsets.getNode());
+    // Quantize filter channelwise.
+    filterCQ->getPayloadMutable() = quantization::quantizeTensor(
+        filterC->getPayload(), filterScalesC->getPayload(),
+        filterOffsetsC->getPayload(), filterElemQTy, qDim, qStep);
+    filter = NodeValue(filterCQ);
+  }
+
   // If input bias is FLOAT then quantize channel wise to biasElemQTy.
   if (quantizeBias && biasElemKind == ElemKind::FloatTy) {
     Constant *biasC = dyn_cast<Constant>(bias.getNode());
+    DCHECK(biasC)
+        << "Bias input to ChannelwiseQuantizedConvolutionNode must be a "
+           "Constant to quantize it";
     Constant *biasCQ = getParent()->createConstant(
         biasElemQTy, biasC->getType()->dims(), 1.0, 0, "bias");
     Constant *biasScalesC = dyn_cast<Constant>(biasScales.getNode());
@@ -3245,14 +3817,15 @@ ChannelwiseQuantizedConvolutionNode *Function::createChannelwiseQuantizedConv(
   auto OT = getParent()->uniqueType(*outTy);
   return addNode(new ChannelwiseQuantizedConvolutionNode(
       name, OT, input, filter, bias, filterScales, filterOffsets, biasScales,
-      biasOffsets, kernels, strides, pads, group, dilation));
+      biasOffsets, kernels, strides, pads, group, dilation,
+      FusedActivation::NONE, {}));
 }
 
 ConvTransposeNode *Function::createConvTranspose(
     PlaceholderBindings &bindings, llvm::StringRef name, NodeValue input,
     dim_t outChannels, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t group, unsigned_t dilation) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation) {
   ShapeNHWC idim = ShapeNHWC(input.dims());
   ShapeHW kdim(kernels);
   PaddingTLBR pdim(pads);
@@ -3299,7 +3872,7 @@ ConvTransposeNode *Function::createConvTranspose(
 ConvTransposeNode *Function::createConvTranspose(
     PlaceholderBindings &bindings, llvm::StringRef name, NodeValue input,
     dim_t outChannels, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-    unsigned_t group, unsigned_t dilation) {
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation) {
   llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
   llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
@@ -3412,7 +3985,7 @@ void Function::createGRU(PlaceholderBindings &bindings,
                          llvm::ArrayRef<NodeValue> inputs, unsigned batchSize,
                          unsigned hiddenSize, unsigned outputSize,
                          std::vector<NodeValue> &outputs) {
-  std::string nameBase = namePrefix;
+  std::string nameBase = namePrefix.str();
   const unsigned timeSteps = inputs.size();
   assert(timeSteps > 0 && "empty input");
   const unsigned inputSize = inputs.front().dims().back();
@@ -3561,7 +4134,7 @@ void Function::createSimpleRNN(PlaceholderBindings &bindings,
                                unsigned batchSize, unsigned hiddenSize,
                                unsigned outputSize,
                                std::vector<NodeValue> &outputs) {
-  std::string nameBase = namePrefix;
+  std::string nameBase = namePrefix.str();
   const unsigned timeSteps = inputs.size();
   assert(timeSteps > 0 && "empty input");
   const unsigned inputSize = inputs.front().dims().back();
@@ -3618,12 +4191,229 @@ void Function::createSimpleRNN(PlaceholderBindings &bindings,
   };
 }
 
+LSTMUnitNode *Function::createLSTMUnit(llvm::StringRef namePrefix,
+                                       NodeValue Input, NodeValue C) {
+
+  return addNode(new LSTMUnitNode(namePrefix, Input, C));
+}
+
+template <class T>
+std::vector<NodeValue> Function::createSingleDirectionLSTM(
+    std::string nameBase, T inputItr, const int timeSteps, NodeValue Wx,
+    NodeValue Wh, NodeValue Bx, NodeValue Bh, NodeValue &H, NodeValue &C) {
+
+  std::vector<NodeValue> Hs;
+  auto name = [&nameBase](const char *s, int t) {
+    return strFormat("%s.%s_%d", nameBase.c_str(), s, t);
+  };
+  for (int t = 0; t < timeSteps; t++, inputItr++) {
+
+    auto *result = createAdd(
+        name("add", t), createFullyConnected(name("fc_1", t), H, Wh, Bh),
+        createFullyConnected(name("fc_2", t), *inputItr, Wx, Bx));
+
+    auto lstmUnitNode =
+        addNode(new LSTMUnitNode(name("lstm_unit", t), result, C));
+    H = lstmUnitNode->getNthResult(0);
+    C = lstmUnitNode->getNthResult(1);
+
+    Hs.push_back(
+        createReshape(name("H_reshape", t), H, {1, H.dims()[0], H.dims()[1]})
+            ->getResult());
+  }
+  return Hs;
+}
+
+std::vector<NodeValue> Function::createMultipleLayerSingleDirectionLSTM(
+    std::string nameBase, NodeValue input, unsigned batchSize,
+    unsigned inputSize, const int timeSteps, std::vector<NodeValue> &Wx,
+    std::vector<NodeValue> &Wh, std::vector<NodeValue> &Bx,
+    std::vector<NodeValue> &Bh, NodeValue &H, NodeValue &C) {
+
+  assert(Wx.size() > 0 && Wh.size() > 0 && Bx.size() > 0 && Bh.size() > 0 &&
+         "Wx, Wh, Bx and Bh should be non empty vectors");
+
+  auto numLayers = Wx.size();
+  NodeValue temp_input = input;
+  std::vector<NodeValue> Hs;
+  auto name = [&nameBase](const char *s, int t) {
+    return strFormat("%s.%s_%d", nameBase.c_str(), s, t);
+  };
+  std::vector<NodeValue> Hv, Cv;
+  auto reshape2dto3d = [=](NodeValue n, std::string nameStr) {
+    return createReshape(nameStr, n, {1, n.dims()[0], n.dims()[1]});
+  };
+  for (unsigned layer = 0; layer < numLayers; layer++) {
+    auto slidedInputs = createSlicedInput(temp_input, nameBase, batchSize,
+                                          inputSize, timeSteps);
+    auto Hn =
+        createReshape(name("reshape_hn", layer),
+                      createSlice(name("slice_hn", layer), H, {layer, 0, 0},
+                                  {layer + 1, H.dims()[1], H.dims()[2]})
+                          ->getResult(),
+                      {H.dims()[1], H.dims()[2]})
+            ->getResult();
+    auto Cn =
+        createReshape(name("reshape_cn", layer),
+                      createSlice(name("slice_cn", layer), C, {layer, 0, 0},
+                                  {layer + 1, C.dims()[1], C.dims()[2]})
+                          ->getResult(),
+                      {C.dims()[1], C.dims()[2]})
+            ->getResult();
+    Hs = createSingleDirectionLSTM(nameBase, slidedInputs.begin(), timeSteps,
+                                   Wx[layer], Wh[layer], Bx[layer], Bh[layer],
+                                   Hn, Cn);
+    temp_input = createConcat(nameBase + "_lstm_temp_input", Hs, 0);
+    Hv.emplace_back(reshape2dto3d(Hn, "_lstm_hv"));
+    Cv.emplace_back(reshape2dto3d(Cn, "_lstm_cv"));
+    inputSize = temp_input.dims()[2];
+  }
+  H = createConcat(nameBase + "_lstm_h_output", Hv, 0);
+  C = createConcat(nameBase + "_lstm_c_output", Cv, 0);
+  return Hs;
+}
+
+std::vector<NodeValue> Function::createSlicedInput(NodeValue input,
+                                                   std::string &nameBase,
+                                                   unsigned batchSize,
+                                                   unsigned inputSize,
+                                                   const int timeSteps) {
+  std::vector<NodeValue> inputs;
+  auto name = [&nameBase](const char *s, int t) {
+    return strFormat("%s.%s_%d", nameBase.c_str(), s, t);
+  };
+  for (unsigned t = 0; t < timeSteps; t++) {
+    auto inputSliced = createSlice(name("slice", t), input, {t, 0, 0},
+                                   {t + 1, batchSize, inputSize})
+                           ->getResult();
+    inputSliced =
+        createReshape(name("reshape", t), inputSliced, {batchSize, inputSize})
+            ->getResult();
+    inputs.push_back(inputSliced);
+  }
+  return inputs;
+}
+
+void Function::createPyTorchLSTM(llvm::StringRef namePrefix, NodeValue input,
+                                 std::vector<NodeValue> &Wx,
+                                 std::vector<NodeValue> &Wh,
+                                 std::vector<NodeValue> &Bx,
+                                 std::vector<NodeValue> &Bh, NodeValue &Ht,
+                                 NodeValue &Ct, NodeValue &output,
+                                 bool isBidirectional, NodeValue WxR,
+                                 NodeValue WhR, NodeValue BxR, NodeValue BhR) {
+  std::string nameBase = namePrefix.str();
+  assert(input.dims().back() > 0 && "input dimensionality is zero");
+  assert((!isBidirectional || WxR != NodeValue(nullptr)) &&
+         "Bidirectional LSTM must provide reverse weights & biases");
+  assert(Wx.size() > 0 && Wh.size() > 0 && Bx.size() > 0 && Bh.size() > 0 &&
+         "Wx, Wh, Bx and Bh should be non empty vectors");
+
+  std::vector<NodeValue> inputs, outputs;
+  unsigned batchSize, inputSize, timeSteps, hiddenSize;
+  batchSize = input.dims()[1];
+  inputSize = input.dims()[2];
+  if (Wh.size() == 1) {
+    hiddenSize = Wh[0].dims()[0];
+  } else {
+    hiddenSize = Wh[0].dims()[1];
+  }
+
+  timeSteps = input.dims()[0];
+
+  // Input gate:
+  //    I <- sigmoid(Wxi * x + Bxi + Whi * h + Bhi)
+  // Forget gate:
+  //    F <- sigmoid(Wxf * x + Bxf + Whf * h + Bhf)
+  // Cell gate:
+  //    G <- tanh(Wxg * x + Bxg + Whg * h + Bhg)
+  // Output gate:
+  //    O <- sigmoid(Wxo * x + Bxo + Who * h + Bho)
+  // Cell state:
+  //    C <- F . C + I . G
+  // Hidden state:
+  //    h <- O . tanh(C)
+
+  if (isBidirectional) {
+    // For bidirectional LSTM, we split H and C to two part, each direction a
+    // part. For each part we calculate them separately.
+    NodeValue Hforward, Hbackward, Cforward, Cbackward;
+    Hforward = createReshape("reshape_hforward",
+                             createSlice("slice_hforward", Ht, {0, 0, 0},
+                                         {1, batchSize, hiddenSize}),
+                             {batchSize, hiddenSize})
+                   ->getResult();
+    Hbackward = createReshape("reshape_hbackward",
+                              createSlice("slice_hbackward", Ht, {1, 0, 0},
+                                          {2, batchSize, hiddenSize}),
+                              {batchSize, hiddenSize})
+                    ->getResult();
+    Cforward = createReshape("reshape_cforward",
+                             createSlice("slice_cforward", Ct, {0, 0, 0},
+                                         {1, batchSize, hiddenSize}),
+                             {batchSize, hiddenSize})
+                   ->getResult();
+    Cbackward = createReshape("reshape_cbackward",
+                              createSlice("slice_cbackward", Ct, {1, 0, 0},
+                                          {2, batchSize, hiddenSize}),
+                              {batchSize, hiddenSize})
+                    ->getResult();
+
+    auto slicedInputs =
+        createSlicedInput(input, nameBase, batchSize, inputSize, timeSteps);
+    auto outputForwards =
+        createSingleDirectionLSTM<std::vector<NodeValue>::iterator>(
+            nameBase + "_lstm_forward", slicedInputs.begin(), timeSteps, Wx[0],
+            Wh[0], Bx[0], Bh[0], Hforward, Cforward);
+    auto outputBackwards =
+        createSingleDirectionLSTM<std::vector<NodeValue>::reverse_iterator>(
+            nameBase + "_lstm_backward", slicedInputs.rbegin(), timeSteps, WxR,
+            WhR, BxR, BhR, Hbackward, Cbackward);
+    std::reverse(outputBackwards.begin(), outputBackwards.end());
+    NodeValue outputForward = createConcat(
+        nameBase + "_lstm_forward_output_concat", outputForwards, 0);
+    NodeValue outputBackward = createConcat(
+        nameBase + "_lstm_backward_output_concat", outputBackwards, 0);
+    output =
+        createConcat("final_output_concat", {outputForward, outputBackward}, 2)
+            ->getResult();
+
+    auto reshape2dto3d = [=](NodeValue n, std::string nameStr) {
+      return createReshape(nameStr, n, {1, n.dims()[0], n.dims()[1]});
+    };
+    Ht = createConcat("Ht_Concat",
+                      {reshape2dto3d(Hforward, "final_Hforward_reshape"),
+                       reshape2dto3d(Hbackward, "final_Hbackward_reshape")},
+                      0)
+             ->getResult();
+    Ct = createConcat("Ct_Concat",
+                      {reshape2dto3d(Cforward, "final_Cforward_reshape"),
+                       reshape2dto3d(Cbackward, "final_Cbackward_reshape")},
+                      0)
+             ->getResult();
+
+  } else {
+    if (Ht.dims().size() == 2) {
+      auto slicedInputs =
+          createSlicedInput(input, nameBase, batchSize, inputSize, timeSteps);
+      outputs = createSingleDirectionLSTM<std::vector<NodeValue>::iterator>(
+          nameBase + "_lstm", slicedInputs.begin(), timeSteps, Wx[0], Wh[0],
+          Bx[0], Bh[0], Ht, Ct);
+    } else {
+      outputs = createMultipleLayerSingleDirectionLSTM(
+          nameBase + "_lstm", input, batchSize, inputSize, timeSteps, Wx, Wh,
+          Bx, Bh, Ht, Ct);
+    }
+    output = createConcat(nameBase + "_lstm_output_concat", outputs, 0);
+  }
+};
+
 void Function::createLSTM(PlaceholderBindings &bindings,
                           llvm::StringRef namePrefix,
                           llvm::ArrayRef<NodeValue> inputs, unsigned batchSize,
                           unsigned hiddenSize, unsigned outputSize,
                           std::vector<NodeValue> &outputs) {
-  std::string nameBase = namePrefix;
+  std::string nameBase = namePrefix.str();
   const unsigned timeSteps = inputs.size();
   assert(timeSteps > 0 && "empty input");
   const unsigned inputSize = inputs.front().dims().back();
@@ -4659,7 +5449,8 @@ TraceEventNode *Function::createTraceEvent(llvm::StringRef eventName,
                                            llvm::StringRef eventType,
                                            Node *data, unsigned index) {
   std::string name = (getName() + "_" + eventName + "_instrumentation").str();
-  return addNode(new TraceEventNode(name, data, eventName, eventType, index));
+  return addNode(
+      new TraceEventNode(name, data, eventName.str(), eventType.str(), index));
 }
 
 NonMaxSuppressionNode *Function::createNonMaxSuppressionV4(
@@ -4768,6 +5559,66 @@ NonMaxSuppressionNode *Function::createNonMaxSuppressionONNX(
   return addNode(new NonMaxSuppressionNode(
       name, indicesTy, numberOfSelectedIndicesTy, boxes, scores, centerPointBox,
       maxOutputBoxesPerClass, iouThreshold, scoreThreshold, false));
+}
+
+TFLiteDetectionPostProcessNode *Function::createTFLiteDetectionPostProcess(
+    llvm::StringRef name, NodeValue boxes, NodeValue scores, NodeValue anchors,
+    int32_t numClasses, int32_t maxDetections, int32_t maxClassesPerDetection,
+    int32_t maxDetectionsPerClass, float iouThreshold, float scoreThreshold,
+    float xScale, float yScale, float hScale, float wScale, bool regularNMS) {
+
+  // Maximum number of detections depending on fast/regular method.
+  dim_t numBoxes = anchors.dims()[0];
+  dim_t fastMaxDetections =
+      std::min(numBoxes, static_cast<dim_t>(maxDetections));
+  dim_t regularMaxDetections = maxDetections;
+  dim_t numMaxDetections =
+      regularNMS ? regularMaxDetections : fastMaxDetections;
+
+  // Create output types. We allocate enough size for the worst possible case
+  // when the maximum number of detections is obtained.
+  std::vector<dim_t> detectionBoxesDims = {static_cast<dim_t>(numMaxDetections),
+                                           4};
+  TypeRef detectionBoxesTy =
+      getParent()->uniqueType(ElemKind::FloatTy, detectionBoxesDims);
+  std::vector<dim_t> detectionClassesDims = {
+      static_cast<dim_t>(numMaxDetections)};
+  TypeRef detectionClassesTy =
+      getParent()->uniqueType(ElemKind::Int32ITy, detectionClassesDims);
+  std::vector<dim_t> detectionScoresDims = {
+      static_cast<dim_t>(numMaxDetections)};
+  TypeRef detectionScoresTy =
+      getParent()->uniqueType(ElemKind::FloatTy, detectionScoresDims);
+  TypeRef numDetectionsTy = getParent()->uniqueType(ElemKind::Int32ITy, {1});
+
+  // Dequantize inputs if quantized.
+  if (boxes.getType()->isQuantizedType()) {
+    boxes = createDequantize(name.str() + ".dequant.boxes", boxes,
+                             ElemKind::FloatTy);
+  }
+  if (scores.getType()->isQuantizedType()) {
+    scores = createDequantize(name.str() + ".dequant.scores", scores,
+                              ElemKind::FloatTy);
+  }
+  if (anchors.getType()->isQuantizedType()) {
+    anchors = createDequantize(name.str() + ".dequant.anchors", anchors,
+                               ElemKind::FloatTy);
+  }
+
+  // Create node.
+  return addNode(new TFLiteDetectionPostProcessNode(
+      name, detectionBoxesTy, detectionClassesTy, detectionScoresTy,
+      numDetectionsTy, boxes, scores, anchors, numClasses, maxDetections,
+      maxClassesPerDetection, maxDetectionsPerClass, iouThreshold,
+      scoreThreshold, xScale, yScale, hScale, wScale, regularNMS));
+}
+
+TFLiteCustomOperatorNode *Function::createTFLiteCustomOperator(
+    llvm::StringRef name, llvm::ArrayRef<TypeRef> outputTypes,
+    llvm::ArrayRef<NodeValue> inputs, std::string operatorType,
+    std::string operatorOptions) {
+  return addNode(new TFLiteCustomOperatorNode(name, outputTypes, inputs,
+                                              operatorType, operatorOptions));
 }
 
 Constant *Function::createCosineWindow(llvm::StringRef name, dim_t length) {
@@ -5027,6 +5878,7 @@ BBoxTransformNode *Function::createBBoxTransform(
 
   auto boxOutTy = getParent()->uniqueTypeWithNewShape(
       rois.getType(), {deltasDims[0], deltasDims[1]});
+  // Forcing roiBatchSplitsTy to always be Float.
   auto roiBatchSplitsTy =
       getParent()->uniqueType(rois.getElementType(), {imInfoDims[0]});
 
@@ -5034,6 +5886,15 @@ BBoxTransformNode *Function::createBBoxTransform(
       name, boxOutTy, roiBatchSplitsTy, rois, deltas, imInfo, weights,
       applyScale, rotated, angleBoundOn, angleBoundLo, angleBoundHi,
       clipAngleThresh, legacyPlusOne));
+}
+
+ExternalFunctionCallNode *Function::createExternalFunctionCall(
+    llvm::StringRef name, TypeRef outTy, llvm::ArrayRef<glow::NodeValue> inputs,
+    llvm::StringRef funcName, llvm::StringRef funcImpl,
+    llvm::StringRef funcKind) {
+  return addNode(new ExternalFunctionCallNode(name.str(), outTy, inputs,
+                                              funcName.str(), funcImpl.str(),
+                                              funcKind.str()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -5104,7 +5965,7 @@ class FunctionDottyPrinter : public AbstractDottyPrinter {
       size_t resNo = pred.getResNo();
       std::ostringstream edge;
       edge << pred.getNode()->getName().str() << ":"
-           << pred.getNode()->getOutputName(resNo).str() << " -> "
+           << pred.getNode()->getOutputName(resNo) << " -> "
            << N->getName().str() << ":w";
       dumpEdgeStyle(N, 0, pred, edge);
       edges_.insert(edge.str());
@@ -5116,8 +5977,8 @@ class FunctionDottyPrinter : public AbstractDottyPrinter {
       size_t resNo = N->getNthInput(i).getResNo();
 
       std::ostringstream edge;
-      edge << to->getName().str() << ":" << to->getOutputName(resNo).str()
-           << " -> " << N->getName().str() << ":" << N->getInputName(i);
+      edge << to->getName().str() << ":" << to->getOutputName(resNo) << " -> "
+           << N->getName().str() << ":" << N->getInputName(i);
       dumpEdgeStyle(N, i, to, edge);
       edges_.insert(edge.str());
 
@@ -5146,6 +6007,31 @@ std::string Function::dumpDAG() {
   return std::string(dotPath.begin(), dotPath.end());
 }
 
+/// Local utility function to convert an existing DOT file \p dotFile to
+/// the right format suggested by the file name extension. For example if
+/// the file name ends with ".pdf" then the file will be converted to PDF.
+/// For conversion we use the "dot" application (assumed available) and
+/// the conversion is done in place.
+static void convertDotFileToRightFormat(llvm::StringRef dotFile) {
+  static const std::vector<std::string> supportedFormats = {"pdf", "svg",
+                                                            "png"};
+  // Get file extension.
+  llvm::StringRef extWithDot = llvm::sys::path::extension(dotFile);
+  std::string ext = extWithDot.take_back(extWithDot.size() - 1).str();
+  // Convert to new format if supported.
+  if (std::find(supportedFormats.begin(), supportedFormats.end(), ext) !=
+      supportedFormats.end()) {
+    std::string cmd =
+        "dot -T" + ext + " " + dotFile.str() + " -o " + dotFile.str();
+    std::string cmdErr =
+        "Error running DOT conversion application with command '" + cmd +
+        "'! Check that you have the 'dot' application installed on your "
+        "system in order to convert files from DOT format to other formats! "
+        "Otherwise choose the extension of the DOT file to '.dot'!";
+    CHECK(!system(cmd.c_str())) << cmdErr;
+  }
+}
+
 void Function::dumpDAG(llvm::StringRef dotFilename) {
   llvm::StringRef legalDotFilename = dotFilename.take_back(255);
   llvm::outs() << "Writing dotty graph for Function to: " << legalDotFilename
@@ -5161,9 +6047,15 @@ void Function::dumpDAG(llvm::StringRef dotFilename) {
   DP.visitGraph(this);
 
   std::ofstream myfile;
-  myfile.open(legalDotFilename);
-  DP.dumpAll(myfile);
+  myfile.open(legalDotFilename.str());
+  if (myfile.fail()) {
+    LOG(ERROR) << "Unable to open " << legalDotFilename.str()
+               << ", reason: " << strerror(errno);
+  } else {
+    DP.dumpAll(myfile);
+  }
   myfile.close();
+  convertDotFileToRightFormat(legalDotFilename);
 }
 
 void Function::dumpDAG(const char *dotFilename) {
@@ -5234,6 +6126,7 @@ Constant *Module::getConstantByName(llvm::StringRef name) const {
 
 void Function::randomizeConstants(
     const std::map<Kinded::Kind, std::set<unsigned>> &ignoredConstants) {
+  LOG(INFO) << "Randomize Constants............";
   for (Constant *c : getParent()->getConstants()) {
     bool usedHere = false;
     bool usedElsewhere = false;
@@ -5339,6 +6232,11 @@ void Function::randomizeConstants(
           std::numeric_limits<uint8_t>::max(), getPRNG());
       break;
     case ElemKind::UInt4FusedFP16QTy:
+      payload.getHandle<uint8_t>().randomize(
+          std::numeric_limits<uint8_t>::lowest(),
+          std::numeric_limits<uint8_t>::max(), getPRNG());
+      break;
+    case ElemKind::UInt4FusedQTy:
       payload.getHandle<uint8_t>().randomize(
           std::numeric_limits<uint8_t>::lowest(),
           std::numeric_limits<uint8_t>::max(), getPRNG());
@@ -5587,8 +6485,8 @@ static bool
 insertAndReport(std::unordered_map<std::string, const Node *> &nameToNode,
                 const Node &node, const Function &function) {
   bool inserted = expectCompareTrue(
-      "Node is not unique", nameToNode.insert({node.getName(), &node}).second,
-      true, &function);
+      "Node is not unique",
+      nameToNode.insert({node.getName().str(), &node}).second, true, &function);
   if (!inserted) {
     std::string storage;
     llvm::raw_string_ostream msg(storage);
@@ -5597,7 +6495,7 @@ insertAndReport(std::unordered_map<std::string, const Node *> &nameToNode,
         << "' conflicts with a previous definition:\n";
     msg << "Current definition: " << node.getDebugDesc() << "\n";
     msg << "Previous definition: "
-        << nameToNode[node.getName()]->getDebugDesc();
+        << nameToNode[node.getName().str()]->getDebugDesc();
     report(msg.str().c_str());
     return false;
   }
@@ -5606,18 +6504,25 @@ insertAndReport(std::unordered_map<std::string, const Node *> &nameToNode,
 
 bool Function::verify(const Backend *backend) const {
   bool isValid = true;
-  if (backend) {
-    if (backend->getTensorLayoutRequirements().isEnabled()) {
+  // Check if the layout verifying is disabled, which will accept all layout for
+  // any ops.
+  VLOG(1) << "Layout requirements checking is "
+          << (glow::flags::DisableLayoutVerifying ? "disabled" : "enabled");
+  if (!glow::flags::DisableLayoutVerifying) {
+    if (backend) {
+      if (backend->getTensorLayoutRequirements().isEnabled()) {
+        isValid &= expectCompareTrue(
+            "Expected correct backend-specific layouts for the graph",
+            verifyLayouts(*this, backend->getTensorLayoutRequirements()), true,
+            this);
+      }
+    } else {
+      // Always run verification pre-lowering / when we don't have backend:
       isValid &= expectCompareTrue(
-          "Expected correct backend-specific layouts for the graph",
-          verifyLayouts(*this, backend->getTensorLayoutRequirements()), true,
+          "Expected correct Glow canonical layouts for the graph",
+          verifyLayouts(*this, CanonicalTensorLayout::getInstance()), true,
           this);
     }
-  } else {
-    // Always run verification pre-lowering / when we don't have backend:
-    isValid &= expectCompareTrue(
-        "Expected correct Glow canonical layouts for the graph",
-        verifyLayouts(*this, CanonicalTensorLayout::getInstance()), true, this);
   }
   std::unordered_map<std::string, const Node *> nameToNode;
 
@@ -5669,6 +6574,35 @@ bool Function::verify(const Backend *backend) const {
           "Every type used by one of the graph nodes should be part of "
           "the graph",
           foundType, true, &N);
+    }
+  }
+
+  // Check that there are no zero volume tensors
+  for (const auto &N : nodes_) {
+    // Check inputs
+    for (size_t idx = 0, e = N.getNumInputs(); idx < e; ++idx) {
+      auto dims = N.getNthInput(idx).dims();
+      for (auto dim : dims) {
+        if (dim == 0) {
+          LOG(ERROR) << "Found 0 volume input in the " << idx
+                     << " input to node " << N.toString() << " with dims "
+                     << dims;
+          return false;
+        }
+      }
+    }
+
+    // Check results
+    for (size_t idx = 0, e = N.getNumResults(); idx < e; ++idx) {
+      auto dims = N.getNthResult(idx).dims();
+      for (auto dim : dims) {
+        if (dim == 0) {
+          LOG(ERROR) << "Found 0 volume result in the " << idx
+                     << " result from node " << N.toString() << " with dims "
+                     << dims;
+          return false;
+        }
+      }
     }
   }
 
@@ -5872,7 +6806,9 @@ bool isConvolutionSameAsFullyConnected(const ConvolutionNode *node,
   isSame &= (pads.top == 0) && (pads.left == 0) && (pads.bottom == 0) &&
             (pads.right == 0);
   isSame &= (group == 1);
-  isSame &= (dilation == 1);
+  isSame &= std::all_of(dilation.begin(), dilation.end(),
+                        [](unsigned_t i) { return i == 1; });
+
   if (enforceInput1x1) {
     auto inputDims = ShapeNHWC(node->getInput().getType()->dims());
     isSame &= (inputDims.h == 1) && (inputDims.w == 1);

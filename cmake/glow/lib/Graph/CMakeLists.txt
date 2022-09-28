@@ -29,7 +29,7 @@ add_library(Graph
             ${NODES_DEF}
             Hook.cpp
             Node.cpp
-            Nodes.cpp
+            ${NESTC_ROOT_DIR}/lib/Graph/Nodes.cpp
             NodeValue.cpp
             Log.cpp
             PlaceholderBindings.cpp

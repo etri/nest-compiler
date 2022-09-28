@@ -151,6 +151,11 @@ public:
   TypeRef uniqueTypeWithNewShape(TypeRef T, llvm::ArrayRef<dim_t> dims);
 
   /// The new type is identical to \p T, with a new shape \p dims and new \p
+  /// strides.
+  TypeRef uniqueTypeWithNewStrides(TypeRef T, llvm::ArrayRef<dim_t> dims,
+                                   llvm::ArrayRef<dim_t> strides);
+
+  /// The new type is identical to \p T, with a new shape \p dims and new \p
   /// alignments.
   TypeRef uniqueTypeWithNewShape(TypeRef T, llvm::ArrayRef<dim_t> dims,
                                  llvm::ArrayRef<dim_t> alignments);
@@ -159,6 +164,11 @@ public:
   /// The new type is identical to \p T, with a new shape and strides taken from
   /// the type \p shapeType.
   TypeRef uniqueTypeWithNewShape(TypeRef T, TypeRef shapeType);
+
+  /// Return a pointer to a uniqued type \p T.
+  /// The new type is identical to \p T, with new scale and offset taken from
+  /// the type \p quantParamType.
+  TypeRef uniqueTypeWithNewQuantParams(TypeRef T, TypeRef quantParamType);
 
   /// Return the void type.
   TypeRef getVoidTy();
@@ -321,7 +331,7 @@ class Backend;
 struct CompilationContext;
 
 /// Represents the compute graph.
-class Function final : public IRContainer {
+class Function : public IRContainer {
   /// A list of nodes that the Function owns.
   NodesList nodes_;
 
@@ -348,7 +358,15 @@ public:
     logCtx_->pushEvent(parent->getModuleLogContext()->getClonedScope());
   }
 
-  ~Function();
+  ~Function() override;
+
+  IRKind getIRKind() const override { return IRKind::GlowGraphIRKind; };
+
+  static bool classof(const IRContainer *I) {
+    return I->getIRKind() == IRKind::GlowGraphIRKind;
+  }
+
+  static bool classof(const Function *F) { return true; }
 
   /// Clear out \ref nodes_ and \ref uniqueNodeNames_.
   void clear();
@@ -374,7 +392,7 @@ public:
     return metadataPlaceholders_;
   }
 
-  Module *getParent() { return parent_; }
+  Module *getParent() override { return parent_; }
 
   /// Perform ordering of nodes_ based on node's name.
   /// This is to make sure that performing optimizations have a deterministic
@@ -399,7 +417,7 @@ public:
   ConstList findConstants();
   ConstList findConstants() const;
 
-  const Module *getParent() const { return parent_; }
+  const Module *getParent() const override { return parent_; }
 
   /// Inserts the node \p N to the list of nodes, and returns the inserted node.
   template <class NodeTy> NodeTy *addNode(NodeTy *N) {
@@ -458,7 +476,7 @@ public:
              NodeValue bias, TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
              llvm::ArrayRef<unsigned_t> strides,
              llvm::ArrayRef<unsigned_t> pads, unsigned_t group,
-             unsigned_t dilation = 1,
+             llvm::ArrayRef<unsigned_t> dilation = {1, 1},
              ConvolutionLayout layout = ConvolutionLayout::NHWC);
 
   /// Creates a ConvolutionNode with the given \p name which convolves the 4D
@@ -475,7 +493,7 @@ public:
   createConv(llvm::StringRef name, NodeValue input, NodeValue filter,
              NodeValue bias, TypeRef outTy, unsigned_t kernel,
              unsigned_t stride, unsigned_t pad, unsigned_t group,
-             unsigned_t dilation = 1,
+             llvm::ArrayRef<unsigned_t> dilation = {1, 1},
              ConvolutionLayout layout = ConvolutionLayout::NHWC);
 
   /// Creates a Convolution3DNode with the given \p name which convolves the 5D
@@ -548,8 +566,8 @@ public:
       NodeValue filterScales, NodeValue filterOffsets, NodeValue biasScales,
       NodeValue biasOffsets, TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
       llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-      unsigned_t group, unsigned_t dilation = 1, bool quantizeFilter = true,
-      bool quantizeBias = true,
+      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation = {1, 1},
+      bool quantizeFilter = true, bool quantizeBias = true,
       quantization::Schema schema = quantization::Schema::Asymmetric,
       ElemKind filterElemQTy = ElemKind::Int8QTy,
       ElemKind biasElemQTy = ElemKind::Int32QTy);
@@ -565,7 +583,7 @@ public:
       llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
       TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
       llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-      unsigned_t group, unsigned_t dilation = 1);
+      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation = {1, 1});
 
   /// Creates a createConvTransposeNode with the given \p name which does
   /// transposed convolution of the 4D \p input with \p filter and \bias. \p
@@ -574,12 +592,11 @@ public:
   /// cell. \p pad defines how many zero padding cells should be added to the
   /// input during convolution. \p group defines the number of groups the input
   /// and output channels should be divided into and convolved separately.
-  ConvTransposeNode *createConvTranspose(llvm::StringRef name, NodeValue input,
-                                         NodeValue filter, NodeValue bias,
-                                         TypeRef outTy, unsigned_t kernel,
-                                         unsigned_t stride, unsigned_t pad,
-                                         unsigned_t group,
-                                         unsigned_t dilation = 1);
+  ConvTransposeNode *
+  createConvTranspose(llvm::StringRef name, NodeValue input, NodeValue filter,
+                      NodeValue bias, TypeRef outTy, unsigned_t kernel,
+                      unsigned_t stride, unsigned_t pad, unsigned_t group,
+                      llvm::ArrayRef<unsigned_t> dilation = {1, 1});
 
   /// Creates and \returns a ConvertTo Node with name \p name of \p input to
   /// output type \p outTy.
@@ -650,6 +667,33 @@ public:
                        float beta = 1.0, bool transposeA = false,
                        bool transposeB = false);
 
+  /// Create and \returns a DynamicQuantizedFullyConnectedNode with \p name,
+  /// \p input, weights \p W, bias \p B, flag to indicate mode \p isSymmetric.
+  /// By default it is a dynamic quantized FC node, which takes fp16 inputs,
+  /// symmetrically quantized them, run FC on them, dequantize them and produces
+  /// fp16 output. If \p isSymmetric is set to false, then inputs are
+  /// asymmetrically quantized. if \p isPerBatchElement is set to false, then
+  /// inputs are per tensor quantized.
+  DynamicQuantizedFullyConnectedNode *createDynamicQuantizedFullyConnected(
+      llvm::StringRef name, NodeValue input, NodeValue W, NodeValue B,
+      bool isSymmetric = true, bool isPerBatchElement = true);
+
+  /// Create and \returns a DynamicRowwiseQuantizedFullyConnectedNode with \p
+  /// name, \p input, weights \p W, bias \p B, rowwise weight qparams \p wScale
+  /// and \p wOffset, flag to indicate mode \p isSymmetric. By default it is a
+  /// dynamic quantized FC node, which takes fp16 inputs, symmetrically
+  /// quantized them, run FC on them, dequantize them and produces fp16 output.
+  /// If \p isSymmetric is set to false, then inputs are asymmetrically
+  /// quantized. if \p isPerBatchElement is set to false, then inputs are per
+  /// tensor quantized.
+  DynamicRowwiseQuantizedFullyConnectedNode *
+  createDynamicRowwiseQuantizedFullyConnected(llvm::StringRef name,
+                                              NodeValue input, NodeValue W,
+                                              NodeValue B, NodeValue wScale,
+                                              NodeValue wOffset,
+                                              bool isSymmetric = true,
+                                              bool isPerBatchElement = true);
+
   /// Creates and \returns a FullyConnectedNode with \p name, \p input, weights
   /// \p W, bias \p B. If \p input is not 2 dimensional then it is flattened
   /// along \p axis. Note, output type and outputDepth are inferred based on
@@ -680,7 +724,7 @@ public:
   /// scales and \p offsets. The output is quantized in the regular way, and its
   /// type \p outTy is a quantized type.
   RowwiseQuantizedFullyConnectedNode *createRowwiseQuantizedFullyConnected(
-      llvm::StringRef name, NodeValue input, Constant *W, Constant *scales,
+      llvm::StringRef name, NodeValue input, NodeValue W, Constant *scales,
       Constant *offsets, NodeValue B, TypeRef outTy);
 
   /// Create a row-wise quantized fully connected node. This node is only used
@@ -690,7 +734,7 @@ public:
   /// \p outTy is a quantized type. if \p transposeWeight is true, \p W need to
   /// be transposed first.
   RowwiseQuantizedFullyConnectedNode *createRowwiseQuantizedFullyConnected(
-      llvm::StringRef name, NodeValue input, Constant *W, NodeValue B,
+      llvm::StringRef name, NodeValue input, NodeValue W, NodeValue B,
       TypeRef outTy, quantization::Schema schema, bool transposeWeight = false);
 
   /// Implement an operation that computes the row-wise dot product of its
@@ -717,15 +761,21 @@ public:
 
   /// Create a ReLU node with the given \p name and \p input.
   /// Result type will be implicitly set based on the \p input type.
+  ReluNode *createRelu(llvm::StringRef name, NodeValue input);
+  // deprecated.
   ReluNode *createRELU(llvm::StringRef name, NodeValue input);
 
   /// Create a ReLU node with the given \p name, \p input and
   /// output type \p outTy.
+  ReluNode *createRelu(llvm::StringRef name, TypeRef outTy, NodeValue input);
+  // deprecated.
   ReluNode *createRELU(llvm::StringRef name, NodeValue input, TypeRef outTy);
 
   /// Create a series of nodes representing a GeLU with the given \p name and \p
   /// input. Result type will be implicitly set based on the \p input type.
-  Node *createGELU(llvm::StringRef name, NodeValue input);
+  GeluNode *createGelu(llvm::StringRef name, NodeValue input);
+  // deprecated.
+  GeluNode *createGELU(llvm::StringRef name, NodeValue input);
 
   /// Create a PReLU node with the given \p name, \p input and  \p slope.
   /// Result type will be implicitly set based on the \p input type.
@@ -749,8 +799,20 @@ public:
   /// Create a Swish node with the given \p name and \p input.
   /// If \p OT is nullptr, then result type will be implicitly set based on the
   /// \p input type.
-  SwishNode *createSwish(llvm::StringRef name, NodeValue input,
-                         TypeRef OT = nullptr);
+  SwishNode *createSwish(llvm::StringRef name, NodeValue input);
+  SwishNode *createSwish(llvm::StringRef name, TypeRef OT, NodeValue input);
+  // deprecated.
+  SwishNode *createSwish(llvm::StringRef name, NodeValue input, TypeRef OT);
+
+  /// Create a HardSigmoid node with the given \p name, \p input, \p alpha and
+  /// \p beta. Result type will be implicitly set based on the \p input type.
+  ClipNode *createHardSigmoid(llvm::StringRef name, NodeValue input,
+                              float alpha, float beta);
+
+  /// Create a HardSigmoid node with the given \p name, \p input,
+  /// \p alpha, \p beta and output type \p outTy.
+  ClipNode *createHardSigmoid(llvm::StringRef name, TypeRef outTy,
+                              NodeValue input, float alpha, float beta);
 
   /// Create a Tanh node with the given \p name, \p input and
   /// output type \p outTy.
@@ -770,15 +832,26 @@ public:
 
   /// Create a Log node with \p name, which calculates element-wise natural log
   /// of \p input, with output type \p outTy.
-  LogNode *createLog(llvm::StringRef name, NodeValue input,
-                     TypeRef outTy = nullptr);
+  LogNode *createLog(llvm::StringRef name, NodeValue input);
+  LogNode *createLog(llvm::StringRef name, TypeRef outTy, NodeValue input);
+  // deprecated
+  LogNode *createLog(llvm::StringRef name, NodeValue input, TypeRef outTy);
 
   /// \returns a LogitNode with \p name given \p input and \p eps.
   LogitNode *createLogit(llvm::StringRef name, NodeValue input, float eps);
 
+  /// Create a SoftPlus node with the given \p name, \p input and
+  /// output type \p outTy.
+  SoftPlusNode *createSoftPlus(llvm::StringRef name, NodeValue input,
+                               TypeRef outTy = nullptr);
+
   SoftMaxNode *createSoftMax(llvm::StringRef name, NodeValue input,
                              NodeValue selected, TypeRef outTy = nullptr,
                              float beta = 1.0);
+
+  LogSoftMaxNode *createLogSoftMax(llvm::StringRef name, NodeValue input,
+                                   NodeValue selected, TypeRef outTy = nullptr,
+                                   float beta = 1.0);
 
   CrossEntropyLossNode *createCrossEntropyLoss(llvm::StringRef name,
                                                NodeValue input,
@@ -804,12 +877,13 @@ public:
   /// of the input \p input along the given axis \p axis.
   FlipNode *createFlip(llvm::StringRef name, NodeValue input, unsigned_t axis);
 
-  /// Create a series of nodes that implement a Broadcast operation. The \p
-  /// input Tensor is broadcasted based on \p newShape and along the \p axis,
-  /// which defines the offset from the leading dimension under which
-  /// broadcasting is performed.
-  Node *createBroadcast(llvm::StringRef name, NodeValue input,
-                        UnsignedArrayRef newShape, unsigned_t axis);
+  /// Create a Broadcast node that broadcasting the \p input Tensor based on
+  /// \p newShape and along the \p axis, which defines the offset between the
+  /// input dim and the newShape.
+  /// e.g. For input: [3] and newShape: [2, 3, 2], the axis will be 1.
+  ///      For input: [3] and newShape: [2, 2, 3], the axis will be 2.
+  BroadcastNode *createBroadcast(llvm::StringRef name, NodeValue input,
+                                 UnsignedArrayRef newShape, unsigned_t axis);
 
   /// Create concat node which concatenates input tensors along \p dimension.
   ConcatNode *createConcat(llvm::StringRef name,
@@ -821,12 +895,18 @@ public:
                            llvm::ArrayRef<NodeValue> inputs,
                            unsigned_t dimension, TypeRef outTy);
 
-  /// Create a quantized TileNode with \p name, \p input, \p tiles, and \p axis.
+  /// Create a TileNode with \p name, \p input, \p tiles, and \p axis.
   /// For example, an input tensor {{1,2,3,4}} of dimension 1x4 with tiles = 2
   /// and axis = 0 would result in an output tensor {{1,2,3,4}, {1,2,3,4}} of
   /// dimension 2x4.
   TileNode *createTile(llvm::StringRef name, NodeValue input, unsigned_t tiles,
                        unsigned_t axis, TypeRef outTy = nullptr);
+
+  /// Create a TileNode with \p name, \p input which repeats the input data
+  /// the given count values \p tiles along the given \p axes.
+  TileNode *createTile(llvm::StringRef name, NodeValue input,
+                       llvm::ArrayRef<unsigned_t> tiles,
+                       llvm::ArrayRef<unsigned_t> axes);
 
   /// Create an insert tensor node \p name, which inserts \p small into \p big
   /// at offset into big \p start \p count times along \p axis.
@@ -889,6 +969,12 @@ public:
   ReshapeNode *createFlatten(llvm::StringRef name, NodeValue input,
                              unsigned_t axis);
 
+  /// Flattens the input tensor into a 2D matrix. If input tensor has shape
+  /// (d_0, d_1, ... d_n) then the output will have shape:
+  /// ((d_0 X d_1 ... d_(axis-1) X d_(axis+1) ... X d_n), d_axis).
+  ReshapeNode *createFlattenV1(llvm::StringRef name, NodeValue input,
+                               unsigned_t axis);
+
   /// Create \p outputNum slice nodes of \p input. Slices happen along dimension
   /// number \p axis. Array \p split defines lengths of slices. If \p split is
   /// empty, \p input is split to equal sized parts.
@@ -896,21 +982,29 @@ public:
                    unsigned_t axis, llvm::ArrayRef<dim_t> split,
                    std::vector<SliceNode *> &outputs);
 
-  BatchNormalizationNode *
-  createBatchNormalization(llvm::StringRef name, NodeValue input,
-                           NodeValue beta, NodeValue scale, NodeValue mean,
-                           NodeValue var, unsigned_t channelIdx = 0,
-                           float epsilon = 1e-5, float momentum = 0.9);
+  BatchNormalizationNode *createBatchNormalization(
+      llvm::StringRef name, TypeRef resType, NodeValue input, NodeValue beta,
+      NodeValue scale, NodeValue mean, NodeValue var, unsigned_t channelIdx = 0,
+      float epsilon = 1e-5, float momentum = 0.9);
 
-  /// Creates and \returns a LayerNormalizationNode that computes the layer
-  /// normalization of the inner most layers of \p input based on the shape of
-  /// \p scale and \p bias. \p epsilon is a small perterbation used to avoid
-  /// division by 0 during normalization.
-  LayerNormalizationNode *createLayerNormalization(llvm::StringRef name,
-                                                   NodeValue input,
-                                                   NodeValue scale,
-                                                   NodeValue bias,
-                                                   float epsilon = 1e-5);
+  /// Create and \returns an InstanceNormalizationNode with result type of \p
+  /// outTy that computes the instance normalization of \p input based on the \p
+  /// scale and \p bias combined with the computed mean and stddev of each
+  /// batch. \p epsilon is a small perterbation used to avoid division by 0
+  /// during normalization.
+  InstanceNormalizationNode *
+  createInstanceNormalization(llvm::StringRef name, NodeValue input,
+                              NodeValue beta, NodeValue scale,
+                              unsigned_t channelIdx = 0, float epsilon = 1e-5);
+
+  /// Creates and \returns a LayerNormalizationNode with result type of \p outTy
+  /// that computes the layer normalization of the inner most layers of \p input
+  /// based on the shape of \p scale and \p bias. \p epsilon is a small
+  /// perterbation used to avoid division by 0 during normalization.
+  LayerNormalizationNode *
+  createLayerNormalization(llvm::StringRef name, TypeRef outTy, NodeValue input,
+                           NodeValue scale, NodeValue bias,
+                           float epsilon = 1e-5);
 
   /// Bucketizes the input tensor based on monotonically increasing \p
   /// boundaries for each value in \p input. For each value x in input, the
@@ -935,6 +1029,9 @@ public:
   /// Create a logical NOT node with name \p name and input \p input.
   NotNode *createNot(llvm::StringRef name, NodeValue input);
 
+  // Create a BitwiseNot node with name \p name and input \p input.
+  BitwiseNotNode *createBitwiseNot(llvm::StringRef name, NodeValue input);
+
 #define UNARY_ARITHMETIC_FUN_DECL(NODE_NAME_)                                  \
   NODE_NAME_##Node *create##NODE_NAME_(llvm::StringRef name, NodeValue input); \
   NODE_NAME_##Node *create##NODE_NAME_(llvm::StringRef name, TypeRef Ty,       \
@@ -950,6 +1047,9 @@ public:
   UNARY_ARITHMETIC_FUN_DECL(Reciprocal)
   UNARY_ARITHMETIC_FUN_DECL(Sin)
   UNARY_ARITHMETIC_FUN_DECL(Cos)
+  UNARY_ARITHMETIC_FUN_DECL(Erf)
+  UNARY_ARITHMETIC_FUN_DECL(Truncate)
+  UNARY_ARITHMETIC_FUN_DECL(HardSwish)
 #undef UNARY_ARITHMETIC_FUN_DECL
 
 #define ARITHMETIC_FUN_DECL(NODE_NAME_)                                        \
@@ -961,7 +1061,6 @@ public:
   ARITHMETIC_FUN_DECL(Mul);
   ARITHMETIC_FUN_DECL(Sub);
   ARITHMETIC_FUN_DECL(Div);
-  ARITHMETIC_FUN_DECL(FloorDiv);
   ARITHMETIC_FUN_DECL(Max);
   ARITHMETIC_FUN_DECL(Min);
   ARITHMETIC_FUN_DECL(CmpEQ);
@@ -971,7 +1070,11 @@ public:
   ARITHMETIC_FUN_DECL(And);
   ARITHMETIC_FUN_DECL(Or);
   ARITHMETIC_FUN_DECL(Xor);
+  ARITHMETIC_FUN_DECL(BitwiseAnd);
+  ARITHMETIC_FUN_DECL(BitwiseOr);
+  ARITHMETIC_FUN_DECL(BitwiseXor);
   ARITHMETIC_FUN_DECL(Pow);
+  ARITHMETIC_FUN_DECL(Fmod);
 #undef ARITHMETIC_FUN_DECL
 
 #define TRIGONOMETRIC_FUN_DECL(NODE_NAME_)                                     \
@@ -1007,14 +1110,18 @@ public:
   /// Template function that creates a node and normalizes its input shapes
   /// with the use of BroadCast nodes. If axis is -1, it calculates it
   /// automatically for multi directional broadcast.
-  DECLARE_BROADCAST_NODE(Mul, /* NUM_INPUTS */ 2)
-  DECLARE_BROADCAST_NODE(Div, /* NUM_INPUTS */ 2)
-  DECLARE_BROADCAST_NODE(FloorDiv, /* NUM_INPUTS */ 2)
   DECLARE_BROADCAST_NODE(Add, /* NUM_INPUTS */ 2)
   DECLARE_BROADCAST_NODE(Sub, /* NUM_INPUTS */ 2)
+  DECLARE_BROADCAST_NODE(Mul, /* NUM_INPUTS */ 2)
+  DECLARE_BROADCAST_NODE(Div, /* NUM_INPUTS */ 2)
   DECLARE_BROADCAST_NODE(And, /* NUM_INPUTS */ 2)
   DECLARE_BROADCAST_NODE(Xor, /* NUM_INPUTS */ 2)
   DECLARE_BROADCAST_NODE(Or, /* NUM_INPUTS */ 2)
+  DECLARE_BROADCAST_NODE(BitwiseAnd, /* NUM_INPUTS */ 2)
+  DECLARE_BROADCAST_NODE(BitwiseXor, /* NUM_INPUTS */ 2)
+  DECLARE_BROADCAST_NODE(BitwiseOr, /* NUM_INPUTS */ 2)
+  DECLARE_BROADCAST_NODE(Pow, /* NUM_INPUTS */ 2)
+  DECLARE_BROADCAST_NODE(Fmod, /* NUM_INPUTS */ 2)
 
 #define DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(NODE_NAME, NUM_INPUTS,            \
                                              OUTTYPEREF)                       \
@@ -1030,9 +1137,9 @@ public:
   DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(Sub, /* NUM_INPUTS */ 2, outTy)
   DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(Mul, /* NUM_INPUTS */ 2, outTy)
   DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(Div, /* NUM_INPUTS */ 2, outTy)
-  DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(FloorDiv, /* NUM_INPUTS */ 2, outTy)
   DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(Min, /* NUM_INPUTS */ 2, outTy)
   DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(Max, /* NUM_INPUTS */ 2, outTy)
+  DECLARE_BROADCAST_NODE_WITH_OUT_TYPE(Fmod, /* NUM_INPUTS */ 2, outTy)
 
 #define DECLARE_CMP_BROADCAST_NODE(NODE_NAME)                                  \
   template <class T, class... Args>                                            \
@@ -1048,6 +1155,7 @@ public:
   /// automatically for multi directional broadcast.
   DECLARE_CMP_BROADCAST_NODE(CmpLT)
   DECLARE_CMP_BROADCAST_NODE(CmpEQ)
+  DECLARE_CMP_BROADCAST_NODE(CmpNEQ)
   DECLARE_CMP_BROADCAST_NODE(CmpLTE)
   DECLARE_CMP_BROADCAST_NODE(Min)
   DECLARE_CMP_BROADCAST_NODE(Max)
@@ -1069,6 +1177,36 @@ public:
 #undef DECLARE_BROADCAST_NODE_WITH_OUT_TYPE
 #undef DECLARE_CMP_BROADCAST_NODE
 #undef BROADCAST_FUNC_COMMON_CODE
+
+  /// Create a FloorDivNode with given \p name which divides \p LHS with \p RHS
+  /// and floors the quotient. If \p truncate is true then truncates the
+  /// quotient instead of flooring.
+  FloorDivNode *createFloorDiv(llvm::StringRef name, NodeValue LHS,
+                               NodeValue RHS, bool truncate = false);
+
+  /// Create a FloorDivNode with given \p name and output type \p outTy which
+  /// divides \p LHS with \p RHS and floors the quotient. If \p truncate is true
+  /// then truncates the quotient to zero instead of flooring.
+  FloorDivNode *createFloorDiv(llvm::StringRef name, TypeRef outTy,
+                               NodeValue LHS, NodeValue RHS,
+                               bool truncate = false);
+
+  /// Create a FloorDivNode with given \p name which divides \p LHS with \p RHS
+  /// and floors the quotient. If \p truncate is true then truncates the
+  /// quotient to zero instead of flooring. The inputs are broadcasted based on
+  /// \p axis.
+  FloorDivNode *createFloorDivWithBroadcast(llvm::StringRef name, int axis,
+                                            NodeValue LHS, NodeValue RHS,
+                                            bool truncate = false);
+
+  /// Create a FloorDivNode with given \p name and output type \p outTy which
+  /// divides \p LHS with \p RHS and floors the quotient. If \p truncate is true
+  /// then truncates the quotient to zero instead of flooring. The inputs are
+  /// broadcasted based on \p axis.
+  FloorDivNode *createFloorDivWithBroadcast(llvm::StringRef name, int axis,
+                                            TypeRef outTy, NodeValue LHS,
+                                            NodeValue RHS,
+                                            bool truncate = false);
 
   /// Create an element-wise GREATER THAN comparison between \p LHS and \p RHS
   /// by creating a CmpLTNode with given \p name and swapped inputs.
@@ -1104,6 +1242,8 @@ public:
                                    float value);
 
   PowNode *createPow(llvm::StringRef name, NodeValue base, float exp);
+
+  NonZeroNode *createNonZero(llvm::StringRef name, NodeValue Cond);
 
   SelectNode *createSelect(llvm::StringRef name, NodeValue Cond, NodeValue LHS,
                            NodeValue RHS);
@@ -1144,11 +1284,37 @@ public:
                                                TypeRef outTy, NodeValue batch,
                                                llvm::ArrayRef<unsigned_t> axes);
 
+  /// Create a node, performing BatchedReduceSumSquare operation. Output type is
+  /// based on the input \p batch type with dimensions specified with \p axes
+  /// removed.
+  BatchedReduceSumSquareNode *
+  createBatchedReduceSumSquare(llvm::StringRef name, NodeValue batch,
+                               llvm::ArrayRef<unsigned_t> axes);
+
+  /// Create a node, performing BatchedReduceSumSquare operation. Output type
+  /// matches input \p outTy type.
+  BatchedReduceSumSquareNode *
+  createBatchedReduceSumSquare(llvm::StringRef name, TypeRef outTy,
+                               NodeValue batch,
+                               llvm::ArrayRef<unsigned_t> axes);
+
+  /// Create a node, performing BatchedReduceMin operation. Output type
+  /// matches input \p outTy type.
+  BatchedReduceMinNode *createBatchedReduceMin(llvm::StringRef name,
+                                               TypeRef outTy, NodeValue batch,
+                                               llvm::ArrayRef<unsigned_t> axes);
+
   /// Create a node, performing BatchedReduceMin operation. Output type is
   /// based on the input \p batch type with dimensions specified with \p axes
   /// removed.
   BatchedReduceMinNode *createBatchedReduceMin(llvm::StringRef name,
                                                NodeValue batch,
+                                               llvm::ArrayRef<unsigned_t> axes);
+
+  /// Create a node, performing BatchedReduceMax operation. Output type
+  /// matches input \p outTy type.
+  BatchedReduceMaxNode *createBatchedReduceMax(llvm::StringRef name,
+                                               TypeRef outTy, NodeValue batch,
                                                llvm::ArrayRef<unsigned_t> axes);
 
   /// Create a node, performing BatchedReduceMax operation. Output type is
@@ -1171,6 +1337,19 @@ public:
   createBatchedReduceMean(llvm::StringRef name, NodeValue batch,
                           llvm::ArrayRef<unsigned_t> axes);
 
+  /// Create a node, performing BatchedReduceProd operation. Output type is
+  /// based on the input \p batch type with dimensions specified with \p axes
+  /// removed.
+  BatchedReduceProdNode *
+  createBatchedReduceProd(llvm::StringRef name, NodeValue batch,
+                          llvm::ArrayRef<unsigned_t> axes);
+
+  /// Create a node, performing BatchedReduceProd operation. Output type
+  /// matches input \p outTy type.
+  BatchedReduceProdNode *
+  createBatchedReduceProd(llvm::StringRef name, TypeRef outTy, NodeValue batch,
+                          llvm::ArrayRef<unsigned_t> axes);
+
   BatchedAddNode *createBatchedAdd(llvm::StringRef name, NodeValue batch,
                                    NodeValue slice);
 
@@ -1186,7 +1365,8 @@ public:
   /// Create a node performing a Cumulative Sum operation, output type matches
   /// \p input type.
   CumSumNode *createCumSum(llvm::StringRef name, NodeValue input,
-                           bool exclusive = false, bool reverse = false);
+                           int64_t dim = 0, bool exclusive = false,
+                           bool reverse = false);
 
   /// Implements an operation that accumulates the values in \p data along the
   /// first dimension into len(\p lengths) entries by summing together the first
@@ -1218,6 +1398,18 @@ public:
       NodeValue indices, NodeValue lengths,
       LengthsMode lengthsMode = LengthsMode::Variable, float avgLength = NAN);
 
+  /// Create an Embedding node
+  /// weights is a 2D tensor capturing the embedding table
+  /// indices is a tesnor of arbitrary shape containing the indices to extract
+  /// padIdx, if given, zeros the output vector when encounters padIdx
+  /// scale, if true, will scale gradients by the inverse of the frequency of
+  /// words in mini-batch (currently not supported, default=false)
+  /// sparse, if true, gradinet w.r.t. weight matrix will be a sparse tensor
+  /// (currently not supported, default=false)
+  EmbeddingNode *createEmbedding(llvm::StringRef name, NodeValue weights,
+                                 NodeValue indices, int32_t padIdx, bool scale,
+                                 bool sparse);
+
   /// Create an EmbeddingBag node. If \p hasEndOffset is true then the node
   /// expects an extra offset to be appended to \p offsets which marks the end
   /// of the last range. \p lengthsMode and \p avgLength represent meta
@@ -1237,7 +1429,8 @@ public:
       llvm::StringRef name, NodeValue data, NodeValue weights,
       NodeValue indices, NodeValue offsets, bool useFP16Accumulation = false,
       bool hasEndOffset = false,
-      LengthsMode lengthsMode = LengthsMode::Variable, float avgLength = NAN);
+      LengthsMode lengthsMode = LengthsMode::Variable, float avgLength = NAN,
+      bool forceFP16Output = false);
 
   /// Same as \ref createEmbeddingBagByteRowwiseOffsets(), but
   /// expects float input \p data, which is rowwise-quantized and fused
@@ -1249,7 +1442,8 @@ public:
       llvm::StringRef name, Tensor &data, NodeValue weights, NodeValue indices,
       NodeValue offsets, ElemKind fusedElemKind = ElemKind::UInt8FusedQTy,
       bool useFP16Accumulation = false, bool hasEndOffset = false,
-      LengthsMode lengthsMode = LengthsMode::Variable, float avgLength = NAN);
+      LengthsMode lengthsMode = LengthsMode::Variable, float avgLength = NAN,
+      bool forceFP16Output = false);
 
   /// Same as \ref createSparseLengthsWeightedSum(), but with \p outTy
   /// specified.
@@ -1368,17 +1562,23 @@ public:
                                                unsigned_t maxOutputSize);
 
   /// Implements an operation that converts the sparse representation given by
-  /// the pair of \p indices and \p values into a dense representation.
-  /// This representation contains each value of \p values at the corresponding
-  /// index given by \p indices. All indices that are not present in \p indices
-  /// are filled with zeroes. \p indices can contain duplicates, and in this
-  /// case, the corresponding values in \p values are added.
-  ///
-  /// \p dataToInferDim acts as a hint about the shape of the output. The first
-  /// dimension of the output is the first dimension of this tensor.
-  SparseToDenseNode *createSparseToDense(llvm::StringRef name,
-                                         NodeValue indices, NodeValue values,
-                                         NodeValue dataToInferDim);
+  /// the  \p lengths, \p indices and \p values into a dense representation.
+  /// This representation contains \p lengths[i] indices in batch i, and in each
+  /// batch contains the value of \p values at the corresponding index given by
+  /// \p indices. All indices that are not present in \p indices are filled with
+  /// defaultValue. \p indices within the same batch should not contain
+  /// duplicates. \p denseLastDim gives the last dimension of the output dense
+  /// representation (ie. the second dimension).
+  BatchSparseToDenseNode *
+  createBatchSparseToDense(llvm::StringRef name, NodeValue lengths,
+                           NodeValue indices, NodeValue values,
+                           float defaultValue, unsigned_t denseLastDim);
+
+  /// Implements an operation that inserts zeros into \p data along axis=0 for
+  /// indices where \p indicator is zero.
+  FillExamplesWithIndicatorNode *
+  createFillExamplesWithIndicator(llvm::StringRef name, NodeValue data,
+                                  NodeValue indicator);
 
   /// Implements an operation that converts the sparse representation given by
   /// the pair of \p indices and \p values into a dense representation, which
@@ -1391,6 +1591,18 @@ public:
   createSparseToDenseMask(llvm::StringRef name, NodeValue indices,
                           NodeValue values, NodeValue defaultValue,
                           NodeValue lengths, llvm::ArrayRef<dim_t> mask);
+
+  // TODO: add description
+  SparseLabelSplitNode *
+  createSparseLabelSplit(llvm::StringRef name, NodeValue lengths,
+                         NodeValue indices, NodeValue values, dim_t numLabels);
+
+  /// Given floats a input node \p input, floats \p mean and \p scale, and \p
+  /// seed \returns a GaussianFillNode. The output shape is the same as that of
+  /// \p input, filled with values drawn from a normal distribution with mean
+  /// and std dev \p mean and \scale, respectively, seeded with seed \p seed
+  GaussianFillNode *createGaussianFill(llvm::StringRef name, NodeValue input,
+                                       float mean, float scale, float seed);
 
   SaveNode *createSave(llvm::StringRef name, NodeValue input);
   SaveNode *createPartitionSave(llvm::StringRef name, NodeValue input);
@@ -1408,15 +1620,39 @@ public:
   createQuantizationProfile(PlaceholderBindings &bindings, llvm::StringRef name,
                             NodeValue input, dim_t numHistogramBins = 10);
 
-  /// Create lookup table for mapping between quantized numbers.
-  /// \p input and \p outTy must have quantized type.
-  /// Table contains all numbers from the quantized range, e.g.,
-  /// 256 entries for int8. Position 0 in the \p initValues
-  /// corresponds to the -128 input number, position 255 to 127.
+  /// Create lookup table for mapping between quantized operands. \p input and
+  /// \p outTy must be quantized types. The table contains all numbers from the
+  /// quantized range, e.g. 256 entries for int8 input. First position in the
+  /// \p initValues corresponds to the minimum input number and the last
+  /// position corresponds to the maximum input number.
+  template <typename T = int8_t>
+  IntLookupTableNode *
+  createIntLookupTable(llvm::StringRef name, NodeValue input,
+                       llvm::ArrayRef<T> initValues, TypeRef outTy);
+
+  /// Create lookup table for mapping between quantized operands based on the
+  /// floating point function \p func. \p input and \p outTy must be quantized
+  /// types.
   IntLookupTableNode *createIntLookupTable(llvm::StringRef name,
                                            NodeValue input,
-                                           llvm::ArrayRef<int8_t> initValues,
+                                           std::function<float(float)> func,
                                            TypeRef outTy);
+
+  /// Create lookup table for operator \p lutOperator using the provided lookup
+  /// \p table.
+  LookupTableNode *createLookupTable(llvm::StringRef name, NodeValue input,
+                                     LUTOperator lutOperator,
+                                     std::vector<float> &lutOperatorArgs,
+                                     NodeValue table, NodeValue idxTable,
+                                     TypeRef outTy);
+
+  /// Create quantized log.
+  IntLookupTableNode *createIntLog(llvm::StringRef name, NodeValue input,
+                                   TypeRef outTy);
+
+  /// Create quantized exp.
+  IntLookupTableNode *createIntExp(llvm::StringRef name, NodeValue input,
+                                   TypeRef outTy);
 
   /// Create quantized tanh.
   IntLookupTableNode *createIntTanh(llvm::StringRef name, NodeValue input,
@@ -1431,12 +1667,49 @@ public:
   TopKNode *createTopK(llvm::StringRef name, NodeValue input, unsigned_t k,
                        ElemKind outIndicesTyKind);
 
-  /// Gathers entries of the outer-most dimension of \p data indexed by
-  /// \p indices, and concatenates them. A non-zero \p batchDims specifies the
-  /// batch, and the result is the concatenation of the operation on each sample
-  /// in the batch.
+  /// Given \p rpnMaxLevel , \p rpnMinLevel and \p rpnPostNmsTopN
+  /// CollectRpnProposals merges rois in the \p roisIN based on \p roisProbIn
+  /// and returns top proposals limited to rpnPostNmsTopN total, size (n x B),
+  /// where B is box dimensions and based on dimension of input rois
+  /// Format for upright boxes is (image_index, x1, y1, x2, y2).
+  /// Format for rotated boxes (image_index, ctr_x, ctr_y, w, h, angle)
+  /// rpnPostNmsTopN should be greater than zero.
+  CollectRpnProposalsNode *createCollectRpnProposals(
+      llvm::StringRef name, std::vector<NodeValue> &roisIn,
+      std::vector<NodeValue> &roiProbsIn, int64_t rpnMaxLevel,
+      int64_t rpnMinLevel, unsigned_t rpnPostNmsTopN);
+
+  /// Given \p data tensor of rank r >= 1, and \p indices tensor of rank q,
+  /// gather entries of the \p axis dimension of data (default outer-most for
+  /// axis = 0) indexed by indices and concatenate them in the output tensor of
+  /// rank q + (r - 1).
+  /// https://github.com/onnx/onnx/blob/master/docs/Operators.md#gather
   GatherNode *createGather(llvm::StringRef name, NodeValue data,
-                           NodeValue indices, unsigned_t batchDims = 0);
+                           NodeValue indices, unsigned_t axis = 0);
+
+  /// Given \p data tensor of rank r >= 1, \p indices tensor of rank q >= 1,
+  /// and \p batchDims integer b, this operator gathers slices of data
+  /// into an output tensor of rank q + r - indices_shape[-1] - 1 - b.
+  /// \p indices is a q-dimensional integer tensor, best thought of as a (q-1)
+  /// dimensional tensor of index-tuples into \p data, where each element
+  /// defines a slice of data.
+  /// \p batchDims is an integer b indicating the number of batch dimensions,
+  /// that is the leading number of dimensions of \p data tensor and
+  /// \p indices that are representing the batches such that the gather starts
+  /// from the b+1 dimension.
+  /// https://github.com/onnx/onnx/blob/master/docs/Operators.md#gathernd
+  GatherNDNode *createGatherND(llvm::StringRef name, NodeValue data,
+                               NodeValue indices, unsigned_t batchDims = 0);
+
+  /// Create a node, performing GatherElements operation:
+  /// GatherElements takes inputs \p data and indices of the same rank r >=
+  /// 1 and a \p dim attribute that identifies an axis of data. It is an
+  /// indexing operation that produces its output by indexing into the input
+  /// data tensor at by elements of the indices tensor. Its output shape is
+  /// the same as the shape of indices and consists of one value (gathered
+  /// from the data) for each element in indices.
+  GatherElementsNode *createGatherElements(llvm::StringRef name, NodeValue data,
+                                           NodeValue indices, unsigned_t dim);
 
   /// Create a node, performing GatherRanges operation:
   /// Gathers entries of \p data in groups specified by the "examples" in
@@ -1477,11 +1750,11 @@ public:
   SpaceToDepthNode *createSpaceToDepth(llvm::StringRef name, NodeValue input,
                                        unsigned blockSize);
 
-  /// Given \p input tensor, \returns an upsampled tensor which has
-  /// doubled the size of dimensions N, N-1, N-2...N-numLeadingDims,
-  /// copying the nearest pixel value to the new locations.
-  ReshapeNode *createUpsample(llvm::StringRef name, NodeValue input,
-                              dim_t numLeadingDims);
+  /// Create a sequence of Reshape and Transpose nodes representing DepthToSpace
+  /// operator with \p blockSize in DCR or CRD mode based on \p isCRD flag.
+  /// Assumes input layout to be NHWC. \returns the last node in the sequence.
+  ReshapeNode *createDepthToSpace(llvm::StringRef name, NodeValue input,
+                                  unsigned blockSize, bool isCRD = false);
 
   /// Given \p input tensor of [N,H,W,C], where N is the batch, C is the channel
   /// or depth, H is the height and W is the width, and \p scale tensor with
@@ -1610,6 +1883,38 @@ public:
                            NodeValue input, unsigned_t channelIdx = 0,
                            float epsilon = 1e-5, float momentum = 0.9);
 
+  /// Create a BatchedUnaryEmbedding node. \p offsets which marks the end
+  /// of the last range.
+  BatchedUnaryEmbeddingsBagsNode *
+  createBatchedUnaryEmbeddingsBags(llvm::StringRef name, NodeValue weights,
+                                   NodeValue tableOffsets, NodeValue indices,
+                                   NodeValue offsets);
+
+  /// Create an IntNBitSplitEmbeddingBags node.
+  IntNBitSplitEmbeddingBagsNode *createIntNBitSplitEmbeddingBags(
+      llvm::StringRef name, NodeValue devWeights, NodeValue uvmWeights,
+      NodeValue weightsPlacements, NodeValue weightsOffsets,
+      NodeValue weightsTys, NodeValue dimOffsets, int64_t totalDims,
+      NodeValue indices, NodeValue offsets,
+      SplitEmbeddingPoolingMode poolingMode,
+      SplitEmbeddingSparseType outputDtype);
+
+  /// Create an IntNBitSplitEmbeddingWeightedBags node.
+  IntNBitSplitEmbeddingWeightedBagsNode *
+  createIntNBitSplitEmbeddingWeightedBags(
+      llvm::StringRef name, NodeValue devWeights, NodeValue uvmWeights,
+      NodeValue weightsPlacements, NodeValue weightsOffsets,
+      NodeValue weightsTys, NodeValue dimOffsets, int64_t totalDims,
+      NodeValue indices, NodeValue offsets,
+      SplitEmbeddingPoolingMode poolingMode,
+      SplitEmbeddingSparseType outputDtype, NodeValue indiceWeights);
+
+  /// Create an PermutePooledEmbeddingsNode
+  PermutePooledEmbeddingsNode *createPermutePooledEmbeddingsNode(
+      llvm::StringRef name, NodeValue pooledEmbeddings, NodeValue listOffsetDim,
+      NodeValue listPermute, NodeValue listInvOffsetDim,
+      NodeValue listInvPermute);
+
   /// Creates a ConvolutionNode with the given \p name which convolves the 4D
   /// \p input. \p kernels defines the size of the height and width dimensions
   /// of the convolutional filters. \p stride defines the the number of steps
@@ -1625,34 +1930,34 @@ public:
                               llvm::ArrayRef<unsigned_t> kernels,
                               llvm::ArrayRef<unsigned_t> strides,
                               llvm::ArrayRef<unsigned_t> pads, unsigned_t group,
-                              unsigned_t dilation = 1,
+                              llvm::ArrayRef<unsigned_t> dilation = {1, 1},
                               ConvolutionLayout layout = NHWC);
 #ifdef GLOW_WITH_VTA
   VTAConvolutionNode *createVTAConv(
       llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
       TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
       llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-      unsigned_t group, unsigned_t dilation = 1,
+      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation = {1, 1},
       ConvolutionLayout layout = ConvolutionLayout::VTA_LAYOUT);
 
   VTAConvolutionNode *
   createVTAConv(llvm::StringRef name, NodeValue input, NodeValue filter,
                 NodeValue bias, TypeRef outTy, unsigned_t kernel,
                 unsigned_t stride, unsigned_t pad, unsigned_t group,
-                unsigned_t dilation = 1,
+                llvm::ArrayRef<unsigned_t> dilation = {1, 1},
                 ConvolutionLayout layout = ConvolutionLayout::VTA_LAYOUT);
 
   VTAInterpreterConvolutionNode *createVTAInterpreterConv(
       llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
       TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
       llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-      unsigned_t group, unsigned_t dilation = 1,
+      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation = {1, 1},
       ConvolutionLayout layout = ConvolutionLayout::VTA_LAYOUT);
 
   VTAInterpreterConvolutionNode *createVTAInterpreterConv(
       llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
       TypeRef outTy, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-      unsigned_t group, unsigned_t dilation = 1,
+      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation = {1, 1},
       ConvolutionLayout layout = ConvolutionLayout::VTA_LAYOUT);
 #endif
 
@@ -1669,7 +1974,8 @@ public:
                               llvm::StringRef name, NodeValue input,
                               dim_t outChannels, unsigned_t kernel,
                               unsigned_t stride, unsigned_t pad,
-                              unsigned_t group, unsigned_t dilation = 1,
+                              unsigned_t group,
+                              llvm::ArrayRef<unsigned_t> dilation = {1, 1},
                               ConvolutionLayout layout = NHWC);
 
   /// Creates a Convolution3DNode with the given \p name which convolves the 5D
@@ -1711,7 +2017,7 @@ public:
       PlaceholderBindings &bindings, llvm::StringRef name, NodeValue input,
       dim_t outChannels, llvm::ArrayRef<unsigned_t> kernels,
       llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-      unsigned_t group, unsigned_t dilation = 1);
+      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation = {1, 1});
 
   /// Creates a ConvTransposeNode with the given \p name which does transposed
   /// convolution on the 4D \p input. \p kernel defines the size of the height
@@ -1720,12 +2026,11 @@ public:
   /// how many zero padding cells should be added to the input during
   /// convolution. \p group defines the number of groups the input and output
   /// channels should be divided into and convolved separately.
-  ConvTransposeNode *createConvTranspose(PlaceholderBindings &bindings,
-                                         llvm::StringRef name, NodeValue input,
-                                         dim_t outChannels, unsigned_t kernel,
-                                         unsigned_t stride, unsigned_t pad,
-                                         unsigned_t group,
-                                         unsigned_t dilation = 1);
+  ConvTransposeNode *
+  createConvTranspose(PlaceholderBindings &bindings, llvm::StringRef name,
+                      NodeValue input, dim_t outChannels, unsigned_t kernel,
+                      unsigned_t stride, unsigned_t pad, unsigned_t group,
+                      llvm::ArrayRef<unsigned_t> dilation = {1, 1});
 
   /// Creates and \returns a FullyConnectedNode with \p name, \p input, weights
   /// \p W, bias \p B. If \p input is not 2 dimensional then it is flattened
@@ -1735,6 +2040,12 @@ public:
                                            llvm::StringRef name,
                                            NodeValue input, dim_t outDepth,
                                            unsigned_t axis = 1);
+
+  /// Creates an RMSNorm pair. \p X should be a 2D tensor, \p gamma and \p beta
+  /// should be 1D tensors.
+  std::array<Node *, 2> createRMSNorm(llvm::StringRef name, NodeValue X,
+                                      NodeValue gamma, NodeValue beta,
+                                      float epsilon = .0f);
 
   /// Create an unrolled single-layer Simple RNN cell with \p hiddenSize
   /// dimensionality of the hidden state and \p outputSize dimensionality of the
@@ -1775,6 +2086,57 @@ public:
                   const llvm::ArrayRef<NodeValue> inputs, unsigned batchSize,
                   unsigned hiddenSize, unsigned outputSize,
                   std::vector<NodeValue> &outputs);
+
+  /// Create an LSTM Unit Node with \p Input which shape is [batch,
+  /// 4*hiddenSize] and follow the order i, f, g, o, and \p C as current cell
+  /// state.
+  LSTMUnitNode *createLSTMUnit(llvm::StringRef namePrefix, NodeValue Input,
+                               NodeValue C);
+
+  /// Helper function create a PyTorch style LSTM for one direction, and returns
+  /// every output in a vector. \p T should be an iterator or reverse_iterator
+  /// of a NodeValue vector, and /p inputItr is an iterator pointer of the input
+  /// vector. \p Wx, \p Wh, \p Bx, \p Bh, \p H and \p C is i, f, g, o, hidden
+  /// state and cell state, whose shape should be the same to
+  /// createSingleDirectionLSTM.
+  template <class T>
+  std::vector<NodeValue> createSingleDirectionLSTM(
+      std::string nameBase, T inputItr, const int timeSteps, NodeValue Wx,
+      NodeValue Wh, NodeValue Bx, NodeValue Bh, NodeValue &H, NodeValue &C);
+
+  /// Helpfer function to create Pytorch Style Multiple Layer STM for one
+  /// direction
+  std::vector<NodeValue> createMultipleLayerSingleDirectionLSTM(
+      std::string nameBase, NodeValue input, unsigned batchSize,
+      unsigned inputSize, const int timeSteps, std::vector<NodeValue> &Wx,
+      std::vector<NodeValue> &Wh, std::vector<NodeValue> &Bx,
+      std::vector<NodeValue> &Bh, NodeValue &H, NodeValue &C);
+
+  /// Helpfer function to create sliced input for LSTM
+  std::vector<NodeValue>
+  createSlicedInput(NodeValue input, std::string &nameBase, unsigned batchSize,
+                    unsigned inputSize, const int timeSteps);
+
+  /// Create PyTorch style LSTM with fixed weights and biases.
+  /// The order of \p Wx \p Wh \p Bx and \p Bh is i, f, g, o,
+  /// The \p inputs shape should be (numSteps, batchSize, hiddenSize),
+  /// while \p Wx shape should be (inputSize, hiddenSize * 4),
+  /// Wh shape should be (hiddenSize, hiddenSize * 4),
+  /// \p Bx and \p Bh shape should be (hiddenSize * 4).
+  /// If \p isBidirectional == true, \p WxR, \p WhR, \p BxR and \p BhR
+  /// also need to be provided, indicates the reversed weights and biases.
+  /// \p Ht and \p Ct are initial hidden state and cell.
+  /// For more details, please read:
+  /// https://pytorch.org/docs/stable/generated/torch.nn.LSTM.html
+  void createPyTorchLSTM(llvm::StringRef namePrefix, NodeValue inputs,
+                         std::vector<NodeValue> &Wx, std::vector<NodeValue> &Wh,
+                         std::vector<NodeValue> &Bx, std::vector<NodeValue> &Bh,
+                         NodeValue &Ht, NodeValue &Ct, NodeValue &outputs,
+                         bool isBidirectional = false,
+                         NodeValue WxR = NodeValue(),
+                         NodeValue WhR = NodeValue(),
+                         NodeValue BxR = NodeValue(),
+                         NodeValue BhR = NodeValue());
 
   /// Type definition for the direction of an RNN module (RNN, GRU, LSTM).
   enum class RnnDirection {
@@ -1968,6 +2330,56 @@ public:
       int64_t centerPointBox, int64_t maxOutputBoxesPerClass,
       float iouThreshold, float scoreThreshold, TypeRef indicesTy);
 
+  /// Create a TensorFlowLite custom node called "DetectionPostProcess" which
+  /// corresponds to a custom NonMaxSuppresion node.
+  /// The node has the following inputs:
+  /// - \p boxes with size [N, B, 4]
+  /// - \p scores with size [N, B, C]
+  /// - \p anchors with size [B, 4]
+  /// where N is the batch size, B is the number of boxes and C is the number
+  /// of classes.
+  /// The node has the following attributes (parameters):
+  /// - \p numClasses - Number of effective classes (without the background).
+  /// - \p maxDetections - The maximum number of detections.
+  /// - \p maxClassesPerDetection - Maximum classes per detection (Fast NMS).
+  /// - \p maxDetectionsPerClass - Maximum detections per class (Regular NMS).
+  /// - \p iouThreshold - Detection threshold for IoU metric.
+  /// - \p scoreThreshold - Detection threshold for scores.
+  /// - \p xScale - X scale used for decoding the boxes.
+  /// - \p yScale - Y scale used for decoding the boxes.
+  /// - \p hScale - H scale used for decoding the boxes.
+  /// - \p wScale - W scale used for decoding the boxes.
+  /// - \p regularNMS - Whether the NMS is "Regular" or "Fast".
+  /// The node will have the following outputs:
+  /// - DetectionBoxes - the chosen boxes (float)
+  /// - DetectionClasses - the classes of the chosen boxes (int32)
+  /// - DetectionScores - the scores of the chosen boxes (float)
+  /// - NumDetections - number of chosen (detected) boxes (int32)
+  /// The first three output tensors will be allocated using the maximum
+  /// number of possible detections (worst case scenario) but the actual
+  /// usage will be given by the 'NumDetections' output.
+  TFLiteDetectionPostProcessNode *createTFLiteDetectionPostProcess(
+      llvm::StringRef name, NodeValue boxes, NodeValue scores,
+      NodeValue anchors, int32_t numClasses, int32_t maxDetections,
+      int32_t maxClassesPerDetection, int32_t maxDetectionsPerClass,
+      float iouThreshold, float scoreThreshold, float xScale, float yScale,
+      float hScale, float wScale, bool regularNMS);
+
+  /// Create a TensorFlowLite custom operator node with the given \p name,
+  /// output types \p outputTypes and input node values \p inputs. The custom
+  /// operator type is given \p operatorType while the raw operator options are
+  /// given by \p operatorOptions. A custom operator node is used to describe
+  /// at graph level a user defined operator for which the implementation is
+  /// provided externally as a hook (callback) through a registration mechanism.
+  /// Note that this node can have a variable number of inputs and outputs.
+  /// The format of the \p operatorOptions depends on the TFLite model but a
+  /// common format used by TFLite is the flexbuffer format. You can find more
+  /// details here: https://google.github.io/flatbuffers/flexbuffers.html.
+  TFLiteCustomOperatorNode *createTFLiteCustomOperator(
+      llvm::StringRef name, llvm::ArrayRef<TypeRef> outputTypes,
+      llvm::ArrayRef<NodeValue> inputs, std::string operatorType,
+      std::string operatorOptions);
+
   /// Create a constant node with a 1D cosine windowing function defined as:
   /// w[n] = 0.5 - 0.5 * cos(2 * pi * n / N) for n = 0 .. N - 1 where N
   /// is the window \p length. The node name will be \p name.
@@ -2135,6 +2547,17 @@ public:
                       int64_t angleBoundLo, int64_t angleBoundHi,
                       float clipAngleThresh, bool legacyPlusOne);
 
+  /// Create an ExternFunctionCall node. \p funcImpl will contain body
+  /// of or reference to the function which can be invoked.
+  /// \p funcKind contains the type of function. The type of function  could be
+  /// source code, like OpenCL, CUDA, or could be a binary or
+  /// a handle to an external function.
+  ExternalFunctionCallNode *
+  createExternalFunctionCall(llvm::StringRef name, TypeRef outTy,
+                             llvm::ArrayRef<glow::NodeValue> inputs,
+                             llvm::StringRef funcName, llvm::StringRef funcImpl,
+                             llvm::StringRef funcKind);
+
   /// Erase the node \p N from the Function.
   void eraseNode(Node *N);
 
@@ -2261,6 +2684,8 @@ bool isOutput(const Placeholder *PH, const Function &F);
 bool isInput(const Placeholder *PH, const Function &F);
 
 /// Helper vectors for common transpose shuffles.
+#define NCH2NHC                                                                \
+  { 0u, 2u, 1u }
 #define NCHW2NHWC                                                              \
   { 0u, 2u, 3u, 1u }
 #define NCTHW2NTHWC                                                            \
@@ -2275,6 +2700,14 @@ bool isInput(const Placeholder *PH, const Function &F);
   { 1u, 2u, 0u, 3u }
 #define CNHW2NHWC                                                              \
   { 1u, 2u, 3u, 0u }
+#define NHWC2CHWN                                                              \
+  { 3u, 1u, 2u, 0u }
+#define CHWN2NHWC                                                              \
+  { 3u, 1u, 2u, 0u }
+#define D2S_DCR                                                                \
+  { 0u, 1u, 3u, 2u, 4u, 5u }
+#define D2S_CRD                                                                \
+  { 0u, 1u, 4u, 2u, 5u, 3u }
 
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const Module &mod);
 

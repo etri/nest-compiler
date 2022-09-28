@@ -52,7 +52,7 @@ public:
   unsigned getNumInputs() const;
   std::string getInputName(unsigned idx) const;
   NodeValue getNthInput(unsigned idx);
-  llvm::StringRef getOutputName(unsigned idx) const;
+  std::string getOutputName(unsigned idx) const;
   bool hasSideEffects() const;
   bool isCanonical() const { return true; }
   bool isDataParallel() const { return false; }
@@ -129,7 +129,12 @@ public:
     return getPayload().getHandle<ElemTy>();
   }
 
-  void assign(const Tensor *t) { payload_.assign(t); }
+  void assign(const Tensor *t) {
+    // Make sure when we assign the output type of constant is matching its
+    // payload.
+    assert(t->getType().isEqual(payload_.getType()));
+    payload_.assign(t);
+  }
 
   void setPayloadType(TypeRef ty) { payload_.setType(ty); }
 
@@ -199,16 +204,16 @@ public:
 inline std::pair<dim_t, dim_t> calculateConvPoolOutputDims(
     size_t sx, size_t sy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t dilation = 1) {
+    llvm::ArrayRef<unsigned_t> dilation = {1, 1}) {
   PaddingTLBR pdim(pads);
   ShapeHW kdim(kernels);
   ShapeHW sdim(strides);
   size_t outsx = ((sx + pdim.top + pdim.bottom - kdim.height -
-                   (kdim.height - 1) * (dilation - 1)) /
+                   (kdim.height - 1) * (dilation[0] - 1)) /
                       sdim.height +
                   1);
   size_t outsy = ((sy + pdim.left + pdim.right - kdim.width -
-                   (kdim.width - 1) * (dilation - 1)) /
+                   (kdim.width - 1) * (dilation[1] - 1)) /
                       sdim.width +
                   1);
   return {outsx, outsy};
@@ -240,14 +245,14 @@ inline ShapeTHW calculate3DConvPoolOutputDims(
 inline std::pair<dim_t, dim_t> calculateConvTransposeOutputDims(
     size_t sx, size_t sy, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
-    unsigned_t dilation = 1) {
+    llvm::ArrayRef<unsigned_t> dilation = {1, 1}) {
   PaddingTLBR pdim(pads);
   ShapeHW kdim(kernels);
   ShapeHW sdim(strides);
 
-  size_t outsx = (sx - 1) * sdim.height + (kdim.height - 1) * dilation + 1 -
+  size_t outsx = (sx - 1) * sdim.height + (kdim.height - 1) * dilation[0] + 1 -
                  pdim.top - pdim.bottom;
-  size_t outsy = (sy - 1) * sdim.width + (kdim.width - 1) * dilation + 1 -
+  size_t outsy = (sy - 1) * sdim.width + (kdim.width - 1) * dilation[1] + 1 -
                  pdim.left - pdim.right;
 
   return {outsx, outsy};
@@ -269,13 +274,53 @@ inline bool is3DData(ConvolutionLayout layout) {
 enum PoolingMode { AVG = 0, MAX };
 
 /// Activations fused into ConvolutionNode (not supported on all backends).
-enum FusedActivation { NONE = 0, RELU, TANH, SIGMOID };
+enum FusedActivation {
+  NONE = 0,
+  RELU,
+  CLIP,
+  TANH,
+  SIGMOID,
+  LEAKY_RELU,
+};
+
+/// LUT Operators (not supported on all backends).
+enum class LUTOperator {
+  NONE = 0,
+  RELU,
+  CLIP,
+  TANH,
+  SIGMOID,
+  LEAKY_RELU,
+};
+
+enum SplitEmbeddingPoolingMode {
+  EP_SUM = 0,
+  EP_MEAN = 1,
+  EP_NONE = 2,
+  EP_TOTAL,
+};
+enum SplitEmbeddingSparseType {
+  EST_FLOAT = 0,
+  EST_FLOAT16 = 1,
+  EST_INT8 = 2,
+  EST_INT4 = 3,
+  EST_INT2 = 4,
+  EST_TOTAL,
+};
+
+enum WeightsPlacement {
+  DEVICE = 0,
+  MANAGED = 1,
+  MANAGED_CACHING = 2,
+  HOST = 3,
+};
 
 /// Define output operators.
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, ConvolutionLayout layout);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os,
                               FusedActivation fusedActivation);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &os, LengthsMode lengthsMode);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &os, LUTOperator lutOperator);
 
 /// Support for hashing the Nodes. This is required for using
 /// llvm::hash_combine.
@@ -362,6 +407,22 @@ public:
 #include "glow/AutoGenNodes.def"
 };
 
+// helper to get a string name for an OpType
+template <typename T> const char *getNodeName() {
+  static_assert(std::is_base_of<Node, T>(), "Must be node");
+
+// Do this for every known node
+#undef DEF_NODE
+#define DEF_NODE(CLASS, NAME)                                                  \
+  if (std::is_same<T, CLASS>()) {                                              \
+    return #NAME;                                                              \
+  }
+// @lint-ignore facebook-hte-DuplicateInclude
+#include "glow/AutoGenNodes.def"
+
+  llvm_unreachable("Not reachable, values are not handled here");
+};
+
 /// Signifiers for exporting and importing properties of Nodes.
 constexpr char layoutSignifier[] = "layout";
 constexpr char staticSignifier[] = "offline";
@@ -369,6 +430,7 @@ constexpr char trainableSignifier[] = "trainable";
 constexpr char elemKindSignifier[] = "elemKind";
 constexpr char loaderNameSignifier[] = "loaderName";
 constexpr char saveNameSignifier[] = "saveName";
+constexpr char stridesSignifier[] = "strides";
 constexpr char qScaleSignifier[] = "qScale";
 constexpr char qOffsetSignifier[] = "qOffset";
 constexpr char shapeSignifier[] = "shape";
