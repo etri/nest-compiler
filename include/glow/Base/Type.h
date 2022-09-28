@@ -79,7 +79,7 @@ struct ShapeNHWC {
   dim_t c; // Number of Channels
 
   template <typename T> explicit ShapeNHWC(llvm::ArrayRef<T> shape) {
-    // assert(shape.size() == 4 && "Invalid shape");
+    assert(shape.size() == 4 && "Invalid shape");
     n = shape[DimN];
     h = shape[DimH];
     w = shape[DimW];

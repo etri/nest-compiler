@@ -1076,11 +1076,6 @@ void BoundVTAFunction::fwdReluInst(const ReluInst *I) {
   // DCHECK(!"Found ReluInst but Relu is lowered on VTA");
   if (I->getSrc()->getType()->isQuantizedType()) {
     assert(I->getSrc()->getElementType() == ElemKind::Int8QTy);
-    auto inW = getWeightHandle<int8_t>(I->getSrc());
-    ShapeNHWC idim(inW.dims());
-    auto outW = getWeightHandle<int8_t>(I->getDest());
-    ShapeNHWC odim(outW.dims());
-
     auto inTy = I->getSrc()->getType();
     float inScale = inTy->getScale();
     inScale = 1 / inScale;
