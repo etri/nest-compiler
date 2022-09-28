@@ -821,11 +821,11 @@ static void assertConvDims(NodeValue input, NodeValue filter, NodeValue bias,
   ShapeNHWC filterDims(filter.dims());
   (void)filterDims;
 
-  // assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
-  //        filterDims.w == kdim.width && filterDims.c == idim.c / group &&
-  //        "Invalid filter dims");
+  assert(filterDims.n % group == 0 && filterDims.h == kdim.height &&
+         filterDims.w == kdim.width && filterDims.c == idim.c / group &&
+         "Invalid filter dims");
 
-  // assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
+  assert(bias.getType()->size() == filterDims.n && "Invalid bias size");
 }
 
 #ifdef GLOW_WITH_VTA
@@ -891,7 +891,7 @@ ConvolutionNode *Function::createConv(
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
     unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
     ConvolutionLayout layout) {
-  // assertConvDims(input, filter, bias, kernels, strides, pads, group);
+  assertConvDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
 
   // If the input is quantized but the bias is not then auto-quantize the
@@ -925,7 +925,7 @@ VTAConvolutionNode *Function::createVTAConv(
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
     unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
     ConvolutionLayout layout) {
-  assertConvDims(input, filter, bias, kernels, strides, pads, group);
+  assertVTAConvDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
 
   // If the input is quantized but the bias is not then auto-quantize the
@@ -971,7 +971,7 @@ VTAInterpreterConvolutionNode *Function::createVTAInterpreterConv(
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
     unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
     ConvolutionLayout layout) {
-  assertConvDims(input, filter, bias, kernels, strides, pads, group);
+  assertVTAConvDims(input, filter, bias, kernels, strides, pads, group);
   auto OT = getParent()->uniqueType(*outTy);
 
   // If the input is quantized but the bias is not then auto-quantize the
