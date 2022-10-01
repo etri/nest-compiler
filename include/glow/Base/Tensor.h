@@ -936,6 +936,7 @@ namespace glow {
                          otherHandleIt = otherHandle.begin();
                  thisHandleIt != thisHandle.end() && otherHandleIt != otherHandle.end();
                  ++thisHandleIt, ++otherHandleIt, ++currIndex) {
+//                std::cout<<*thisHandleIt <<", "<<*otherHandleIt <<std::endl;
                 double delta = *thisHandleIt - *otherHandleIt;
                 delta = std::abs(delta);
                 // Since any comparison with NAN returns false, we use a negated condition

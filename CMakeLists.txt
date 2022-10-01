@@ -10,6 +10,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/glow/cmake/modules")
 project(NESTC C CXX)
 
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
+option(NESTC_WITH_NEWTON "Build the Newton backend" OFF)
 option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_EVTA_RUN_ON_ZCU102 "Run on ZCU102 board" OFF)
 option(NESTC_EVTA_MULTI "use Multi-EVTA" OFF)
@@ -67,6 +68,12 @@ if (NESTC_WITH_EVTA)
     message("NESTC WITH EVTA in graph cmake")
     add_definitions(-DGLOW_WITH_VTA)
 endif()
+
+if (NESTC_WITH_NEWTON)
+    message("NESTC WITH NEWTON in graph cmake")
+    add_definitions(-DGLOW_WITH_NEWTON)
+endif()
+
 
 include_directories(BEFORE
         ${NESTC_ROOT_DIR}/
@@ -134,15 +141,22 @@ if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
     INCLUDE_DIRECTORIES(${vtalib_SOURCE_DIR}/include/Bundle/ ${vtalib_SOURCE_DIR}/include/simulator ${vtalib_SOURCE_DIR}/include/simulator/vta)
 endif()
 
+if(NESTC_WITH_NEWTON)
+    add_subdirectory(examples/newton_bundles)
+endif()
+
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)
 
 get_property(NESTC_TEST_DEPENDS GLOBAL PROPERTY NESTC_TEST_DEPENDS)
 get_property(ZCU102_TEST_DEPENDS GLOBAL PROPERTY ZCU102_TEST_DEPENDS)
+get_property(NEWTON_TEST_DEPENDS GLOBAL PROPERTY NEWTON_TEST_DEPENDS)
 get_property(MULTIEVTA_TEST_DEPENDS GLOBAL PROPERTY MULTIEVTA_TEST_DEPENDS)
 add_custom_target(check_nestc COMMAND ${CMAKE_CTEST_COMMAND} -L NESTC
         DEPENDS ${NESTC_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_zcu102 COMMAND ${CMAKE_CTEST_COMMAND} -L ZCU102
         DEPENDS ${ZCU102_TEST_DEPENDS} USES_TERMINAL)
+add_custom_target(check_newton COMMAND ${CMAKE_CTEST_COMMAND} -L NEWTON
+        DEPENDS ${NEWTON_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_multievta COMMAND ${CMAKE_CTEST_COMMAND} -L MULTIEVTA
         DEPENDS ${MULTIEVTA_TEST_DEPENDS} USES_TERMINAL)

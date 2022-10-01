@@ -35,6 +35,7 @@
 using namespace glow;
 
 
+namespace vta_save{
 
 class VTASaveContext{
 public:
@@ -4207,7 +4208,8 @@ void exportBundleHeader(llvm::StringRef outputDir,
   bhos.close();
 }
 
-
+}
+using namespace vta_save;
 
 void VTA::save(Function *F, llvm::StringRef outputDir,
                llvm::StringRef bundleName,
