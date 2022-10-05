@@ -69,22 +69,22 @@ NodeBuilder &NodeBuilder::addFusedActivation() {
 }
 
 NodeBuilder &NodeBuilder::addFusedActivationVTA() {
-    return addMember(MEMBER_TYPE_INFO(glow::FusedActivation), "FusedActivation",
-            /* addSetter */ true)
-            .addExtraMethod(
-                    "bool hasFusedActivation() const;",
-                    "bool VTAConvolutionNode::hasFusedActivation() const { return "
-                    "getFusedActivation() != FusedActivation::NONE; }");
+  return addMember(MEMBER_TYPE_INFO(glow::FusedActivation), "FusedActivation",
+                   /* addSetter */ true)
+      .addExtraMethod(
+          "bool hasFusedActivation() const;",
+          "bool VTAConvolutionNode::hasFusedActivation() const { return "
+          "getFusedActivation() != FusedActivation::NONE; }");
 }
 
-
 NodeBuilder &NodeBuilder::addFusedActivationVTAInter() {
-    return addMember(MEMBER_TYPE_INFO(glow::FusedActivation), "FusedActivation",
-            /* addSetter */ true)
-            .addExtraMethod(
-                    "bool hasFusedActivation() const;",
-                    "bool VTAInterpreterConvolutionNode::hasFusedActivation() const { return "
-                    "getFusedActivation() != FusedActivation::NONE; }");
+  return addMember(MEMBER_TYPE_INFO(glow::FusedActivation), "FusedActivation",
+                   /* addSetter */ true)
+      .addExtraMethod(
+          "bool hasFusedActivation() const;",
+          "bool VTAInterpreterConvolutionNode::hasFusedActivation() const { "
+          "return "
+          "getFusedActivation() != FusedActivation::NONE; }");
 }
 
 void NodeBuilder::emitMemberForwardDecls(std::ostream &os) const {

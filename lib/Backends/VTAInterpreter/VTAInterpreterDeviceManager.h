@@ -23,9 +23,9 @@
 namespace glow {
 namespace runtime {
 
-/// A class controlling a single "VTAInterpreter Device", a thread of execution in
-/// the IR-VTAInterpreter. Many VTAInterpreterFunctions may be added, but only one
-/// inference is executed at a time.
+/// A class controlling a single "VTAInterpreter Device", a thread of execution
+/// in the IR-VTAInterpreter. Many VTAInterpreterFunctions may be added, but
+/// only one inference is executed at a time.
 class VTAInterpreterDeviceManager : public QueueBackedDeviceManager {
   /// Compiled function list by name.
   FunctionMapTy functions_;

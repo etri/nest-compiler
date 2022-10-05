@@ -48,18 +48,20 @@ class main_template {
                                       const BundleConfig &config);
   static uint8_t *allocateMutableWeightVars(const BundleConfig &config);
   static void dumpInferenceResults(const BundleConfig &config,
-                                   uint8_t *mutableWeightVars, char* resultName);
-  static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT);
-  static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT);
-  static uint8_t *copyMutableWeightVarsWithoutAlloc(const BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float* inputT);
-  void transpose(float* &in, float* &out);
+                                   uint8_t *mutableWeightVars, char*
+resultName); static uint8_t *copyMutableWeightVars(const BundleConfig &config,
+const char *name, float* inputT); static uint8_t
+*copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name,
+float* inputT); static uint8_t *copyMutableWeightVarsWithoutAlloc(const
+BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float*
+inputT); void transpose(float* &in, float* &out);
 
   #define NHWC 1
 
-  static uint8_t *initMutableWeightVars(const BundleConfig &config, char* varName);
-  static uint8_t *initActivations(const BundleConfig &config);
-  static float* getInferenceResultVar(const BundleConfig &config,
-                                      uint8_t *mutableWeightVars, const char* name);
+  static uint8_t *initMutableWeightVars(const BundleConfig &config, char*
+varName); static uint8_t *initActivations(const BundleConfig &config); static
+float* getInferenceResultVar(const BundleConfig &config, uint8_t
+*mutableWeightVars, const char* name);
 
 };
 
@@ -194,19 +196,18 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
         imageT[getXYZ(imageDims, row_n, col_n, 0)] =
             float(ptr[0]) * scale + bias;
       } else {
-//        imageT[getXYZ(imageDims, row_n, col_n, 0)] =
-//            float(ptr[0]) * scale + bias;
-//        imageT[getXYZ(imageDims, row_n, col_n, 1)] =
-//            float(ptr[1]) * scale + bias;
-//        imageT[getXYZ(imageDims, row_n, col_n, 2)] =
-//            float(ptr[2]) * scale + bias;
+        //        imageT[getXYZ(imageDims, row_n, col_n, 0)] =
+        //            float(ptr[0]) * scale + bias;
+        //        imageT[getXYZ(imageDims, row_n, col_n, 1)] =
+        //            float(ptr[1]) * scale + bias;
+        //        imageT[getXYZ(imageDims, row_n, col_n, 2)] =
+        //            float(ptr[2]) * scale + bias;
         imageT[getXYZ(imageDims, row_n, col_n, 2)] =
             float(ptr[0]) * scale + bias;
         imageT[getXYZ(imageDims, row_n, col_n, 1)] =
             float(ptr[1]) * scale + bias;
         imageT[getXYZ(imageDims, row_n, col_n, 0)] =
             float(ptr[2]) * scale + bias;
-
       }
     }
   }
@@ -235,14 +236,13 @@ static void loadImagesAndPreprocess(const std::vector<std::string> &filenames,
   assert(filenames.size() > 0 &&
          "There must be at least one filename in filenames");
 
-  //for normalization range setting
+  // for normalization range setting
 
-  //for resnet18v2.onnx
+  // for resnet18v2.onnx
   std::pair<float, float> range = std::make_pair(0., 1.0);
 
-  if(RANGE == 255)
-  {
-    //for mxnet_exported_resnet18.onnx
+  if (RANGE == 255) {
+    // for mxnet_exported_resnet18.onnx
     range = std::make_pair(0., 255.0);
   }
 
@@ -339,20 +339,20 @@ static uint8_t *initConstantWeights(const char *weightsFileName,
     fprintf(stderr, "Could not open the weights file: %s\n", weightsFileName);
     exit(1);
   }
-  //printf("%s", weightsFileName);
+  // printf("%s", weightsFileName);
   fseek(weightsFile, 0, SEEK_END);
   size_t fileSize = ftell(weightsFile);
   fseek(weightsFile, 0, SEEK_SET);
   uint8_t *baseConstantWeightVarsAddr =
       static_cast<uint8_t *>(alignedAlloc(config, fileSize));
-//  printf("Allocated weights of size: %lu\n", fileSize);
-//  printf("Expected weights of size: %" PRIu64 "\n",
-//         config.constantWeightVarsMemSize);
+  //  printf("Allocated weights of size: %lu\n", fileSize);
+  //  printf("Expected weights of size: %" PRIu64 "\n",
+  //         config.constantWeightVarsMemSize);
   assert(fileSize == config.constantWeightVarsMemSize &&
          "Wrong weights file size");
   int result = fread(baseConstantWeightVarsAddr, fileSize, 1, weightsFile);
   if (result != 1) {
-    //perror("Could not read the weights file");
+    // perror("Could not read the weights file");
   } else {
     printf("Loaded weights of size: %lu from the file %s\n", fileSize,
            weightsFileName);
@@ -366,15 +366,16 @@ static uint8_t *initConstantWeights(const char *weightsFileName,
 static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
   auto *weights = static_cast<uint8_t *>(
       alignedAlloc(config, config.mutableWeightVarsMemSize));
-//  printf("Allocated mutable weight variables of size: %" PRIu64 "\n",
-//         config.mutableWeightVarsMemSize);
+  //  printf("Allocated mutable weight variables of size: %" PRIu64 "\n",
+  //         config.mutableWeightVarsMemSize);
   return weights;
 }
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
-//static void dumpInferenceResults(const BundleConfig &config,
-//                                 uint8_t *mutableWeightVars, char* resultName) {
+// static void dumpInferenceResults(const BundleConfig &config,
+//                                 uint8_t *mutableWeightVars, char* resultName)
+//                                 {
 //  const SymbolTableEntry &outputWeights =
 //      getMutableWeightVar(config, resultName);
 //  int maxIdx = 0;
@@ -391,8 +392,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 //}
 
 #include <math.h>
-void softmax(float* in, float* result)
-{
+void softmax(float *in, float *result) {
   float max = -INFINITY;
   for (size_t j = 0; j < 1000; j++) {
     if (in[j] > max) {
@@ -402,18 +402,18 @@ void softmax(float* in, float* result)
 
   float sum = 0.0;
   for (size_t j = 0; j < 1000; j++) {
-    sum += expf(in[j]- max);
+    sum += expf(in[j] - max);
   }
 
   for (size_t j = 0; j < 1000; j++) {
-    result[j] = expf(in[j]-max)/sum;
+    result[j] = expf(in[j] - max) / sum;
   }
 }
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
 static void dumpInferenceResults(const BundleConfig &config,
-                                 uint8_t *mutableWeightVars, char* resultName) {
+                                 uint8_t *mutableWeightVars, char *resultName) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, resultName);
   int maxIdx = 0;
@@ -432,72 +432,78 @@ static void dumpInferenceResults(const BundleConfig &config,
   printf("Confidence: %f\n", maxValue);
 }
 
-
-
-static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT) {
-
-  uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
-
-  const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
-//  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
-//         inputDataVar.size*4);
-//  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
-  memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
-         inputDataVar.size*4);
-
-  return mutableWeightVarsAddr;
-}
-
-static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT) {
+static uint8_t *copyMutableWeightVars(const BundleConfig &config,
+                                      const char *name, float *inputT) {
 
   uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
 
   const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
-//  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
-//         inputDataVar.size*4);
-//  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+  //  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu
+  //  bytes\n",
+  //         inputDataVar.size*4);
+  //  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
   memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
-         inputDataVar.size*4);
+         inputDataVar.size * 4);
 
   return mutableWeightVarsAddr;
 }
 
-static uint8_t *copyMutableWeightVarsWithoutAlloc(const BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float* inputT) {
+static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config,
+                                               const char *name,
+                                               float *inputT) {
 
-//  uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
+  uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
 
   const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
-//  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
-//         inputDataVar.size*4);
-//  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+  //  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu
+  //  bytes\n",
+  //         inputDataVar.size*4);
+  //  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
   memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
-         inputDataVar.size*4);
+         inputDataVar.size * 4);
 
   return mutableWeightVarsAddr;
 }
 
-void transpose(float* &in, float* &out) {
+static uint8_t *
+copyMutableWeightVarsWithoutAlloc(const BundleConfig &config,
+                                  uint8_t *mutableWeightVarsAddr,
+                                  const char *name, float *inputT) {
 
-  float (*inPtr)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH];
-  float (*outPtr)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3];
+  //  uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
 
-  inPtr = (float (*)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH])in;
-  outPtr = (float (*)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3])out;
+  const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
+  //  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu
+  //  bytes\n",
+  //         inputDataVar.size*4);
+  //  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+  memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
+         inputDataVar.size * 4);
 
+  return mutableWeightVarsAddr;
+}
 
-  for (int j=0; j<3; j++){
-    for (int k=0; k<DEFAULT_HEIGHT; k++){
-      for (int l=0; l<DEFAULT_WIDTH; l++){
+void transpose(float *&in, float *&out) {
+
+  float(*inPtr)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH];
+  float(*outPtr)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3];
+
+  inPtr = (float(*)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH])in;
+  outPtr = (float(*)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3])out;
+
+  for (int j = 0; j < 3; j++) {
+    for (int k = 0; k < DEFAULT_HEIGHT; k++) {
+      for (int l = 0; l < DEFAULT_WIDTH; l++) {
         (*outPtr)[0][k][l][j] = (*inPtr)[0][j][k][l];
       }
     }
   }
-
 }
 
 /// The assumed layout of the area for mutable WeightVars is:
 /// data | gpu_0/data | results
-static uint8_t *initMutableWeightVars(const BundleConfig &config, char* varName) {
+static uint8_t *initMutableWeightVars(const BundleConfig &config,
+                                      char *varName) {
   uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
   size_t inputDims[4];
   float *inputT{nullptr};
@@ -506,18 +512,18 @@ static uint8_t *initMutableWeightVars(const BundleConfig &config, char* varName)
   // mutableWeightVars area.
   size_t imageDataSizeInBytes =
       inputDims[0] * inputDims[1] * inputDims[2] * inputDims[3] * sizeof(float);
-//  printf("Copying image data into mutable weight vars: %lu bytes\n",
-//         imageDataSizeInBytes);
+  //  printf("Copying image data into mutable weight vars: %lu bytes\n",
+  //         imageDataSizeInBytes);
   const SymbolTableEntry &inputGPUDataVar =
       getMutableWeightVar(config, varName);
 
-  if(NHWC == 1) {
-    float* tmp = (float *)malloc(sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]));
+  if (NHWC == 1) {
+    float *tmp =
+        (float *)malloc(sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]));
     memset(tmp, 0, imageDataSizeInBytes);
     transpose(inputT, tmp);
     memcpy(inputT, tmp, imageDataSizeInBytes);
     free(tmp);
-
   }
 
   memcpy(mutableWeightVarsAddr + inputGPUDataVar.offset, inputT,
@@ -533,9 +539,9 @@ static uint8_t *initActivations(const BundleConfig &config) {
       alignedAlloc(config, config.activationsMemSize));
 }
 
-
-static float* getInferenceResultVar(const BundleConfig &config,
-                                    uint8_t *mutableWeightVars, const char* name) {
+static float *getInferenceResultVar(const BundleConfig &config,
+                                    uint8_t *mutableWeightVars,
+                                    const char *name) {
   const SymbolTableEntry &outputWeights = getMutableWeightVar(config, name);
   float *results = (float *)(mutableWeightVars + outputWeights.offset);
   return results;

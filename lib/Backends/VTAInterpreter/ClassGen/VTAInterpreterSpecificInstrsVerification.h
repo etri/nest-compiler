@@ -15,6 +15,4 @@
  * Modifications copyright (C) 2022 <ETRI/Yongin Kwon>
  */
 
-void VTAInterpreterConvolutionInst::verify() const {
-
-}
+void VTAInterpreterConvolutionInst::verify() const {}

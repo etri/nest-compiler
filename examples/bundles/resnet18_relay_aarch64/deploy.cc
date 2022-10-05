@@ -23,25 +23,20 @@
  * \file cpp_deploy.cc
  */
 
-
 #include "mxnet_exported_resnet18.h"
 //#include <dlpack/dlpack.h>
 //#include <tvm/runtime/module.h>
 //#include <tvm/runtime/packed_func.h>
 //#include <tvm/runtime/registry.h>
 
-
-#include <cstring>
-#include <cstdio>
-#include <png.h>
 #include <assert.h>
-#include <math.h>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <limits>
+#include <math.h>
+#include <png.h>
 #include <sys/time.h>
-
-
-
 
 // \returns the index of the element at x,y,z,w.
 size_t getXYZW(const size_t *dims, size_t x, size_t y, size_t z, size_t w) {
@@ -135,7 +130,7 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
   imageDims[2] = numChannels;
   imageT = static_cast<float *>(
       calloc(1, width * height * numChannels * sizeof(float)));
-  printf("%p w:%d h:%d c:%d\n",imageT,width,height,numChannels);
+  printf("%p w:%d h:%d c:%d\n", imageT, width, height, numChannels);
 
   float scale = ((range.second - range.first) / 255.0);
   float bias = range.first;
@@ -170,10 +165,9 @@ bool readPngImage(const char *filename, std::pair<float, float> range,
   return false;
 }
 
-
-static int read_all(const char* file_description, const char* file_path, char** out_params,
-                    size_t* params_size) {
-  FILE* fp = fopen(file_path, "rb");
+static int read_all(const char *file_description, const char *file_path,
+                    char **out_params, size_t *params_size) {
+  FILE *fp = fopen(file_path, "rb");
   if (fp == NULL) {
     return 2;
   }
@@ -187,9 +181,11 @@ static int read_all(const char* file_description, const char* file_path, char** 
   long file_size = ftell(fp);
   if (file_size < 0) {
     return (int)file_size;
-  } else if (file_size == 0 || file_size > 1000000000) {  // file size should be in (0, 20MB].
+  } else if (file_size == 0 ||
+             file_size > 1000000000) { // file size should be in (0, 20MB].
     char buf[128];
-    snprintf(buf, sizeof(buf), "determing file size: %s,%d", file_path,file_size);
+    snprintf(buf, sizeof(buf), "determing file size: %s,%d", file_path,
+             file_size);
     perror(buf);
     return 2;
   }
@@ -205,7 +201,7 @@ static int read_all(const char* file_description, const char* file_path, char** 
     return error;
   }
 
-  *out_params = (char*)malloc((unsigned long)file_size);
+  *out_params = (char *)malloc((unsigned long)file_size);
   if (fread(*out_params, file_size, 1, fp) != 1) {
     free(*out_params);
     *out_params = NULL;
@@ -225,32 +221,26 @@ static int read_all(const char* file_description, const char* file_path, char** 
   return 0;
 }
 
-
 #define NHWC 1
 
-void transpose(float* &in, float* &out) {
+void transpose(float *&in, float *&out) {
 
-  float (*inPtr)[1][3][224][224];
-  float (*outPtr)[1][224][224][3];
+  float(*inPtr)[1][3][224][224];
+  float(*outPtr)[1][224][224][3];
 
-  inPtr = (float (*)[1][3][224][224])in;
-  outPtr = (float (*)[1][224][224][3])out;
+  inPtr = (float(*)[1][3][224][224])in;
+  outPtr = (float(*)[1][224][224][3])out;
 
-
-  for (int j=0; j<3; j++){
-    for (int k=0; k<224; k++){
-      for (int l=0; l<224; l++){
+  for (int j = 0; j < 3; j++) {
+    for (int k = 0; k < 224; k++) {
+      for (int l = 0; l < 224; l++) {
         (*outPtr)[0][k][l][j] = (*inPtr)[0][j][k][l];
-        }
       }
     }
-
+  }
 }
 
-
-
-
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
 
   float *imgT{nullptr};
 
@@ -269,41 +259,42 @@ int main(int argc, char** argv) {
   inputDims[3] = 224;
 
   float *inputT;
-  inputT = static_cast<float *>(malloc(1*3*224*224*sizeof(float)));
+  inputT = static_cast<float *>(malloc(1 * 3 * 224 * 224 * sizeof(float)));
 
   // Convert to BGR, as this is what NN is expecting.
   for (unsigned z = 0; z < 3; z++) {
     for (unsigned y = 0; y < loadDims[1]; y++) {
       for (unsigned x = 0; x < loadDims[0]; x++) {
-        inputT[getXYZW(inputDims,0, 2 - z, x, y)] = imgT[getXYZ(loadDims, x, y, z)];
+        inputT[getXYZW(inputDims, 0, 2 - z, x, y)] =
+            imgT[getXYZ(loadDims, x, y, z)];
       }
     }
   }
 
   // nhwc -> nchw
-  if(NHWC == 1) {
-    float* tmp = (float *)malloc(sizeof(float[1][224][224][3]));
-    int imgSize= 1*224*224*3*sizeof(float);
-    memset(tmp, 0,     imgSize);
+  if (NHWC == 1) {
+    float *tmp = (float *)malloc(sizeof(float[1][224][224][3]));
+    int imgSize = 1 * 224 * 224 * 3 * sizeof(float);
+    memset(tmp, 0, imgSize);
     transpose(inputT, tmp);
     memcpy(inputT, tmp, imgSize);
     free(tmp);
+  }
 
-  }  
+  // set input
+  uint8_t *mutableMem = (uint8_t *)malloc(
+      mxnet_exported_resnet18_config.mutableWeightVarsMemSize);
+  memcpy(mutableMem, inputT, sizeof(float) * 1 * 224 * 224 * 3);
 
-  
-
-    //set input
-  uint8_t *mutableMem = (uint8_t*)malloc(mxnet_exported_resnet18_config.mutableWeightVarsMemSize);
-  memcpy(mutableMem, inputT, sizeof(float)*1*224*224*3);
-  
   mxnet_exported_resnet18_load_module(0);
   timeval t1, t2;
   gettimeofday(&t1, NULL);
-  mxnet_exported_resnet18(0, mutableMem,0);
+  mxnet_exported_resnet18(0, mutableMem, 0);
   gettimeofday(&t2, NULL);
   float output_storage[1000];
-  memcpy(output_storage, mutableMem+mxnet_exported_resnet18_config.symbolTable[1].offset, mxnet_exported_resnet18_config.symbolTable[1].size * sizeof(float) );
+  memcpy(output_storage,
+         mutableMem + mxnet_exported_resnet18_config.symbolTable[1].offset,
+         mxnet_exported_resnet18_config.symbolTable[1].size * sizeof(float));
 
   float max_iter = -std::numeric_limits<float>::max();
   int32_t max_index = -1;
@@ -317,11 +308,9 @@ int main(int argc, char** argv) {
   printf("Result: %u\n", max_index);
   printf("Confidence: %f\n", max_iter);
   double result;
-  result = (t2.tv_sec - t1.tv_sec)*1000.0 + (t2.tv_usec - t1.tv_usec)/1000.0;
-  std::cout<<"Inference time: "<<result<<"ms\n";
-  
+  result =
+      (t2.tv_sec - t1.tv_sec) * 1000.0 + (t2.tv_usec - t1.tv_usec) / 1000.0;
+  std::cout << "Inference time: " << result << "ms\n";
+
   return 0;
-
-
-
 }

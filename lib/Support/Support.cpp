@@ -194,7 +194,7 @@ const char *getDotFileNodeColor(size_t index) {
 
 template <typename T> static T deserializeFromYaml(llvm::StringRef fileName) {
   T result;
-//  std::cout << "YAML: " << fileName.str() << std::endl;
+  //  std::cout << "YAML: " << fileName.str() << std::endl;
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> text =
       llvm::MemoryBuffer::getFileAsStream(fileName);
   assert(!text.getError() && "Unable to open file");

@@ -185,12 +185,12 @@ public:
   ElemKind getElementType(unsigned resNo) const;
   llvm::ArrayRef<dim_t> dims(unsigned resNo) const;
   /// @}
-  //for C/C++ code generation
-  std::string getVarName(){
-      if(varName_.size() == 0) {
-          varName_ = "var" + getName().str();
-      }
-      return varName_;
+  // for C/C++ code generation
+  std::string getVarName() {
+    if (varName_.size() == 0) {
+      varName_ = "var" + getName().str();
+    }
+    return varName_;
   }
 
 protected:

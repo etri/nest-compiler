@@ -299,7 +299,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
 static int dumpInferenceResults(const BundleConfig &config,
-                                 uint8_t *mutableWeightVars) {
+                                uint8_t *mutableWeightVars) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, "resnetv22_dense0_fwd__1");
   int maxIdx = 0;
@@ -330,8 +330,7 @@ static uint8_t *initMutableWeightVars(const BundleConfig &config) {
       inputDims[0] * inputDims[1] * inputDims[2] * inputDims[3] * sizeof(float);
   printf("Copying image data into mutable weight vars: %lu bytes\n",
          imageDataSizeInBytes);
-  const SymbolTableEntry &inputGPUDataVar =
-      getMutableWeightVar(config, "data");
+  const SymbolTableEntry &inputGPUDataVar = getMutableWeightVar(config, "data");
   memcpy(mutableWeightVarsAddr + inputGPUDataVar.offset, inputT,
          imageDataSizeInBytes);
   free(inputT);
@@ -352,8 +351,8 @@ int main(int argc, char **argv) {
   uint8_t *activationsAddr = initActivations(resnet18v2_config);
 
   // Perform the computation.
-  int errCode =
-      resnet18v2(constantWeightVarsAddr, mutableWeightVarsAddr, activationsAddr);
+  int errCode = resnet18v2(constantWeightVarsAddr, mutableWeightVarsAddr,
+                           activationsAddr);
   if (errCode != GLOW_SUCCESS) {
     printf("Error running bundle: error code %d\n", errCode);
   }
@@ -366,5 +365,5 @@ int main(int argc, char **argv) {
   free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
 
-  return !(maxIdx==281);
+  return !(maxIdx == 281);
 }

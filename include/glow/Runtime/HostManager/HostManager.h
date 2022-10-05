@@ -200,12 +200,19 @@ public:
   /// contained within the module should be considered invalid. The function is
   /// optimized based on \p cctx.
   Error addNetwork(std::unique_ptr<Module> module, CompilationContext &cctx);
-  Error addNetworkForNestPartition(std::unique_ptr<Module> module, CompilationContext &cctx, size_t exeType,
-                                 std::string profilePath, std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode, int partitionExe);
+  Error addNetworkForNestPartition(std::unique_ptr<Module> module,
+                                   CompilationContext &cctx, size_t exeType,
+                                   std::string profilePath,
+                                   std::string partitionPlanFile,
+                                   std::string bundleDir,
+                                   std::string quantFileName, int profileMode,
+                                   int partitionExe);
   std::vector<DeviceInfo> getDeviceInfoList();
-  void setCompileOptions(PartitionerCompileOptions* compileOptions) {provisioner_->setCompileOptions(compileOptions);}
+  void setCompileOptions(PartitionerCompileOptions *compileOptions) {
+    provisioner_->setCompileOptions(compileOptions);
+  }
 
-    /// Given \p networkName removes that network from the host. This also
+  /// Given \p networkName removes that network from the host. This also
   /// removes the network from any backends setup to execute it.
   /// \returns an Error indicating success or failure of the operation.
   Error removeNetwork(llvm::StringRef networkName);

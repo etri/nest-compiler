@@ -299,7 +299,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
 static int dumpInferenceResults(const BundleConfig &config,
-                                 uint8_t *mutableWeightVars) {
+                                uint8_t *mutableWeightVars) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, "gpu_0_softmax_1");
   int maxIdx = 0;
@@ -353,8 +353,8 @@ int main(int argc, char **argv) {
   uint8_t *activationsAddr = initActivations(shufflenet_config);
 
   // Perform the computation.
-  int errCode =
-          shufflenet(constantWeightVarsAddr, mutableWeightVarsAddr, activationsAddr);
+  int errCode = shufflenet(constantWeightVarsAddr, mutableWeightVarsAddr,
+                           activationsAddr);
   if (errCode != GLOW_SUCCESS) {
     printf("Error running bundle: error code %d\n", errCode);
   }
@@ -367,5 +367,5 @@ int main(int argc, char **argv) {
   free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
 
-  return !(maxIdx==281);
+  return !(maxIdx == 281);
 }

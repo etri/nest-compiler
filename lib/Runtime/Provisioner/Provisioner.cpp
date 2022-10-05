@@ -21,9 +21,9 @@
 #include "glow/Graph/Graph.h"
 #include "glow/Runtime/DeferredWeightLoader.h"
 
+#include "Backends/Relay/Relay.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormatVariadic.h"
-#include "Backends/Relay/Relay.h"
 
 #ifdef GLOW_WITH_VTA
 #include "Backends/VTA/VTA.h"
@@ -65,59 +65,72 @@ auto sortMostMemory = [](const std::pair<DeviceIDTy, uint64_t> &a,
 };
 } // namespace
 
-
 Provisioner::Provisioner(DeviceManagerMapTy &devices) {
-    unsigned deviceMapping{0};
-    for (auto &device : devices) {
-        devices_.push_back(device.second.get());
-        deviceMappings_.push_back(deviceMapping++);
-        auto backendName = device.second->getBackendName();
-        if (backends_.find(backendName) == backends_.end()) {
-            std::unique_ptr<Backend> newBackend(createBackend(backendName));
-            backends_.emplace(std::string(backendName), std::move(newBackend));
-        }
+  unsigned deviceMapping{0};
+  for (auto &device : devices) {
+    devices_.push_back(device.second.get());
+    deviceMappings_.push_back(deviceMapping++);
+    auto backendName = device.second->getBackendName();
+    if (backends_.find(backendName) == backends_.end()) {
+      std::unique_ptr<Backend> newBackend(createBackend(backendName));
+      backends_.emplace(std::string(backendName), std::move(newBackend));
     }
+  }
 }
 
-void Provisioner::setCompileOptions(PartitionerCompileOptions* compileOptions) {
+void Provisioner::setCompileOptions(PartitionerCompileOptions *compileOptions) {
 
 #ifdef GLOW_WITH_VTA
-    if (backends_.find("VTA") != backends_.end()) {
-        if(compileOptions->idxMultiEVTA_ > 0) {
-            //std::cout << "idxMultiEVTA_: " << compileOptions->idxMultiEVTA_ << std::endl;
-            static_cast<VTA*>(backends_["VTA"].get())->setIdxMultiEVTA(compileOptions->idxMultiEVTA_);
-        }
+  if (backends_.find("VTA") != backends_.end()) {
+    if (compileOptions->idxMultiEVTA_ > 0) {
+      // std::cout << "idxMultiEVTA_: " << compileOptions->idxMultiEVTA_ <<
+      // std::endl;
+      static_cast<VTA *>(backends_["VTA"].get())
+          ->setIdxMultiEVTA(compileOptions->idxMultiEVTA_);
     }
+  }
 #endif
 
-    if (backends_.find("Relay") != backends_.end()) {
+  if (backends_.find("Relay") != backends_.end()) {
 
-        if(!compileOptions->relayTarget_.empty()) {
-            //std::cout << "relayTarget_: " << compileOptions->relayTarget_ << std::endl;
-            static_cast<Relay*>(backends_["Relay"].get())->setTarget(compileOptions->relayTarget_.c_str());
-        }
-        if(!compileOptions->relayTargetHost_.empty()) {
-            //std::cout << "relayTargetHost_: " << compileOptions->relayTargetHost_ << std::endl;
-            static_cast<Relay*>(backends_["Relay"].get())->setTargetHost(compileOptions->relayTargetHost_.c_str());
-        }
-        if(compileOptions->relayOptLevel_ > 0) {
-            //std::cout << "relayOptLevel_: " << compileOptions->relayOptLevel_ << std::endl;
-            static_cast<Relay*>(backends_["Relay"].get())->setOptLevel(compileOptions->relayOptLevel_);
-        }
-        if(!compileOptions->relayRequiredPass_.empty()) {
-            //std::cout << "relayRequiredPass_: " << compileOptions->relayRequiredPass_ << std::endl;
-            static_cast<Relay*>(backends_["Relay"].get())->setRequiredPass(compileOptions->relayRequiredPass_.c_str());
-        }
-
-        if(!compileOptions->relayDisabledPass_.empty()) {
-            //std::cout << "relayDisabledPass_: " << compileOptions->relayDisabledPass_ << std::endl;
-            static_cast<Relay*>(backends_["Relay"].get())->setDisabledPass(compileOptions->relayDisabledPass_.c_str());
-        }
-        if(!compileOptions->relayExportOption_.empty()) {
-            //std::cout << "relayExportOption_: " << compileOptions->relayExportOption_ << std::endl;
-            static_cast<Relay*>(backends_["Relay"].get())->setExportOption(compileOptions->relayExportOption_.c_str());
-        }
+    if (!compileOptions->relayTarget_.empty()) {
+      // std::cout << "relayTarget_: " << compileOptions->relayTarget_ <<
+      // std::endl;
+      static_cast<Relay *>(backends_["Relay"].get())
+          ->setTarget(compileOptions->relayTarget_.c_str());
     }
+    if (!compileOptions->relayTargetHost_.empty()) {
+      // std::cout << "relayTargetHost_: " << compileOptions->relayTargetHost_
+      // << std::endl;
+      static_cast<Relay *>(backends_["Relay"].get())
+          ->setTargetHost(compileOptions->relayTargetHost_.c_str());
+    }
+    if (compileOptions->relayOptLevel_ > 0) {
+      // std::cout << "relayOptLevel_: " << compileOptions->relayOptLevel_ <<
+      // std::endl;
+      static_cast<Relay *>(backends_["Relay"].get())
+          ->setOptLevel(compileOptions->relayOptLevel_);
+    }
+    if (!compileOptions->relayRequiredPass_.empty()) {
+      // std::cout << "relayRequiredPass_: " <<
+      // compileOptions->relayRequiredPass_ << std::endl;
+      static_cast<Relay *>(backends_["Relay"].get())
+          ->setRequiredPass(compileOptions->relayRequiredPass_.c_str());
+    }
+
+    if (!compileOptions->relayDisabledPass_.empty()) {
+      // std::cout << "relayDisabledPass_: " <<
+      // compileOptions->relayDisabledPass_ << std::endl;
+      static_cast<Relay *>(backends_["Relay"].get())
+          ->setDisabledPass(compileOptions->relayDisabledPass_.c_str());
+    }
+    if (!compileOptions->relayExportOption_.empty()) {
+      // std::cout << "relayExportOption_: " <<
+      // compileOptions->relayExportOption_ << std::endl;
+      static_cast<Relay *>(backends_["Relay"].get())
+          ->setExportOption(compileOptions->relayExportOption_.c_str());
+    }
+  }
 }
 
 Error Provisioner::checkActiveNetworks(
@@ -710,8 +723,9 @@ Error Provisioner::provision(DAGListTy &networks, Module &module,
   return Error::success();
 };
 
-Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module,
-                              CompilationContext &cctx, std::string bundleDir, std::map<std::string, int>* puIdxMap) {
+Error Provisioner::provisionForNestPartition(
+    DAGListTy &networks, Module &module, CompilationContext &cctx,
+    std::string bundleDir, std::map<std::string, int> *puIdxMap) {
 
   // Check that the requested networks don't collide with the names of any other
   // networks being added.
@@ -810,7 +824,9 @@ Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module
     }
   }
 
-  std::cout << std::endl << "Generating partition code.." << std::endl << std::endl;
+  std::cout << std::endl
+            << "Generating partition code.." << std::endl
+            << std::endl;
 
   // Compile and load.
   // This is done one logical device at a time. All functions in a logical
@@ -854,7 +870,7 @@ Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module
           // Return error requested device type not found.
           return MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_DEVICE_NOT_FOUND,
                           "Unable to find device of type: " +
-                          deviceBackendName);
+                              deviceBackendName);
         }
 
         std::unordered_map<std::string, std::unique_ptr<glow::CompiledFunction>>
@@ -894,19 +910,22 @@ Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module
           }
 
 #ifdef GLOW_WITH_VTA
-          if(!deviceBackendName.compare("VTA")) {
-                int vtaIdx = pow(2, (*puIdxMap)[function->getName().str()]);
-              std::cout << "Partition name = " << function->getName().str() << "(" << deviceBackendName << ") VTA index: " << vtaIdx << std::endl;
-              static_cast<VTA*>(backends_["VTA"].get())->save(function, bundleDir + "/",
-                                                              function->getName(),
-                                                              function->getName(), vtaIdx);
+          if (!deviceBackendName.compare("VTA")) {
+            int vtaIdx = pow(2, (*puIdxMap)[function->getName().str()]);
+            std::cout << "Partition name = " << function->getName().str() << "("
+                      << deviceBackendName << ") VTA index: " << vtaIdx
+                      << std::endl;
+            static_cast<VTA *>(backends_["VTA"].get())
+                ->save(function, bundleDir + "/", function->getName(),
+                       function->getName(), vtaIdx);
 
           } else {
 #endif
-              std::cout << "Partition name = " << function->getName().str() << "(" << deviceBackendName << ")"<< std::endl;
-              backends_[deviceBackendName]->save(function, bundleDir + "/",
-                                                 function->getName(),
-                                                 function->getName());
+            std::cout << "Partition name = " << function->getName().str() << "("
+                      << deviceBackendName << ")" << std::endl;
+            backends_[deviceBackendName]->save(function, bundleDir + "/",
+                                               function->getName(),
+                                               function->getName());
 #ifdef GLOW_WITH_VTA
           }
 #endif
@@ -1137,7 +1156,7 @@ Error Provisioner::provisionForNestPartition(DAGListTy &networks, Module &module
     }
   }
 
-  std::cout << "Partition-code generation is done." << std::endl<< std::endl;
+  std::cout << "Partition-code generation is done." << std::endl << std::endl;
 
   cleanupProvision(localActiveNames, {}, false);
   return Error::success();

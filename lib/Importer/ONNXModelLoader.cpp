@@ -45,10 +45,10 @@ using llvm::cast;
 namespace {
 llvm::cl::OptionCategory onnxModelLoaderCat("ONNX Model Loader Options");
 
-    llvm::cl::opt<int> npuConvFitting(
-            "npu-conv-fitting",
-            llvm::cl::desc("\"npu-conv-fitting number ex) 16\""),
-            llvm::cl::init(-1), llvm::cl::cat(onnxModelLoaderCat));
+llvm::cl::opt<int>
+    npuConvFitting("npu-conv-fitting",
+                   llvm::cl::desc("\"npu-conv-fitting number ex) 16\""),
+                   llvm::cl::init(-1), llvm::cl::cat(onnxModelLoaderCat));
 
 std::vector<std::string> onnxDefineSymbol;
 llvm::cl::list<std::string, std::vector<std::string>> onnxDefineSymbolOpt(
@@ -1506,168 +1506,180 @@ Error ONNXModelLoader::loadConv(const ONNX_NAMESPACE::NodeProto &op,
     dilation = dilations[0];
   }
 
-  //jeman 20210701
-    dim_t depth1 = filterValue.dims()[0];
+  // jeman 20210701
+  dim_t depth1 = filterValue.dims()[0];
 
-    // Construct the Bias field.
-    //Constant *bias= nullptr;
-    NodeValue bias;
+  // Construct the Bias field.
+  // Constant *bias= nullptr;
+  NodeValue bias;
 
-    // Check if we have a serialized bias vector.
-    if (op.input_size() > 2) {
-        auto &biasTensorName = op.input(2);
-        // Load the serialized bias vector.
-        ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(biasTensorName));
-    }
+  // Check if we have a serialized bias vector.
+  if (op.input_size() > 2) {
+    auto &biasTensorName = op.input(2);
+    // Load the serialized bias vector.
+    ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(biasTensorName));
+  }
 
-    // If a serialized bias wasn't found then create a zero bias.
-    if (!bias) {
-        Tensor biasTensor(ElemKind::FloatTy, {depth1});
-        biasTensor.zero();
-        bias = mod_.createConstant("conv.bias", std::move(biasTensor));
-    }
+  // If a serialized bias wasn't found then create a zero bias.
+  if (!bias) {
+    Tensor biasTensor(ElemKind::FloatTy, {depth1});
+    biasTensor.zero();
+    bias = mod_.createConstant("conv.bias", std::move(biasTensor));
+  }
 
-    //    Tensor biasTensor1(ElemKind::FloatTy, {depth1});
-//    biasTensor1 = bias->getPayload().getData();
-//    std::cout << "!!!! " << bias->payload_.data_[0] << std::endl;
+  //    Tensor biasTensor1(ElemKind::FloatTy, {depth1});
+  //    biasTensor1 = bias->getPayload().getData();
+  //    std::cout << "!!!! " << bias->payload_.data_[0] << std::endl;
 
+  // jeman 20210622 - channel padding 16X
+  // group
+  //    auto pOpName =  opName.data();
+  //    if (group >1){
+  //        printf("%s\n",pOpName);
+  //        //printf("%s (nGroup=%d)\n",pOpName,group);
+  //    }
+  // std::cout << "!!!! " << group << std::endl;
 
+  if (npuConvFitting > 0) {
+    int vta_conv_value = npuConvFitting;
+    // printf("mooyaaho %d", vta_conv_value);
+    int channelpads[] = {0, 0, 0, 0, 0, 0, 0, 0};
+    unsigned_t mode = PaddingMode::CONSTANT;
 
-    //jeman 20210622 - channel padding 16X
-    //group
-//    auto pOpName =  opName.data();
-//    if (group >1){
-//        printf("%s\n",pOpName);
-//        //printf("%s (nGroup=%d)\n",pOpName,group);
-//    }
-// std::cout << "!!!! " << group << std::endl;
+    // int input_channel_size = in.dims()[1];
+    int input_channel_size = filterValue.dims()[1];
+    int channelpads_r = input_channel_size % vta_conv_value;
+    int channelpads_size = vta_conv_value - channelpads_r;
 
+    int filter_batch_size = filterValue.dims()[0];
+    int filter_batch_pads_r = filter_batch_size % vta_conv_value;
+    int filter_batch_pads_size = vta_conv_value - filter_batch_pads_r;
 
-    if (npuConvFitting > 0) {
-        int vta_conv_value = npuConvFitting;
-        //printf("mooyaaho %d", vta_conv_value);
-        int channelpads[] = {0, 0, 0, 0, 0, 0, 0, 0};
-        unsigned_t mode = PaddingMode::CONSTANT;
+    auto filterDims = filterValue.dims();
+    auto filterchannelnumDims = filterDims.size();
+    std::vector<dim_t> filterchanneloutDims(filterchannelnumDims);
 
-        //int input_channel_size = in.dims()[1];
-        int input_channel_size = filterValue.dims()[1];
-        int channelpads_r = input_channel_size % vta_conv_value;
-        int channelpads_size = vta_conv_value - channelpads_r;
+    if (channelpads_r > 0 && group == 1) {
+      // if (input_channel_size < 40 && channelpads_r > 7 && group == 1 &&
+      // in.dims()[2] != 1) {
+      channelpads[5] = input_channel_size + channelpads_size;
 
-        int filter_batch_size = filterValue.dims()[0];
-        int filter_batch_pads_r = filter_batch_size % vta_conv_value;
-        int filter_batch_pads_size = vta_conv_value - filter_batch_pads_r;
+      if (in.dims()[1] % vta_conv_value) {
+        auto DataDims = in.dims();
+        auto channelnumDims = DataDims.size();
 
-        auto filterDims = filterValue.dims();
-        auto filterchannelnumDims = filterDims.size();
-        std::vector<dim_t> filterchanneloutDims(filterchannelnumDims);
+        std::vector<dim_t> channeloutDims(channelnumDims);
+        for (unsigned_t i = 0; i < channelnumDims; i++) {
+          auto data_new_channel_size = DataDims[i];
+          if (i == 1) {
+            data_new_channel_size += channelpads_size;
+          }
 
-        if (channelpads_r > 0 && group == 1) {
-            //if (input_channel_size < 40 && channelpads_r > 7 && group == 1 && in.dims()[2] != 1) {
-            channelpads[5] = input_channel_size + channelpads_size;
-
-            if(in.dims()[1]% vta_conv_value) {
-                auto DataDims = in.dims();
-                auto channelnumDims = DataDims.size();
-
-                std::vector<dim_t> channeloutDims(channelnumDims);
-                for (unsigned_t i = 0; i < channelnumDims; i++) {
-                    auto data_new_channel_size = DataDims[i];
-                    if (i == 1) {
-                        data_new_channel_size += channelpads_size;
-                    }
-
-                    RETURN_ERR_IF_NOT(
-                            data_new_channel_size > 0,
-                            opErrMsg(op, "The padding can't remove all elements of a dimension"));
-                    channeloutDims[i] = data_new_channel_size;
-                }
-                auto channeloutTy = mod_.uniqueType(ElemKind::FloatTy, channeloutDims);
-                //std::vector<int> channelpads;
-                //int channelpads[] = {0,0,0,0,0,0,0,0};
-                //      ASSIGN_VALUE_OR_RETURN_ERR(channelpads, getShape<int>(dict["pads"]));
-                in = G_->createPad(opName, in, channeloutTy, mode, channelpads, 0);
-                //std::cout << "1: " << opName.data() << in.getType()->dims() << std::endl;
-            }
-
-            for (unsigned_t i = 0; i < filterchannelnumDims; i++) {
-                auto filter_new_size = filterDims[i];
-                if (i == 1) {
-                    filter_new_size += channelpads_size;
-                }
-                RETURN_ERR_IF_NOT(
-                        filter_new_size > 0,
-                        opErrMsg(op, "The padding can't remove all elements of a dimension"));
-                filterchanneloutDims[i] = filter_new_size;
-            }
-            auto filterchanneloutTy = mod_.uniqueType(ElemKind::FloatTy, filterchanneloutDims);
-            //std::vector<int> filterchannelpads;
-            //int filterchannelpads[] = {0,0,0,0,0,0,0,0};
-            //ASSIGN_VALUE_OR_RETURN_ERR(filterchannelpads, getShape<int>(dict["pads"]));
-            filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode, channelpads, 0);
-
-            //std::cout << "2: " << opName.data() << in.getType()->dims() << std::endl;
-            //std::cout << "2: " << opName.data() << filterValue.getType()->dims() << std::endl;
-
-            //filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode, 0, 0);
+          RETURN_ERR_IF_NOT(
+              data_new_channel_size > 0,
+              opErrMsg(op,
+                       "The padding can't remove all elements of a dimension"));
+          channeloutDims[i] = data_new_channel_size;
         }
+        auto channeloutTy = mod_.uniqueType(ElemKind::FloatTy, channeloutDims);
+        // std::vector<int> channelpads;
+        // int channelpads[] = {0,0,0,0,0,0,0,0};
+        //      ASSIGN_VALUE_OR_RETURN_ERR(channelpads,
+        //      getShape<int>(dict["pads"]));
+        in = G_->createPad(opName, in, channeloutTy, mode, channelpads, 0);
+        // std::cout << "1: " << opName.data() << in.getType()->dims() <<
+        // std::endl;
+      }
 
-        if (filter_batch_pads_r > 0) {
-            filterDims = filterValue.dims();\
-            if (group > 1){
-                group = group + filter_batch_pads_size;
-            }
-            for (unsigned_t i = 0; i < filterchannelnumDims; i++) {
-                auto filter_new_size = filterDims[i];
-                if (i == 0) {
-                    filter_new_size += filter_batch_pads_size;
-                }
-                RETURN_ERR_IF_NOT(
-                        filter_new_size > 0,
-                        opErrMsg(op, "The padding can't remove all elements of a dimension"));
-                filterchanneloutDims[i] = filter_new_size;
-            }
-            auto filterchanneloutTy = mod_.uniqueType(ElemKind::FloatTy, filterchanneloutDims);
-            //std::vector<int> filterchannelpads;
-            int filterchannelpads[] = {0,0,0,0,0,0,0,0};
-            filterchannelpads[4] = filter_batch_size + filter_batch_pads_size;
-            //ASSIGN_VALUE_OR_RETURN_ERR(filterchannelpads, getShape<int>(dict["pads"]));
-            filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode, filterchannelpads, 0);
-            //std::cout << "2: "<< opName.data() << filterValue.getType()->dims() << std::endl;
-            //filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode, 0, 0);
-
-            //std::cout << "3: " << opName.data() << in.getType()->dims() << std::endl;
-            //std::cout << "3: " << opName.data() << filterValue.getType()->dims() << std::endl;
-//
-//            int filter_batch_size = filterValue.dims()[0];
-//            int filter_batch_pads_r = filter_batch_size % vta_conv_value;
-//            int filter_batch_pads_size = vta_conv_value - filter_batch_pads_r;
-//
-//            auto filterDims = filterValue.dims();
-//            auto filterchannelnumDims = filterDims.size();
-//            std::vector<dim_t> filterchanneloutDims(filterchannelnumDims);
-
-            auto biasDims = bias.dims();
-            auto biasnumDims = biasDims.size();
-            std::vector<dim_t> biaschanneloutDims(biasnumDims);
-
-           // bias->dims() = *biaschanneloutDims;
-            //std::cout << "3: " << opName.data() << ": " << bias->dims()[0] << " biaschanneloutDims:" << biaschanneloutDims[0] << std::endl;
-
-            auto bias_new_size = biasDims[0] + filter_batch_pads_size;
-            biaschanneloutDims[0] = bias_new_size;
-            auto biasoutTy = mod_.uniqueType(ElemKind::FloatTy, biaschanneloutDims);
-            int biaspads[] = {0,0};
-            biaspads[1] = filter_batch_size + filter_batch_pads_size;
-            //NodeValue bias_nv;
-
-            bias = G_->createPad(opName, bias, biasoutTy, mode, biaspads, 0);
-
+      for (unsigned_t i = 0; i < filterchannelnumDims; i++) {
+        auto filter_new_size = filterDims[i];
+        if (i == 1) {
+          filter_new_size += channelpads_size;
         }
+        RETURN_ERR_IF_NOT(
+            filter_new_size > 0,
+            opErrMsg(op,
+                     "The padding can't remove all elements of a dimension"));
+        filterchanneloutDims[i] = filter_new_size;
+      }
+      auto filterchanneloutTy =
+          mod_.uniqueType(ElemKind::FloatTy, filterchanneloutDims);
+      // std::vector<int> filterchannelpads;
+      // int filterchannelpads[] = {0,0,0,0,0,0,0,0};
+      // ASSIGN_VALUE_OR_RETURN_ERR(filterchannelpads,
+      // getShape<int>(dict["pads"]));
+      filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode,
+                                  channelpads, 0);
 
+      // std::cout << "2: " << opName.data() << in.getType()->dims() <<
+      // std::endl; std::cout << "2: " << opName.data() <<
+      // filterValue.getType()->dims() << std::endl;
 
+      // filterValue = G_->createPad(opName, filterValue, filterchanneloutTy,
+      // mode, 0, 0);
     }
 
+    if (filter_batch_pads_r > 0) {
+      filterDims = filterValue.dims();
+      if (group > 1) {
+        group = group + filter_batch_pads_size;
+      }
+      for (unsigned_t i = 0; i < filterchannelnumDims; i++) {
+        auto filter_new_size = filterDims[i];
+        if (i == 0) {
+          filter_new_size += filter_batch_pads_size;
+        }
+        RETURN_ERR_IF_NOT(
+            filter_new_size > 0,
+            opErrMsg(op,
+                     "The padding can't remove all elements of a dimension"));
+        filterchanneloutDims[i] = filter_new_size;
+      }
+      auto filterchanneloutTy =
+          mod_.uniqueType(ElemKind::FloatTy, filterchanneloutDims);
+      // std::vector<int> filterchannelpads;
+      int filterchannelpads[] = {0, 0, 0, 0, 0, 0, 0, 0};
+      filterchannelpads[4] = filter_batch_size + filter_batch_pads_size;
+      // ASSIGN_VALUE_OR_RETURN_ERR(filterchannelpads,
+      // getShape<int>(dict["pads"]));
+      filterValue = G_->createPad(opName, filterValue, filterchanneloutTy, mode,
+                                  filterchannelpads, 0);
+      // std::cout << "2: "<< opName.data() << filterValue.getType()->dims() <<
+      // std::endl; filterValue = G_->createPad(opName, filterValue,
+      // filterchanneloutTy, mode, 0, 0);
+
+      // std::cout << "3: " << opName.data() << in.getType()->dims() <<
+      // std::endl; std::cout << "3: " << opName.data() <<
+      // filterValue.getType()->dims() << std::endl;
+      //
+      //            int filter_batch_size = filterValue.dims()[0];
+      //            int filter_batch_pads_r = filter_batch_size %
+      //            vta_conv_value; int filter_batch_pads_size = vta_conv_value
+      //            - filter_batch_pads_r;
+      //
+      //            auto filterDims = filterValue.dims();
+      //            auto filterchannelnumDims = filterDims.size();
+      //            std::vector<dim_t>
+      //            filterchanneloutDims(filterchannelnumDims);
+
+      auto biasDims = bias.dims();
+      auto biasnumDims = biasDims.size();
+      std::vector<dim_t> biaschanneloutDims(biasnumDims);
+
+      // bias->dims() = *biaschanneloutDims;
+      // std::cout << "3: " << opName.data() << ": " << bias->dims()[0] << "
+      // biaschanneloutDims:" << biaschanneloutDims[0] << std::endl;
+
+      auto bias_new_size = biasDims[0] + filter_batch_pads_size;
+      biaschanneloutDims[0] = bias_new_size;
+      auto biasoutTy = mod_.uniqueType(ElemKind::FloatTy, biaschanneloutDims);
+      int biaspads[] = {0, 0};
+      biaspads[1] = filter_batch_size + filter_batch_pads_size;
+      // NodeValue bias_nv;
+
+      bias = G_->createPad(opName, bias, biasoutTy, mode, biaspads, 0);
+    }
+  }
 
   // Transpose the filter to the right format. Glow expects to read the
   // weights in the format CRSK. ONNX stores the operators as KCRS.
@@ -1700,23 +1712,22 @@ Error ONNXModelLoader::loadConv(const ONNX_NAMESPACE::NodeProto &op,
     (void)kernelShapeAttribute; // Avoids compilation warning in release mode.
   }
 
-//  // Construct the Bias field.
-//  Constant *bias = nullptr;
-//
-//  // Check if we have a serialized bias vector.
-//  if (op.input_size() > 2) {
-//    auto &biasTensorName = op.input(2);
-//    // Load the serialized bias vector.
-//    ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(biasTensorName));
-//  }
-//
-//  // If a serialized bias wasn't found then create a zero bias.
-//  if (!bias) {
-//    Tensor biasTensor(ElemKind::FloatTy, {depth});
-//    biasTensor.zero();
-//    bias = mod_.createConstant("conv.bias", std::move(biasTensor));
-//  }
-
+  //  // Construct the Bias field.
+  //  Constant *bias = nullptr;
+  //
+  //  // Check if we have a serialized bias vector.
+  //  if (op.input_size() > 2) {
+  //    auto &biasTensorName = op.input(2);
+  //    // Load the serialized bias vector.
+  //    ASSIGN_VALUE_OR_RETURN_ERR(bias, getConstantByName(biasTensorName));
+  //  }
+  //
+  //  // If a serialized bias wasn't found then create a zero bias.
+  //  if (!bias) {
+  //    Tensor biasTensor(ElemKind::FloatTy, {depth});
+  //    biasTensor.zero();
+  //    bias = mod_.createConstant("conv.bias", std::move(biasTensor));
+  //  }
 
   // ONNX passes the input as NCHW, and we expect the input to be NHWC.
   auto *tr = G_->createTranspose(opName, in, NCHW2NHWC);

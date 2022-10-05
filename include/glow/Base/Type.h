@@ -79,7 +79,7 @@ struct ShapeNHWC {
   dim_t c; // Number of Channels
 
   template <typename T> explicit ShapeNHWC(llvm::ArrayRef<T> shape) {
-//    assert(shape.size() == 4 && "Invalid shape");
+    //    assert(shape.size() == 4 && "Invalid shape");
     n = shape[DimN];
     h = shape[DimH];
     w = shape[DimW];
@@ -96,75 +96,79 @@ struct ShapeNHWC {
 
 struct ShapeVTAIO {
 
-    enum {
-        DimNm, // Modulo of number of samples == 1
-        DimCm, // Modulo of number of channels
-        DimH,
-        DimW,
-        DimNs, // Static number of samples == 1
-        DimCs, // Static number of channels = 16
-    };
+  enum {
+    DimNm, // Modulo of number of samples == 1
+    DimCm, // Modulo of number of channels
+    DimH,
+    DimW,
+    DimNs, // Static number of samples == 1
+    DimCs, // Static number of channels = 16
+  };
 
-    dim_t nm;
-    dim_t cm;
-    dim_t h;
-    dim_t w;
-    dim_t ns;
-    dim_t cs;
+  dim_t nm;
+  dim_t cm;
+  dim_t h;
+  dim_t w;
+  dim_t ns;
+  dim_t cs;
 
-    template <typename T> explicit ShapeVTAIO(llvm::ArrayRef<T> shape) {
-        assert(shape.size() == 6 && "Invalid shape");
-        nm = shape[DimNm];
-        ns = shape[DimNs];
-        cm = shape[DimCm];
-        h = shape[DimH];
-        w = shape[DimW];
-        cs = shape[DimCs];
-    }
+  template <typename T> explicit ShapeVTAIO(llvm::ArrayRef<T> shape) {
+    assert(shape.size() == 6 && "Invalid shape");
+    nm = shape[DimNm];
+    ns = shape[DimNs];
+    cm = shape[DimCm];
+    h = shape[DimH];
+    w = shape[DimW];
+    cs = shape[DimCs];
+  }
 
-    ShapeVTAIO(dim_t nm, dim_t cm, dim_t height, dim_t width, dim_t ns, dim_t channels)
-            : nm(nm), cm(cm), h(height), w(width), ns(ns), cs(channels) {}
+  ShapeVTAIO(dim_t nm, dim_t cm, dim_t height, dim_t width, dim_t ns,
+             dim_t channels)
+      : nm(nm), cm(cm), h(height), w(width), ns(ns), cs(channels) {}
 
-    bool equals(const ShapeVTAIO &other) const {
-        return nm == other.nm && ns == other.ns && cm == other.cm && h == other.h && w == other.w && cs == other.cs;
-    }
+  bool equals(const ShapeVTAIO &other) const {
+    return nm == other.nm && ns == other.ns && cm == other.cm && h == other.h &&
+           w == other.w && cs == other.cs;
+  }
 };
 
 //{N//16}{C//16}HW1616
 struct ShapeVTAKernel {
 
-    enum {
-        DimNm, // Modulo of number of kernels
-        DimCm, // Modulo of number of channels
-        DimH,
-        DimW,
-        DimNs, // Static number of kernels = 16
-        DimCs, // Static number of channels = 16
-    };
+  enum {
+    DimNm, // Modulo of number of kernels
+    DimCm, // Modulo of number of channels
+    DimH,
+    DimW,
+    DimNs, // Static number of kernels = 16
+    DimCs, // Static number of channels = 16
+  };
 
-    dim_t nm;
-    dim_t cm;
-    dim_t h;
-    dim_t w;
-    dim_t ns;
-    dim_t cs;
+  dim_t nm;
+  dim_t cm;
+  dim_t h;
+  dim_t w;
+  dim_t ns;
+  dim_t cs;
 
-    template <typename T> explicit ShapeVTAKernel(llvm::ArrayRef<T> shape) {
-        assert(shape.size() == 6 && "Invalid shape");
-        nm = shape[DimNm];
-        cm = shape[DimCm];
-        h = shape[DimH];
-        w = shape[DimW];
-        ns = shape[DimNs];
-        cs = shape[DimCs];
-    }
+  template <typename T> explicit ShapeVTAKernel(llvm::ArrayRef<T> shape) {
+    assert(shape.size() == 6 && "Invalid shape");
+    nm = shape[DimNm];
+    cm = shape[DimCm];
+    h = shape[DimH];
+    w = shape[DimW];
+    ns = shape[DimNs];
+    cs = shape[DimCs];
+  }
 
-    ShapeVTAKernel(dim_t nm, dim_t cm, dim_t height, dim_t width, dim_t ns, dim_t cs)
-            : nm(nm), cm(cm), h(height), w(width), ns(ns), cs(cs) {}
+  ShapeVTAKernel(dim_t nm, dim_t cm, dim_t height, dim_t width, dim_t ns,
+                 dim_t cs)
+      : nm(nm), cm(cm), h(height), w(width), ns(ns), cs(cs) {}
 
-    bool equals(const ShapeVTAKernel &other) const {
-        return nm == other.nm && ns == other.ns && cm == other.cm && h == other.h && w == other.w && cs == other.cs;
-    }
+  bool equals(const ShapeVTAKernel &other) const {
+    return nm == other.nm && ns == other.ns && cm == other.cm && h == other.h &&
+           w == other.w && cs == other.cs;
+  }
 };
 
 struct ShapeNTHWC {
@@ -854,9 +858,9 @@ struct Type final {
     return getElementName(elementType_);
   }
 
-    llvm::StringRef getElementTypeName() const {
-        return getElementTypeName(elementType_);
-    }
+  llvm::StringRef getElementTypeName() const {
+    return getElementTypeName(elementType_);
+  }
 
   /// \return the textual name of the element \p Ty.
   static llvm::StringRef getElementName(ElemKind Ty) {
@@ -868,39 +872,39 @@ struct Type final {
     return names[(int)Ty];
   }
 
-    /// \return the textual name of the element for CCodeGenerator \p Ty.
-    static llvm::StringRef getElementTypeName(ElemKind Ty) {
-        if (Ty == ElemKind::FloatTy) {
-            return "float";
-        } else if (Ty == ElemKind::Float16Ty) {
-            return "float";
-        } else if (Ty == ElemKind::BFloat16Ty) {
-            return "float";
-        } else if (Ty == ElemKind::Int8QTy) {
-            return "short int";
-        } else if (Ty == ElemKind::UInt8QTy) {
-            return "unsigned short int";
-        } else if (Ty == ElemKind::Int16QTy) {
-            return "short int";
-        } else if (Ty == ElemKind::Int32QTy) {
-            return "int";
-        } else if (Ty == ElemKind::Int32ITy) {
-            return "int";
-        } else if (Ty == ElemKind::Int64ITy) {
-            return "unsigned long int";
-        } else if (Ty == ElemKind::UInt8FusedQTy) {
-            return "unsigned short int";
-        } else if (Ty == ElemKind::UInt8FusedFP16QTy) {
-            return "unsigned short int";
-        } else if (Ty == ElemKind::UInt4FusedFP16QTy) {
-            return "unsigned short int";
-        } else if (Ty == ElemKind::BoolTy) {
-            return "bool";
-        } else {
-            LOG(DFATAL) << "Invalid ElemKind string: " << getElementName(Ty).str();
-            return "bool";
-        }
+  /// \return the textual name of the element for CCodeGenerator \p Ty.
+  static llvm::StringRef getElementTypeName(ElemKind Ty) {
+    if (Ty == ElemKind::FloatTy) {
+      return "float";
+    } else if (Ty == ElemKind::Float16Ty) {
+      return "float";
+    } else if (Ty == ElemKind::BFloat16Ty) {
+      return "float";
+    } else if (Ty == ElemKind::Int8QTy) {
+      return "short int";
+    } else if (Ty == ElemKind::UInt8QTy) {
+      return "unsigned short int";
+    } else if (Ty == ElemKind::Int16QTy) {
+      return "short int";
+    } else if (Ty == ElemKind::Int32QTy) {
+      return "int";
+    } else if (Ty == ElemKind::Int32ITy) {
+      return "int";
+    } else if (Ty == ElemKind::Int64ITy) {
+      return "unsigned long int";
+    } else if (Ty == ElemKind::UInt8FusedQTy) {
+      return "unsigned short int";
+    } else if (Ty == ElemKind::UInt8FusedFP16QTy) {
+      return "unsigned short int";
+    } else if (Ty == ElemKind::UInt4FusedFP16QTy) {
+      return "unsigned short int";
+    } else if (Ty == ElemKind::BoolTy) {
+      return "bool";
+    } else {
+      LOG(DFATAL) << "Invalid ElemKind string: " << getElementName(Ty).str();
+      return "bool";
     }
+  }
 
   /// Given a string \p str containing the name of an ElemKind from
   /// Type::getElementName, returns the corresponding ElemKind or Error if a

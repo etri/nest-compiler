@@ -84,7 +84,7 @@ std::unique_ptr<CompiledFunction> VTAInterpreter::compileIRWithoutConstants(
 bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
   switch (NI.getKind()) {
   case Kinded::Kind::VTAInterpreterConvolutionNodeKind:
-      return true;
+    return true;
   case Kinded::Kind::BatchedReduceMinNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
         {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty,
@@ -722,27 +722,27 @@ static bool checkLayoutForNode(const Node &N) {
 }
 
 bool VTAInterpreter::verify(const Function &F, bool verbose) const {
-    if (!F.verify(this)) {
-        return false;
+  if (!F.verify(this)) {
+    return false;
+  }
+  if (!checkAllNodesSupported(F, verbose)) {
+    return false;
+  }
+  for (const Node &N : F.getNodes()) {
+    if (!checkLayoutForNode(N)) {
+      return false;
     }
-    if (!checkAllNodesSupported(F, verbose)) {
-        return false;
-    }
-    for (const Node &N : F.getNodes()) {
-        if (!checkLayoutForNode(N)) {
-            return false;
-        }
-        if (!(N.getKind() == Kinded::Kind::ConvolutionNodeKind &&
-              llvm::cast<ConvolutionNode>(&N)->getFusedActivation() ==
+    if (!(N.getKind() == Kinded::Kind::ConvolutionNodeKind &&
+          llvm::cast<ConvolutionNode>(&N)->getFusedActivation() ==
               FusedActivation::RELU) &&
-            !(N.getKind() == Kinded::Kind::VTAInterpreterConvolutionNodeKind &&
-              llvm::cast<VTAInterpreterConvolutionNode>(&N)->getFusedActivation() ==
+        !(N.getKind() == Kinded::Kind::VTAInterpreterConvolutionNodeKind &&
+          llvm::cast<VTAInterpreterConvolutionNode>(&N)->getFusedActivation() ==
               FusedActivation::RELU) &&
-            !checkNoFusionForNode(N)) {
-            return false;
-        }
+        !checkNoFusionForNode(N)) {
+      return false;
     }
-    return true;
+  }
+  return true;
 }
 
 static bool checkLayoutForInstr(const Instruction &I) {
@@ -763,27 +763,27 @@ static bool checkLayoutForInstr(const Instruction &I) {
 }
 
 bool VTAInterpreter::verify(const IRFunction &IR) const {
-    for (const auto &I : IR.getInstrs()) {
-        // Only support convolution+relu fusions for now.
-        if (!(I.getKind() == Kinded::Kind::ConvolutionInstKind &&
-              llvm::cast<ConvolutionInst>(&I)->getFusedActivation() ==
+  for (const auto &I : IR.getInstrs()) {
+    // Only support convolution+relu fusions for now.
+    if (!(I.getKind() == Kinded::Kind::ConvolutionInstKind &&
+          llvm::cast<ConvolutionInst>(&I)->getFusedActivation() ==
               FusedActivation::RELU) &&
-            !(I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind &&
-              llvm::cast<VTAInterpreterConvolutionInst>(&I)->getFusedActivation() ==
+        !(I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind &&
+          llvm::cast<VTAInterpreterConvolutionInst>(&I)->getFusedActivation() ==
               FusedActivation::RELU) &&
-            !checkNoFusionForInstr(I)) {
-            return false;
-        }
-
-        if (I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind) {
-            continue;
-        }
-
-        if (!checkLayoutForInstr(I)) {
-            return false;
-        }
+        !checkNoFusionForInstr(I)) {
+      return false;
     }
-    return true;
+
+    if (I.getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind) {
+      continue;
+    }
+
+    if (!checkLayoutForInstr(I)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool VTAInterpreter::shouldLower(const Node *N) const {

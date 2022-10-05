@@ -299,9 +299,8 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
 static int dumpInferenceResults(const BundleConfig &config,
-                                 uint8_t *mutableWeightVars) {
-  const SymbolTableEntry &outputWeights =
-      getMutableWeightVar(config, "output");
+                                uint8_t *mutableWeightVars) {
+  const SymbolTableEntry &outputWeights = getMutableWeightVar(config, "output");
   int maxIdx = 0;
   float maxValue = 0;
   float *results = (float *)(mutableWeightVars + outputWeights.offset);
@@ -347,14 +346,14 @@ static uint8_t *initActivations(const BundleConfig &config) {
 int main(int argc, char **argv) {
   parseCommandLineOptions(argc, argv);
   // Allocate and initialize constant and mutable weights.
-  //uint8_t *constantWeightVarsAddr =initConstantWeights("resnext50.weights.bin", resnext50_config);
+  // uint8_t *constantWeightVarsAddr
+  // =initConstantWeights("resnext50.weights.bin", resnext50_config);
   uint8_t *mutableWeightVarsAddr = initMutableWeightVars(resnext50_config);
-  //uint8_t *activationsAddr = initActivations(resnext50_config);
+  // uint8_t *activationsAddr = initActivations(resnext50_config);
 
   // Perform the computation.
   resnext50_load_module(0);
-  int errCode =
-      resnext50(0, mutableWeightVarsAddr, 0);
+  int errCode = resnext50(0, mutableWeightVarsAddr, 0);
   if (errCode != GLOW_SUCCESS) {
     printf("Error running bundle: error code %d\n", errCode);
   }
@@ -363,9 +362,9 @@ int main(int argc, char **argv) {
   int maxIdx = dumpInferenceResults(resnext50_config, mutableWeightVarsAddr);
 
   // Free all resources.
-  //free(activationsAddr);
-  //free(constantWeightVarsAddr);
+  // free(activationsAddr);
+  // free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
 
-  return !(maxIdx==285);
+  return !(maxIdx == 285);
 }

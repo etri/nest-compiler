@@ -305,7 +305,7 @@ using FunctionTensorPair = std::pair<Function *, Tensor *>;
 /// Signature of functions used to create and init a Function. Returns a pair of
 /// the Function created and the Placeholder of the output of the Function.
 using CreateAndInitFunction =
-std::function<FunctionTensorPair(PlaceholderBindings &, ExecutionEngine &)>;
+    std::function<FunctionTensorPair(PlaceholderBindings &, ExecutionEngine &)>;
 
 /// Given a method \p createAndInitFunction that creates and initializes a
 /// FloatTy Function with a single output Tensor, \returns a bool representing
@@ -334,7 +334,7 @@ void compareAgainstInterpreter(
     quantization::Schema schema = quantization::Schema::Asymmetric,
     ElemKind biasElemKind = ElemKind::Int32QTy, bool forceFP16AccumSLS = false,
     PrecisionConfiguration::Float16Format float16Format =
-    PrecisionConfiguration::Float16Format::FP16,
+        PrecisionConfiguration::Float16Format::FP16,
     bool convertToChannelwiseQuantization = false,
     bool skipQuantizeFCBias = false);
 
@@ -355,34 +355,37 @@ unsigned countNodeKind(Function *F, Kinded::Kind kind);
 void inferConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                   llvm::StringRef kind);
 
-void inferFloatConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                       llvm::StringRef kind);
+void inferFloatConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                       Tensor *out, llvm::StringRef kind);
 
-void inferQuantizedConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                           llvm::StringRef kind);
+void inferQuantizedConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                           Tensor *out, llvm::StringRef kind);
 void inferFCNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                 llvm::StringRef kind);
 
-void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                         llvm::StringRef kind);
+void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                         Tensor *out, unsigned_t kernel, unsigned_t stride,
+                         unsigned_t pad, llvm::StringRef kind);
 
 void inferVTAReluNet(Tensor *inputs, Tensor *out, llvm::StringRef kind);
 
-void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
+void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+                     unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind);
 
-void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                           llvm::StringRef kind);
+void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                           Tensor *out, unsigned_t kernel, unsigned_t stride,
+                           unsigned_t pad, llvm::StringRef kind);
 
-
-void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                         llvm::StringRef kind);
+void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias,
+                         Tensor *out, llvm::StringRef kind);
 
 void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                       llvm::StringRef kind);
 
-void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *filter2, Tensor *bias2, Tensor *out, Tensor *out2,
-                          llvm::StringRef kind);
+void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                          Tensor *filter2, Tensor *bias2, Tensor *out,
+                          Tensor *out2, llvm::StringRef kind);
 
 void trainConvNet(Tensor *inputs, Tensor *kernel1, Tensor *bias1,
                   Tensor *kernel2, Tensor *bias2, Tensor *selected,
@@ -446,19 +449,18 @@ void inferExtract3D(Tensor *input, Tensor *out, llvm::StringRef kind);
 
 void inferMaxSplat(Tensor *input, Tensor *out, llvm::StringRef kind);
 
-void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                     llvm::StringRef kind);
+void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel,
+                     unsigned_t stride, unsigned_t pad, llvm::StringRef kind);
 
-void inferAvgPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                     llvm::StringRef kind);
+void inferAvgPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel,
+                     unsigned_t stride, unsigned_t pad, llvm::StringRef kind);
 
-void inferQuantizeNet(Tensor *inputs, Tensor *out,
-                      llvm::StringRef kind);
+void inferQuantizeNet(Tensor *inputs, Tensor *out, llvm::StringRef kind);
 
-void inferDequantizeNet(Tensor *inputs, Tensor *out,
-                        llvm::StringRef kind);
+void inferDequantizeNet(Tensor *inputs, Tensor *out, llvm::StringRef kind);
 
-void inferTransposeNet(Tensor *inputs, Tensor *out, llvm::ArrayRef<unsigned_t> shuffle,
+void inferTransposeNet(Tensor *inputs, Tensor *out,
+                       llvm::ArrayRef<unsigned_t> shuffle,
                        llvm::StringRef kind);
 
 void inferSplatMaxNet(Tensor *inputs, Tensor *out, llvm::StringRef kind);

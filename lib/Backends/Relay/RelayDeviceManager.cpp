@@ -25,13 +25,11 @@ namespace glow {
 namespace runtime {
 
 unsigned GlowRelayMemory = 0;
-static llvm::cl::OptionCategory
-    RelayBackendCat("Glow Relay Backend Options");
+static llvm::cl::OptionCategory RelayBackendCat("Glow Relay Backend Options");
 static llvm::cl::opt<unsigned, /* ExternalStorage */ true> RelayMaxMemOpt(
     "Relay-memory",
     llvm::cl::desc("Relay DeviceManager maximum memory in kilobytes"),
-    llvm::cl::location(GlowRelayMemory),
-    llvm::cl::cat(RelayBackendCat));
+    llvm::cl::location(GlowRelayMemory), llvm::cl::cat(RelayBackendCat));
 
 DeviceManager *createRelayDeviceManager(const DeviceConfig &config) {
   if (GlowRelayMemory) {
@@ -67,8 +65,8 @@ DeviceInfo RelayDeviceManager::getDeviceInfo() const {
 }
 
 void RelayDeviceManager::addNetworkImpl(const Module *module,
-                                              FunctionMapTy functions,
-                                              ReadyCBTy readyCB) {
+                                        FunctionMapTy functions,
+                                        ReadyCBTy readyCB) {
   DCHECK(readyCB != nullptr);
 
   uint64_t allFunctionsMemoryBytes{0};
@@ -98,8 +96,7 @@ void RelayDeviceManager::addNetworkImpl(const Module *module,
         func.second->getRuntimeBundle().getConstantWeightSize();
 
     // Add function name to map for static placeholders.
-    RelayFunction *function =
-        static_cast<RelayFunction *>(func.second);
+    RelayFunction *function = static_cast<RelayFunction *>(func.second);
     for (auto PH : function->getIR()->getGraph()->findPlaceholders()) {
       if (PH->isStatic()) {
         staticPlaceholderToFunctions_[PH].push_back(func.first);
@@ -149,7 +146,7 @@ void RelayDeviceManager::transferStaticPlaceholderToDevice(
 }
 
 void RelayDeviceManager::evictNetworkImpl(std::string functionName,
-                                                EvictFunctionCBTy evictCB) {
+                                          EvictFunctionCBTy evictCB) {
   DCHECK(evictCB != nullptr);
 
   auto it = functions_.find(functionName);

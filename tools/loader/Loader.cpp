@@ -38,8 +38,8 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "Backends/VTA/VTA.h"
 #include "Backends/Relay/Relay.h"
+#include "Backends/VTA/VTA.h"
 #include <algorithm>
 #include <future>
 #include <sstream>
@@ -225,10 +225,11 @@ llvm::cl::opt<std::string> dumpGraphDAGFileOpt(
     llvm::cl::desc("Specify the file to export the Graph in DOT format"),
     llvm::cl::value_desc("file.dot"), llvm::cl::cat(modelExportCat));
 
-//Jemin
+// Jemin
 llvm::cl::opt<std::string> dumpPlainSTCNN(
     "dump-plain-stcnn",
-    llvm::cl::desc("Specify the file to export the Graph in Plain STCNN format"),
+    llvm::cl::desc(
+        "Specify the file to export the Graph in Plain STCNN format"),
     llvm::cl::value_desc("file.dot"), llvm::cl::cat(modelExportCat));
 
 llvm::cl::opt<bool> dumpGraphOpt("dump-graph",
@@ -295,11 +296,8 @@ llvm::cl::opt<std::string>
                                  "of the entry point to the network."),
                   llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<bool> BNNOpt(
-    "bnn",
-    llvm::cl::desc(
-        "Quantization scale = 1"),
-    llvm::cl::init(false), llvm::cl::cat(loaderCat));
+llvm::cl::opt<bool> BNNOpt("bnn", llvm::cl::desc("Quantization scale = 1"),
+                           llvm::cl::init(false), llvm::cl::cat(loaderCat));
 } // namespace
 
 // These are outside the namespace so they can be used by the image-classifier.
@@ -323,21 +321,25 @@ llvm::cl::opt<unsigned> iterationsOpt(
     "iterations", llvm::cl::desc("Number of iterations to perform"),
     llvm::cl::Optional, llvm::cl::init(0), llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<unsigned> idxMultiEVTA(
-    "index-multi-evta", llvm::cl::desc("Target EVTA Index"),
-    llvm::cl::Optional, llvm::cl::init(1), llvm::cl::cat(loaderCat));
+llvm::cl::opt<unsigned> idxMultiEVTA("index-multi-evta",
+                                     llvm::cl::desc("Target EVTA Index"),
+                                     llvm::cl::Optional, llvm::cl::init(1),
+                                     llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<std::string> relayTarget(
-    "relay-target", llvm::cl::desc("Relay Target Name"),
-    llvm::cl::Optional, llvm::cl::init("llvm"), llvm::cl::cat(loaderCat));
+llvm::cl::opt<std::string> relayTarget("relay-target",
+                                       llvm::cl::desc("Relay Target Name"),
+                                       llvm::cl::Optional,
+                                       llvm::cl::init("llvm"),
+                                       llvm::cl::cat(loaderCat));
 
 llvm::cl::opt<std::string> relayTargetHost(
     "relay-target-host", llvm::cl::desc("Relay Target Host Name"),
     llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<unsigned> relayOptLevel(
-    "relay-opt-level", llvm::cl::desc("Relay Optimzation Level"),
-    llvm::cl::Optional, llvm::cl::init(0), llvm::cl::cat(loaderCat));
+llvm::cl::opt<unsigned> relayOptLevel("relay-opt-level",
+                                      llvm::cl::desc("Relay Optimzation Level"),
+                                      llvm::cl::Optional, llvm::cl::init(0),
+                                      llvm::cl::cat(loaderCat));
 
 llvm::cl::opt<std::string> relayRequiredPass(
     "relay-required-pass", llvm::cl::desc("Relay Required Passes"),
@@ -347,13 +349,16 @@ llvm::cl::opt<std::string> relayDisabledPass(
     "relay-disabled-pass", llvm::cl::desc("Relay Disabled Passes"),
     llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<std::string> relayExportOption(
-    "relay-export-option", llvm::cl::desc("Relay Export Option"),
-    llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
+llvm::cl::opt<std::string>
+    relayExportOption("relay-export-option",
+                      llvm::cl::desc("Relay Export Option"), llvm::cl::Optional,
+                      llvm::cl::init(""), llvm::cl::cat(loaderCat));
 
-llvm::cl::opt<std::string> relayDebugMode(
-    "relay-debug-mode", llvm::cl::desc("Relay Debug Mode"),
-    llvm::cl::Optional, llvm::cl::init(""), llvm::cl::cat(loaderCat));
+llvm::cl::opt<std::string> relayDebugMode("relay-debug-mode",
+                                          llvm::cl::desc("Relay Debug Mode"),
+                                          llvm::cl::Optional,
+                                          llvm::cl::init(""),
+                                          llvm::cl::cat(loaderCat));
 
 std::string Loader::getModelOptPath() {
   // If given a single path, return it.
@@ -480,11 +485,11 @@ static void getModelInputs(std::vector<std::string> &inputNames,
 void Loader::loadModel(TypeRef inputType) {
 
   // Get model input names and types.
-  //std::vector<std::string> inputNames;
-  //std::vector<Type> inputTypes;
+  // std::vector<std::string> inputNames;
+  // std::vector<Type> inputTypes;
   getModelInputs(inputNames_, inputTypes_);
-  //std::vector<const char *> inputNameRefs;
-  //std::vector<TypeRef> inputTypeRefs;
+  // std::vector<const char *> inputNameRefs;
+  // std::vector<TypeRef> inputTypeRefs;
   for (size_t idx = 0, e = inputNames_.size(); idx < e; idx++) {
     inputNameRefs_.push_back(inputNames_[idx].c_str());
     inputTypeRefs_.push_back(&inputTypes_[idx]);
@@ -503,8 +508,8 @@ void Loader::loadModel(TypeRef inputType) {
     // explicitly (mandatory).
     std::unique_ptr<ProtobufLoader> protoLoader;
     protoLoader.reset(new Caffe2ModelLoader(
-    getCaffe2NetDescFilename(), getCaffe2NetWeightFilename(), inputNameRefs_,
-        inputTypeRefs_, *getFunction()));
+        getCaffe2NetDescFilename(), getCaffe2NetWeightFilename(),
+        inputNameRefs_, inputTypeRefs_, *getFunction()));
     // Load the maps between original model names and the placeholders.
     inputPlaceholderByName_ = protoLoader->getInputVarsMapping();
     outputPlaceholderByName_ = protoLoader->getOutputVarsMapping();
@@ -539,8 +544,9 @@ void Loader::loadModel(TypeRef inputType) {
     // the input placeholder types in order to override the placeholder sizes
     // (one such example is the batch size).
     std::unique_ptr<ProtobufLoader> protoLoader;
-    protoLoader.reset(new ONNXModelLoader(getOnnxModelFilename(), inputNameRefs_,
-                                          inputTypeRefs_, *getFunction()));
+    protoLoader.reset(new ONNXModelLoader(getOnnxModelFilename(),
+                                          inputNameRefs_, inputTypeRefs_,
+                                          *getFunction()));
     // Load the maps between original model names and the placeholders.
     inputPlaceholderByName_ = protoLoader->getInputVarsMapping();
     outputPlaceholderByName_ = protoLoader->getOutputVarsMapping();
@@ -732,7 +738,8 @@ void Loader::compile(CompilationContext &cctx) {
 
   // Jemin STCNN
   if (!dumpPlainSTCNN.empty()) {
-    llvm::outs() <<"STCNN option test" <<"\n";
+    llvm::outs() << "STCNN option test"
+                 << "\n";
   }
 
   // Store a raw pointer to the Module, we pass the unique_ptr to HostManager
@@ -777,8 +784,11 @@ void Loader::compile(CompilationContext &cctx) {
   compilationInfo_ = cctx.info;
 }
 
-void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlanFile, int profileMode, int partitionExe) {
-//  std::cout << "=== compileForNestProfile ===" << std::endl;
+void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType,
+                                     std::string profilePath,
+                                     std::string partitionPlanFile,
+                                     int profileMode, int partitionExe) {
+  //  std::cout << "=== compileForNestProfile ===" << std::endl;
 
   // Dump the DAG before compilation if needed.
   if (!dumpGraphDAGFileBeforeCompilationOpt.empty()) {
@@ -787,38 +797,40 @@ void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType, s
 
   // Jemin STCNN
   if (!dumpPlainSTCNN.empty()) {
-    llvm::outs() <<"STCNN option test" <<"\n";
+    llvm::outs() << "STCNN option test"
+                 << "\n";
   }
 
   // Store a raw pointer to the Module, we pass the unique_ptr to HostManager
   // but the Module is stored by Hostmanager so the pointer will remain valid.
   auto module = M_.get();
 
-//  if (emittingBundle()) {
-//    // Create bundle directory if not exists.
-//    if (!llvm::sys::fs::is_directory(emitBundle)) {
-//      llvm::sys::fs::create_directory(emitBundle);
-//    }
-//    // Emit IR for the graph, compile it and save as a bundle.
-//    auto error = ::glow::optimizeFunction(F_, *backend_, cctx);
-//    EXIT_ON_ERR(std::move(error));
-//    backend_->save(F_, emitBundle, networkName,
-//                   mainEntryName.empty() ? networkName : mainEntryName);
-//  } else {
+  //  if (emittingBundle()) {
+  //    // Create bundle directory if not exists.
+  //    if (!llvm::sys::fs::is_directory(emitBundle)) {
+  //      llvm::sys::fs::create_directory(emitBundle);
+  //    }
+  //    // Emit IR for the graph, compile it and save as a bundle.
+  //    auto error = ::glow::optimizeFunction(F_, *backend_, cctx);
+  //    EXIT_ON_ERR(std::move(error));
+  //    backend_->save(F_, emitBundle, networkName,
+  //                   mainEntryName.empty() ? networkName : mainEntryName);
+  //  } else {
 
-//  std::cout << "=== partition ===" << std::endl;
-//  std::cout << "bundle dir = " << emitBundle << std::endl;
+  //  std::cout << "=== partition ===" << std::endl;
+  //  std::cout << "bundle dir = " << emitBundle << std::endl;
   // Emit IR for the graph and compile it.
   cctx.saturateHost = !runAllInputsOnAllDevices;
 
-  auto error = hostManager_->addNetworkForNestPartition(std::move(M_), cctx, exeType, profilePath, partitionPlanFile,
-                                                          emitBundle.c_str(), loadProfileFileOpt, profileMode, partitionExe);
+  auto error = hostManager_->addNetworkForNestPartition(
+      std::move(M_), cctx, exeType, profilePath, partitionPlanFile,
+      emitBundle.c_str(), loadProfileFileOpt, profileMode, partitionExe);
 
   EXIT_ON_ERR(std::move(error));
   // After partitioning, the original function may be removed. Need to update
   // F_.
   F_ = module->getFunctions().front();
-//  }
+  //  }
   if (dumpGraphOpt) {
     for (auto function : module->getFunctions()) {
       function->dump();
@@ -938,66 +950,69 @@ void Loader::inferEndMiniBatch(PlaceholderBindings &bindings,
 }
 
 Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
-    if (modelPathOpt.size() == 1) {
-        if (llvm::sys::fs::is_directory(*modelPathOpt.begin())) {
-            caffe2NetDescFilename_ = modelPathOpt[0] + "/predict_net.pb";
-            caffe2NetWeightFilename_ = modelPathOpt[0] + "/init_net.pb";
-        } else {
-            llvm::StringRef modelPath = modelPathOpt[0];
-            if (modelPath.endswith("tflite")) {
-                tfliteModelFilename_ = modelPath.str();
-            } else {
-                onnxModelFilename_ = modelPath.str();
-            }
-        }
+  if (modelPathOpt.size() == 1) {
+    if (llvm::sys::fs::is_directory(*modelPathOpt.begin())) {
+      caffe2NetDescFilename_ = modelPathOpt[0] + "/predict_net.pb";
+      caffe2NetWeightFilename_ = modelPathOpt[0] + "/init_net.pb";
     } else {
-        caffe2NetDescFilename_ = modelPathOpt[0];
-        caffe2NetWeightFilename_ = modelPathOpt[1];
-    }
-    M_.reset(new Module);
-
-    std::vector<std::unique_ptr<runtime::DeviceConfig>> configs;
-
-    if (configDeviceIDs.empty()) {
-        configs = runtime::generateDeviceConfigs(numDevices, ExecutionBackend);
-    } else {
-        for (size_t ID: configDeviceIDs) {
-            CHECK(ID < numDevices) << "IDs must be less than the number of devices";
-            auto config = glow::make_unique<runtime::DeviceConfig>(ExecutionBackend);
-            config->deviceID = ID;
-            configs.push_back(std::move(config));
-        }
-    }
-
-      hostManager_ = glow::make_unique<runtime::HostManager>(std::move(configs));
-      backend_ = std::unique_ptr<Backend>(createBackend(ExecutionBackend));
-      if(backend_->getBackendName()=="VTA"){
-        static_cast<VTA*>(backend_.get())->setIdxMultiEVTA(idxMultiEVTA);
+      llvm::StringRef modelPath = modelPathOpt[0];
+      if (modelPath.endswith("tflite")) {
+        tfliteModelFilename_ = modelPath.str();
+      } else {
+        onnxModelFilename_ = modelPath.str();
       }
+    }
+  } else {
+    caffe2NetDescFilename_ = modelPathOpt[0];
+    caffe2NetWeightFilename_ = modelPathOpt[1];
+  }
+  M_.reset(new Module);
 
-      if(backend_->getBackendName()=="Relay"){
-          static_cast<Relay*>(backend_.get())->setTarget(relayTarget.c_str());
-          static_cast<Relay*>(backend_.get())->setTargetHost(relayTargetHost.c_str());
-          static_cast<Relay*>(backend_.get())->setExportOption(relayExportOption.c_str());
-          static_cast<Relay*>(backend_.get())->setRequiredPass(relayRequiredPass.c_str());
-          static_cast<Relay*>(backend_.get())->setDisabledPass(relayDisabledPass.c_str());
-          static_cast<Relay*>(backend_.get())->setOptLevel(relayOptLevel);
-          static_cast<Relay*>(backend_.get())->setDebugMode(relayDebugMode.c_str());
-      }
+  std::vector<std::unique_ptr<runtime::DeviceConfig>> configs;
 
-      PartitionerCompileOptions compileOptions;
+  if (configDeviceIDs.empty()) {
+    configs = runtime::generateDeviceConfigs(numDevices, ExecutionBackend);
+  } else {
+    for (size_t ID : configDeviceIDs) {
+      CHECK(ID < numDevices) << "IDs must be less than the number of devices";
+      auto config = glow::make_unique<runtime::DeviceConfig>(ExecutionBackend);
+      config->deviceID = ID;
+      configs.push_back(std::move(config));
+    }
+  }
 
-      compileOptions.idxMultiEVTA_= idxMultiEVTA;
-      compileOptions.relayTargetHost_ = relayTargetHost;
-      compileOptions.relayTarget_ = relayTarget;
-      compileOptions.relayExportOption_ = relayExportOption;
-      compileOptions.relayRequiredPass_ = relayRequiredPass;
-      compileOptions.relayDisabledPass_ = relayDisabledPass;
-      compileOptions.relayOptLevel_ = relayOptLevel;
+  hostManager_ = glow::make_unique<runtime::HostManager>(std::move(configs));
+  backend_ = std::unique_ptr<Backend>(createBackend(ExecutionBackend));
+  if (backend_->getBackendName() == "VTA") {
+    static_cast<VTA *>(backend_.get())->setIdxMultiEVTA(idxMultiEVTA);
+  }
 
-      hostManager_->setCompileOptions(&compileOptions);
+  if (backend_->getBackendName() == "Relay") {
+    static_cast<Relay *>(backend_.get())->setTarget(relayTarget.c_str());
+    static_cast<Relay *>(backend_.get())
+        ->setTargetHost(relayTargetHost.c_str());
+    static_cast<Relay *>(backend_.get())
+        ->setExportOption(relayExportOption.c_str());
+    static_cast<Relay *>(backend_.get())
+        ->setRequiredPass(relayRequiredPass.c_str());
+    static_cast<Relay *>(backend_.get())
+        ->setDisabledPass(relayDisabledPass.c_str());
+    static_cast<Relay *>(backend_.get())->setOptLevel(relayOptLevel);
+    static_cast<Relay *>(backend_.get())->setDebugMode(relayDebugMode.c_str());
+  }
 
-      F_ = M_->createFunction(modelPathOpt[0]);
-      functionName_ = modelPathOpt[0];
+  PartitionerCompileOptions compileOptions;
+
+  compileOptions.idxMultiEVTA_ = idxMultiEVTA;
+  compileOptions.relayTargetHost_ = relayTargetHost;
+  compileOptions.relayTarget_ = relayTarget;
+  compileOptions.relayExportOption_ = relayExportOption;
+  compileOptions.relayRequiredPass_ = relayRequiredPass;
+  compileOptions.relayDisabledPass_ = relayDisabledPass;
+  compileOptions.relayOptLevel_ = relayOptLevel;
+
+  hostManager_->setCompileOptions(&compileOptions);
+
+  F_ = M_->createFunction(modelPathOpt[0]);
+  functionName_ = modelPathOpt[0];
 }
-

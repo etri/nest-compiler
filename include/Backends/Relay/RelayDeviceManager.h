@@ -35,8 +35,7 @@ class RelayDeviceManager : public QueueBackedDeviceManager {
       staticPlaceholderToFunctions_;
 
   /// String constant for logging number of in-use devices.
-  static constexpr const char *kDevicesUsedRelay =
-      "glow.devices_used.Relay";
+  static constexpr const char *kDevicesUsedRelay = "glow.devices_used.Relay";
 
 public:
   explicit RelayDeviceManager(const DeviceConfig &config)

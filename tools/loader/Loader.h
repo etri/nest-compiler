@@ -17,13 +17,12 @@
 #ifndef GLOW_TOOLS_LOADER_LOADER_H
 #define GLOW_TOOLS_LOADER_LOADER_H
 
-#include "glow/Graph/Node.h"
-#include "glow/Graph/Graph.h"
-#include "glow/Runtime/HostManager/HostManager.h"
 #include "glow/ExecutionEngine/ExecutionEngine.h"
+#include "glow/Graph/Graph.h"
+#include "glow/Graph/Node.h"
 #include "glow/Importer/ProtobufLoader.h"
 #include "glow/Quantization/Quantization.h"
-
+#include "glow/Runtime/HostManager/HostManager.h"
 
 #include "llvm/Support/CommandLine.h"
 
@@ -114,7 +113,7 @@ class Loader {
   /// Info produced after calling the \ref compile function.
   CompilationInfo compilationInfo_;
 
-  //for C/C++ generator
+  // for C/C++ generator
   std::vector<const char *> inputNameRefs_;
   std::vector<TypeRef> inputTypeRefs_;
 
@@ -146,11 +145,10 @@ public:
     return caffe2NetWeightFilename_;
   }
 
-  std::vector<std::string> getInputNames() {return inputNames_;}
-  std::vector<Type> getInputTypes() {return inputTypes_;}
+  std::vector<std::string> getInputNames() { return inputNames_; }
+  std::vector<Type> getInputTypes() { return inputTypes_; }
 
-
-    /// Getter for the ONNX model file name.
+  /// Getter for the ONNX model file name.
   llvm::StringRef getOnnxModelFilename() { return onnxModelFilename_; }
 
   /// Getter for the TensorFlowLite model file name.
@@ -204,7 +202,10 @@ public:
   /// Compiles the Function F_. Handles quantization, emitting bundles, and
   /// dumping debug information. \p cctx is used for compiling F_.
   void compile(CompilationContext &cctx);
-  void compileForNestPartition(CompilationContext &cctx, size_t exeType, std::string profilePath, std::string partitionPlan, int profileMode, int partitionExe);
+  void compileForNestPartition(CompilationContext &cctx, size_t exeType,
+                               std::string profilePath,
+                               std::string partitionPlan, int profileMode,
+                               int partitionExe);
 
   /// Runs inference, unless emit bundle mode is enabled. \p bindings
   /// binds specific placeholders to concrete tensors. The concrete

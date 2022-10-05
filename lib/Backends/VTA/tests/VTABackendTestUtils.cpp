@@ -30,8 +30,8 @@
 
 #include "llvm/Support/CommandLine.h"
 
-#include <future>
 #include "VTA.h"
+#include <future>
 
 namespace glow {
 
@@ -70,12 +70,11 @@ static Placeholder *createPlaceholder(Module &mod,
   return P;
 }
 
-static Placeholder *createQuantizedPlaceholder(Module &mod,
-                                               PlaceholderBindings &bindings,
-                                               Tensor *tensor, float scale,
-                                               int32_t offset,
-                                               llvm::StringRef name,
-                                               const std::string &layout = ANY_LAYOUT) {
+static Placeholder *
+createQuantizedPlaceholder(Module &mod, PlaceholderBindings &bindings,
+                           Tensor *tensor, float scale, int32_t offset,
+                           llvm::StringRef name,
+                           const std::string &layout = ANY_LAYOUT) {
   auto *P = mod.createPlaceholder(tensor->getElementType(), tensor->dims(),
                                   scale, offset, name, false, layout);
   auto *PTensor = bindings.allocate(P);
@@ -95,7 +94,7 @@ profileAndGetNodeProfilingInfo(CreateAndInitFunction createAndInitFunction,
   PlaceholderBindings pBindings;
   // Note: deviceMemory = 0 is a signal to use the defaultMemory.
   ExecutionEngine PEE{"Interpreter", /* deviceMemory */ 0,
-      /* ignoreUserDeviceConfig */ true};
+                      /* ignoreUserDeviceConfig */ true};
   auto FT = createAndInitFunction(pBindings, PEE);
   CompilationContext cctx{&pBindings, &loweredMapForProf};
 
@@ -207,8 +206,8 @@ void dispatchInference(const std::string &fname,
   for (unsigned i = 0; i < concurrentRequestsOpt; i++) {
     hostManager->runNetwork(fname, std::move(contexts[i]),
                             [&contexts, &promises,
-                                i](runtime::RunIdentifierTy, Error err,
-                                   std::unique_ptr<ExecutionContext> contextPtr) {
+                             i](runtime::RunIdentifierTy, Error err,
+                                std::unique_ptr<ExecutionContext> contextPtr) {
                               contexts[i] = std::move(contextPtr);
                               // Expect no errors.
                               EXIT_ON_ERR(std::move(err));
@@ -277,7 +276,7 @@ void compareAgainstInterpreter(
     bool convertToChannelwiseQuantization, bool skipQuantizeFCBias) {
   // Note: deviceMemory = 0 is a signal to use the defaultMemory.
   ExecutionEngine IEE{"Interpreter", /* deviceMemory */ 0,
-      /* ignoreUserDeviceConfig */ true};
+                      /* ignoreUserDeviceConfig */ true};
   ExecutionEngine BEE{backendName};
   PlaceholderBindings iBindings, bBindings;
 
@@ -473,8 +472,8 @@ void inferIntLookupTableNet(Tensor *input, Tensor *out,
   EE.run(bindings);
   out->assign(resultTensor);
 }
-void inferFloatConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                       llvm::StringRef kind) {
+void inferFloatConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                       Tensor *out, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -519,8 +518,8 @@ void inferFloatConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out
   out->assign(resultTensor);
 }
 
-void inferQuantizedConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                           llvm::StringRef kind) {
+void inferQuantizedConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                           Tensor *out, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -612,7 +611,6 @@ void inferFCNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
   out->assign(resultTensor);
 }
 
-
 void inferConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                   llvm::StringRef kind) {
   PlaceholderBindings bindings;
@@ -658,8 +656,9 @@ void inferConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
   EE.run(bindings);
   out->assign(resultTensor);
 }
-void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *filter2, Tensor *bias2, Tensor *out1, Tensor *out2,
-                          llvm::StringRef kind) {
+void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                          Tensor *filter2, Tensor *bias2, Tensor *out1,
+                          Tensor *out2, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -686,11 +685,12 @@ void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *
                                    filterType.getOffset(), "filterP");
     biasP = createQuantizedPlaceholder(mod, bindings, bias, biasType.getScale(),
                                        biasType.getOffset(), "biasP");
-    filter2P =
-        createQuantizedPlaceholder(mod, bindings, filter2, filter2Type.getScale(),
-                                   filter2Type.getOffset(), "filter2P");
-    bias2P = createQuantizedPlaceholder(mod, bindings, bias2, bias2Type.getScale(),
-                                        bias2Type.getOffset(), "bias2P");
+    filter2P = createQuantizedPlaceholder(mod, bindings, filter2,
+                                          filter2Type.getScale(),
+                                          filter2Type.getOffset(), "filter2P");
+    bias2P =
+        createQuantizedPlaceholder(mod, bindings, bias2, bias2Type.getScale(),
+                                   bias2Type.getOffset(), "bias2P");
     outP = createQuantizedPlaceholder(mod, bindings, out2, outType2.getScale(),
                                       outType2.getOffset(), "outP");
     OT1 = F->getParent()->uniqueType(out1->getElementType(), out1->dims(),
@@ -712,8 +712,9 @@ void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *
   out2->assign(resultTensor);
 }
 
-void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                         llvm::StringRef kind) {
+void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                         Tensor *out, unsigned_t kernel, unsigned_t stride,
+                         unsigned_t pad, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -746,12 +747,12 @@ void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *o
     outP = createPlaceholder(mod, bindings, out, "outP");
     OT = F->getParent()->uniqueType(out->getElementType(), out->dims());
   }
-  auto *conv = F->createConv("conv", inputP, filterP, biasP, OT, kernel, stride, pad, 1);
+  auto *conv =
+      F->createConv("conv", inputP, filterP, biasP, OT, kernel, stride, pad, 1);
 
-  //Relu
-  auto *outputTy = mod.uniqueType(ElemKind::Int8QTy, {1,14,14,16}, 0.5, 0);
+  // Relu
+  auto *outputTy = mod.uniqueType(ElemKind::Int8QTy, {1, 14, 14, 16}, 0.5, 0);
   auto *relu = F->createRELU("relu", conv);
-
 
   auto *result = F->createSave("ret", relu, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
@@ -789,22 +790,21 @@ void inferVTAReluNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
     outP = createPlaceholder(mod, bindings, out, "outP");
     OT = F->getParent()->uniqueType(out->getElementType(), out->dims());
   }
-  //Relu
+  // Relu
   auto *relu = F->createRELU("relu", inputP);
-
 
   auto *result = F->createSave("ret", relu, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
-void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
+void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+                     unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
@@ -838,7 +838,8 @@ void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, 
     outP = createPlaceholder(mod, bindings, out, "outP");
     OT = F->getParent()->uniqueType(out->getElementType(), out->dims());
   }
-  auto *conv = F->createConv("conv", inputP, filterP, biasP, OT, kernel, stride, pad, 1);
+  auto *conv =
+      F->createConv("conv", inputP, filterP, biasP, OT, kernel, stride, pad, 1);
   auto *result = F->createSave("ret", conv, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
@@ -850,9 +851,9 @@ void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, 
   out->assign(resultTensor);
 }
 
-
-void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                           llvm::StringRef kind) {
+void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                           Tensor *out, unsigned_t kernel, unsigned_t stride,
+                           unsigned_t pad, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -885,7 +886,8 @@ void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor 
     outP = createPlaceholder(mod, bindings, out, "outP");
     OT = F->getParent()->uniqueType(out->getElementType(), out->dims());
   }
-  auto *conv = F->createVTAConv("conv", inputP, filterP, biasP, OT, kernel, stride, pad, 1);
+  auto *conv = F->createVTAConv("conv", inputP, filterP, biasP, OT, kernel,
+                                stride, pad, 1);
   auto *result = F->createSave("ret", conv, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
@@ -897,9 +899,8 @@ void inferVTALayoutConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor 
   out->assign(resultTensor);
 }
 
-
-void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                     llvm::StringRef kind) {
+void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel,
+                     unsigned_t stride, unsigned_t pad, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -908,26 +909,25 @@ void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t 
   Placeholder *outP;
   auto &outType = out->getType();
   auto &inType = inputs->getType();
-  inputP = createQuantizedPlaceholder(
-      mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP");
+  inputP = createQuantizedPlaceholder(mod, bindings, inputs, inType.getScale(),
+                                      inType.getOffset(), "inputP");
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
-  //auto *maxPool = F->createQuantizedMaxPool("maxPool", inputP, kernel, stride, pad,  outType.getScale(), outType.getOffset(), ElemKind::Int8QTy);
+  // auto *maxPool = F->createQuantizedMaxPool("maxPool", inputP, kernel,
+  // stride, pad,  outType.getScale(), outType.getOffset(), ElemKind::Int8QTy);
   auto *maxPool = F->createMaxPool("maxPool", inputP, kernel, stride, pad);
-  auto *result = F->createSave("ret", NodeValue(maxPool,0), outP);
+  auto *result = F->createSave("ret", NodeValue(maxPool, 0), outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
-
-void inferAvgPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                     llvm::StringRef kind) {
+void inferAvgPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel,
+                     unsigned_t stride, unsigned_t pad, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -936,27 +936,27 @@ void inferAvgPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t 
   Placeholder *outP;
   auto &outType = out->getType();
   auto &inType = inputs->getType();
-  inputP = createQuantizedPlaceholder(
-      mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP");
+  inputP = createQuantizedPlaceholder(mod, bindings, inputs, inType.getScale(),
+                                      inType.getOffset(), "inputP");
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
   llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
   llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
-  TypeRef OT1 = F->getParent()->uniqueType(out->getElementType(), out->dims(),
-                                           outType.getScale(), outType.getOffset());
-  auto *avgPool = F->createAvgPool("avgPool", inputP, OT1, kernels, strides, pads);
+  TypeRef OT1 =
+      F->getParent()->uniqueType(out->getElementType(), out->dims(),
+                                 outType.getScale(), outType.getOffset());
+  auto *avgPool =
+      F->createAvgPool("avgPool", inputP, OT1, kernels, strides, pads);
   auto *result = F->createSave("ret", avgPool, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
-
 
 void inferSoftMaxNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
   PlaceholderBindings bindings;
@@ -967,28 +967,25 @@ void inferSoftMaxNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
   Placeholder *outP;
   auto &outType = out->getType();
   auto &inType = inputs->getType();
-  inputP = createPlaceholder(
-      mod, bindings, inputs, "inputP");
+  inputP = createPlaceholder(mod, bindings, inputs, "inputP");
   outP = createPlaceholder(mod, bindings, out, "outP");
   TypeRef OT1 = F->getParent()->uniqueType(out->getElementType(), out->dims());
 
-  auto selected =
-      mod.createConstant(ElemKind::Int64ITy, {inputP->dims()[0], 1}, "selected");
+  auto selected = mod.createConstant(ElemKind::Int64ITy, {inputP->dims()[0], 1},
+                                     "selected");
   auto *softmax = F->createSoftMax("softMax", inputP, selected, OT1);
   auto *result = F->createSave("ret", softmax, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
-
-
-void inferTransposeNet(Tensor *inputs, Tensor *out, llvm::ArrayRef<unsigned_t> shuffle,
+void inferTransposeNet(Tensor *inputs, Tensor *out,
+                       llvm::ArrayRef<unsigned_t> shuffle,
                        llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
@@ -998,23 +995,22 @@ void inferTransposeNet(Tensor *inputs, Tensor *out, llvm::ArrayRef<unsigned_t> s
   Placeholder *outP;
   auto &outType = out->getType();
   auto &inType = inputs->getType();
-  inputP = createQuantizedPlaceholder(
-      mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP");
+  inputP = createQuantizedPlaceholder(mod, bindings, inputs, inType.getScale(),
+                                      inType.getOffset(), "inputP");
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
-  //auto *maxPool = F->createQuantizedMaxPool("maxPool", inputP, kernel, stride, pad,  outType.getScale(), outType.getOffset(), ElemKind::Int8QTy);
+  // auto *maxPool = F->createQuantizedMaxPool("maxPool", inputP, kernel,
+  // stride, pad,  outType.getScale(), outType.getOffset(), ElemKind::Int8QTy);
   auto *transpose = F->createTranspose("transpose", inputP, shuffle);
   auto *result = F->createSave("ret", transpose, outP);
   auto *resultTensor = bindings.get(result->getPlaceholder());
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
-
 
 void inferSplatMaxNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
   PlaceholderBindings bindings;
@@ -1025,13 +1021,14 @@ void inferSplatMaxNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
   Placeholder *outP;
   auto &outType = out->getType();
   auto &inType = inputs->getType();
-  inputP = createQuantizedPlaceholder(
-      mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP");
+  inputP = createQuantizedPlaceholder(mod, bindings, inputs, inType.getScale(),
+                                      inType.getOffset(), "inputP");
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
 
-  TypeRef IT = F->getParent()->uniqueType(inputs->getElementType(), inputs->dims(),
-                                          inType.getScale(), inType.getOffset());
+  TypeRef IT =
+      F->getParent()->uniqueType(inputs->getElementType(), inputs->dims(),
+                                 inType.getScale(), inType.getOffset());
   auto *splat = F->createSplat("splat", IT, 0.0);
   auto *elemmax = F->createMax("elementmax", inputP, splat);
   auto *result = F->createSave("ret", elemmax, outP);
@@ -1039,12 +1036,10 @@ void inferSplatMaxNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
-
 
 void inferElemAddNet(Tensor *inputs0, Tensor *inputs1, Tensor *out,
                      llvm::StringRef kind) {
@@ -1057,15 +1052,18 @@ void inferElemAddNet(Tensor *inputs0, Tensor *inputs1, Tensor *out,
   auto &outType = out->getType();
   auto &inType0 = inputs0->getType();
   auto &inType1 = inputs1->getType();
-  inputP0 = createQuantizedPlaceholder(
-      mod, bindings, inputs0, inType0.getScale(), inType0.getOffset(), "inputP0");
-  inputP1 = createQuantizedPlaceholder(
-      mod, bindings, inputs1, inType1.getScale(), inType1.getOffset(), "inputP1");
+  inputP0 =
+      createQuantizedPlaceholder(mod, bindings, inputs0, inType0.getScale(),
+                                 inType0.getOffset(), "inputP0");
+  inputP1 =
+      createQuantizedPlaceholder(mod, bindings, inputs1, inType1.getScale(),
+                                 inType1.getOffset(), "inputP1");
 
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
-  TypeRef OT1 = F->getParent()->uniqueType(out->getElementType(), out->dims(),
-                                           outType.getScale(), outType.getOffset());
+  TypeRef OT1 =
+      F->getParent()->uniqueType(out->getElementType(), out->dims(),
+                                 outType.getScale(), outType.getOffset());
 
   auto *elemadd = F->createAdd("elementadd", inputP0, inputP1);
 
@@ -1075,8 +1073,7 @@ void inferElemAddNet(Tensor *inputs0, Tensor *inputs1, Tensor *out,
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP0, inputP1},
-                          {inputs0, inputs1});
+  updateInputPlaceholders(bindings, {inputP0, inputP1}, {inputs0, inputs1});
   EE.run(bindings);
   out->assign(resultTensor);
 }
@@ -1092,15 +1089,18 @@ void inferElemSubNet(Tensor *inputs0, Tensor *inputs1, Tensor *out,
   auto &outType = out->getType();
   auto &inType0 = inputs0->getType();
   auto &inType1 = inputs1->getType();
-  inputP0 = createQuantizedPlaceholder(
-      mod, bindings, inputs0, inType0.getScale(), inType0.getOffset(), "inputP0");
-  inputP1 = createQuantizedPlaceholder(
-      mod, bindings, inputs1, inType1.getScale(), inType1.getOffset(), "inputP1");
+  inputP0 =
+      createQuantizedPlaceholder(mod, bindings, inputs0, inType0.getScale(),
+                                 inType0.getOffset(), "inputP0");
+  inputP1 =
+      createQuantizedPlaceholder(mod, bindings, inputs1, inType1.getScale(),
+                                 inType1.getOffset(), "inputP1");
 
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
-  TypeRef OT1 = F->getParent()->uniqueType(out->getElementType(), out->dims(),
-                                           outType.getScale(), outType.getOffset());
+  TypeRef OT1 =
+      F->getParent()->uniqueType(out->getElementType(), out->dims(),
+                                 outType.getScale(), outType.getOffset());
 
   auto *elemsub = F->createSub("elementsub", inputP0, inputP1);
 
@@ -1110,8 +1110,7 @@ void inferElemSubNet(Tensor *inputs0, Tensor *inputs1, Tensor *out,
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP0, inputP1},
-                          {inputs0, inputs1});
+  updateInputPlaceholders(bindings, {inputP0, inputP1}, {inputs0, inputs1});
   EE.run(bindings);
   out->assign(resultTensor);
 }
@@ -1127,15 +1126,18 @@ void inferElemDivNet(Tensor *inputs0, Tensor *inputs1, Tensor *out,
   auto &outType = out->getType();
   auto &inType0 = inputs0->getType();
   auto &inType1 = inputs1->getType();
-  inputP0 = createQuantizedPlaceholder(
-      mod, bindings, inputs0, inType0.getScale(), inType0.getOffset(), "inputP0");
-  inputP1 = createQuantizedPlaceholder(
-      mod, bindings, inputs1, inType1.getScale(), inType1.getOffset(), "inputP1");
+  inputP0 =
+      createQuantizedPlaceholder(mod, bindings, inputs0, inType0.getScale(),
+                                 inType0.getOffset(), "inputP0");
+  inputP1 =
+      createQuantizedPlaceholder(mod, bindings, inputs1, inType1.getScale(),
+                                 inType1.getOffset(), "inputP1");
 
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
-  TypeRef OT1 = F->getParent()->uniqueType(out->getElementType(), out->dims(),
-                                           outType.getScale(), outType.getOffset());
+  TypeRef OT1 =
+      F->getParent()->uniqueType(out->getElementType(), out->dims(),
+                                 outType.getScale(), outType.getOffset());
 
   auto *elemdiv = F->createDiv("elementdiv", inputP0, inputP1);
 
@@ -1145,15 +1147,12 @@ void inferElemDivNet(Tensor *inputs0, Tensor *inputs1, Tensor *out,
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP0, inputP1},
-                          {inputs0, inputs1});
+  updateInputPlaceholders(bindings, {inputP0, inputP1}, {inputs0, inputs1});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
-
-void inferQuantizeNet(Tensor *inputs, Tensor *out,
-                      llvm::StringRef kind) {
+void inferQuantizeNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -1162,12 +1161,12 @@ void inferQuantizeNet(Tensor *inputs, Tensor *out,
   Placeholder *outP;
   auto &outType = out->getType();
   auto &inType = inputs->getType();
-  inputP = createPlaceholder(
-      mod, bindings, inputs, "inputP");
+  inputP = createPlaceholder(mod, bindings, inputs, "inputP");
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
-  TypeRef OT1 = F->getParent()->uniqueType(out->getElementType(), out->dims(),
-                                           outType.getScale(), outType.getOffset());
+  TypeRef OT1 =
+      F->getParent()->uniqueType(out->getElementType(), out->dims(),
+                                 outType.getScale(), outType.getOffset());
 
   auto *quantize = F->createQuantize("maxPool", inputP, OT1);
   auto *result = F->createSave("ret", quantize, outP);
@@ -1175,16 +1174,12 @@ void inferQuantizeNet(Tensor *inputs, Tensor *out,
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
-
-
-void inferDequantizeNet(Tensor *inputs, Tensor *out,
-                        llvm::StringRef kind) {
+void inferDequantizeNet(Tensor *inputs, Tensor *out, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -1193,9 +1188,8 @@ void inferDequantizeNet(Tensor *inputs, Tensor *out,
   Placeholder *outP;
   auto &outType = out->getType();
   auto &inType = inputs->getType();
-  inputP = createQuantizedPlaceholder(
-      mod, bindings, inputs, inType.getScale(),
-      inType.getOffset(), "inputP");
+  inputP = createQuantizedPlaceholder(mod, bindings, inputs, inType.getScale(),
+                                      inType.getOffset(), "inputP");
   outP = createPlaceholder(mod, bindings, out, "outP");
   TypeRef OT1 = F->getParent()->uniqueType(out->getElementType(), out->dims());
 
@@ -1205,14 +1199,13 @@ void inferDequantizeNet(Tensor *inputs, Tensor *out,
 
   EE.compile(CompilationMode::Infer);
 
-  updateInputPlaceholders(bindings, {inputP},
-                          {inputs});
+  updateInputPlaceholders(bindings, {inputP}, {inputs});
   EE.run(bindings);
   out->assign(resultTensor);
 }
 
-void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                         llvm::StringRef kind) {
+void inferVTAConvNettemp(Tensor *inputs, Tensor *filter, Tensor *bias,
+                         Tensor *out, llvm::StringRef kind) {
   PlaceholderBindings bindings;
   ExecutionEngine EE(kind);
   auto &mod = EE.getModule();
@@ -1278,11 +1271,10 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
   auto &filterType = filter->getType();
   auto &biasType = bias->getType();
   inputP = createQuantizedPlaceholder(
-      mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP", "NCHW");
-  filterP =
-      createQuantizedPlaceholder(mod, bindings, filter, filterType.getScale(),
-                                 filterType.getOffset(), "filterP", "NCHW");
-  biasP = createQuantizedPlaceholder(mod, bindings, bias, biasType.getScale(),
+      mod, bindings, inputs, inType.getScale(), inType.getOffset(), "inputP",
+"NCHW"); filterP = createQuantizedPlaceholder(mod, bindings, filter,
+filterType.getScale(), filterType.getOffset(), "filterP", "NCHW"); biasP =
+createQuantizedPlaceholder(mod, bindings, bias, biasType.getScale(),
                                      biasType.getOffset(), "biasP");
   outP = createQuantizedPlaceholder(mod, bindings, out, outType.getScale(),
                                     outType.getOffset(), "outP");
@@ -1293,15 +1285,18 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
 #define BLOCK_IN 16
   auto inputDim = inputP->dims();
   assert(inputDim.size()==4);
-  std::array<dim_t, 6> reshapeInputS{{inputDim[0], 1, (dim_t)ceil(inputDim[1]/(double)BLOCK_IN), BLOCK_IN, inputDim[2], inputDim[3]}};
+  std::array<dim_t, 6> reshapeInputS{{inputDim[0], 1,
+(dim_t)ceil(inputDim[1]/(double)BLOCK_IN), BLOCK_IN, inputDim[2], inputDim[3]}};
   llvm::ArrayRef<dim_t> reshapeInputDim(reshapeInputS);
   std::array<unsigned_t, 6> transposeInputS{{0,2,4,5,1,3}};
   llvm::ArrayRef<unsigned_t> transposeInputDim(transposeInputS);
   auto filterDim = filterP->dims();
 
   assert(filterDim.size()==4);
-  std::array<dim_t, 6> reshapeFilterS{{(dim_t)ceil(filterDim[0]/(double)BLOCK_OUT), BLOCK_OUT, (dim_t)ceil(filterDim[1]/(double)BLOCK_IN), BLOCK_IN, filterDim[2], filterDim[3]}};
-  llvm::ArrayRef<dim_t> reshapeFilterDim(reshapeFilterS);
+  std::array<dim_t, 6>
+reshapeFilterS{{(dim_t)ceil(filterDim[0]/(double)BLOCK_OUT), BLOCK_OUT,
+(dim_t)ceil(filterDim[1]/(double)BLOCK_IN), BLOCK_IN, filterDim[2],
+filterDim[3]}}; llvm::ArrayRef<dim_t> reshapeFilterDim(reshapeFilterS);
   std::array<unsigned_t, 6> transposeFilterS{{0,2,4,5,1,3}};
   llvm::ArrayRef<unsigned_t> transposeFilterDim(transposeFilterS);
 
@@ -1309,29 +1304,33 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
   auto biasDim = biasP->dims();
 
   assert(biasDim.size()==1);
-  std::array<dim_t, 2> biasS{{(dim_t)ceil(biasDim[0]/(double)BLOCK_OUT), BLOCK_OUT}};
-  llvm::ArrayRef<dim_t> newBiasDim(biasS);
+  std::array<dim_t, 2> biasS{{(dim_t)ceil(biasDim[0]/(double)BLOCK_OUT),
+BLOCK_OUT}}; llvm::ArrayRef<dim_t> newBiasDim(biasS);
 
 
   auto outDim = out->dims();
-  std::array<dim_t, 6> outputS{{outDim[0], (dim_t)ceil(outDim[3]/(double)BLOCK_IN), outDim[1], outDim[2], 1, BLOCK_IN}};
+  std::array<dim_t, 6> outputS{{outDim[0],
+(dim_t)ceil(outDim[3]/(double)BLOCK_IN), outDim[1], outDim[2], 1, BLOCK_IN}};
   llvm::ArrayRef<dim_t> newOutputDim(outputS);
 
-  TypeRef newOT = F->getParent()->uniqueType(out->getElementType(), newOutputDim, out->getType().getScale(), out->getType().getOffset());
+  TypeRef newOT = F->getParent()->uniqueType(out->getElementType(),
+newOutputDim, out->getType().getScale(), out->getType().getOffset());
 
-  auto *reshapeInput = F->createReshape("reshapeInput", inputP, reshapeInputDim, "N1(C//16)16HW");
-  auto *transposeInput = F->createTranspose("transposeInput", reshapeInput, transposeInputDim, "N(C//16)HW1(16)" );
-  auto *reshapeFilter = F->createReshape("reshapeFilter", filterP, reshapeFilterDim, "(N//16)(16)(C//16)(16)HW");
-  auto *transposeFilter = F->createTranspose("transposeFilter", reshapeFilter, transposeFilterDim, "(N//16)(C//16)HW(16)(16)" );
+  auto *reshapeInput = F->createReshape("reshapeInput", inputP, reshapeInputDim,
+"N1(C//16)16HW"); auto *transposeInput = F->createTranspose("transposeInput",
+reshapeInput, transposeInputDim, "N(C//16)HW1(16)" ); auto *reshapeFilter =
+F->createReshape("reshapeFilter", filterP, reshapeFilterDim,
+"(N//16)(16)(C//16)(16)HW"); auto *transposeFilter =
+F->createTranspose("transposeFilter", reshapeFilter, transposeFilterDim,
+"(N//16)(C//16)HW(16)(16)" );
 
-  auto *reshapeBias = F->createReshape("reshapeBias", biasP, newBiasDim, "VTA_BIAS_LAYOUT");
-  auto *conv = F->createConv("conv", transposeInput, transposeFilter, reshapeBias, newOT, 3, 1, 1, 1, VTA_LAYOUT);
-  auto *relu = F->createRELU("relu", conv);
-  auto *reshapeOutput = F->createReshape("reshapeOutput", relu, out->dims());
-  auto *result = F->createSave("ret", reshapeOutput, outP);
-  auto *resultTensor = bindings.get(result->getPlaceholder());
-  auto B = VTA();
-  CompilationContext cctx;
+  auto *reshapeBias = F->createReshape("reshapeBias", biasP, newBiasDim,
+"VTA_BIAS_LAYOUT"); auto *conv = F->createConv("conv", transposeInput,
+transposeFilter, reshapeBias, newOT, 3, 1, 1, 1, VTA_LAYOUT); auto *relu =
+F->createRELU("relu", conv); auto *reshapeOutput =
+F->createReshape("reshapeOutput", relu, out->dims()); auto *result =
+F->createSave("ret", reshapeOutput, outP); auto *resultTensor =
+bindings.get(result->getPlaceholder()); auto B = VTA(); CompilationContext cctx;
   F->dumpDAG("aaa.dot");
   glow::fold(F, cctx, &B);
   F->dumpDAG("aaa2.dot");
@@ -1345,9 +1344,6 @@ void inferVTAConvNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
   out->assign(resultTensor);
 }
 */
-
-
-
 
 void trainConvNet(Tensor *inputs, Tensor *kernel1, Tensor *bias1,
                   Tensor *kernel2, Tensor *bias2, Tensor *selected,

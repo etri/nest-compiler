@@ -1,42 +1,43 @@
 /*****************************************************************************
-	*
-	* Copyright Next-Generation System Software Research Group, All rights reserved.
-	* Future Computing Research Division, Artificial Intelligence Reserch Laboratory
-	* Electronics and Telecommunications Research Institute (ETRI)
-	*
-	* THESE DOCUMENTS CONTAIN CONFIDENTIAL INFORMATION AND KNOWLEDGE
-	* WHICH IS THE PROPERTY OF ETRI. NO PART OF THIS PUBLICATION IS
-	* TO BE USED FOR ANY OTHER PURPOSE, AND THESE ARE NOT TO BE"
-	* REPRODUCED, COPIED, DISCLOSED, TRANSMITTED, STORED IN A RETRIEVAL
-	"* SYSTEM OR TRANSLATED INTO ANY OTHER HUMAN OR COMPUTER LANGUAGE,
-	* IN ANY FORM, BY ANY MEANS, IN WHOLE OR IN PART, WITHOUT THE
-	* COMPLETE PRIOR WRITTEN PERMISSION OF ETRI.
-	*
-	* LICENSE file : LICENSE_ETRI located in the top directory
-	*
+        *
+        * Copyright Next-Generation System Software Research Group, All rights
+reserved.
+        * Future Computing Research Division, Artificial Intelligence Reserch
+Laboratory
+        * Electronics and Telecommunications Research Institute (ETRI)
+        *
+        * THESE DOCUMENTS CONTAIN CONFIDENTIAL INFORMATION AND KNOWLEDGE
+        * WHICH IS THE PROPERTY OF ETRI. NO PART OF THIS PUBLICATION IS
+        * TO BE USED FOR ANY OTHER PURPOSE, AND THESE ARE NOT TO BE"
+        * REPRODUCED, COPIED, DISCLOSED, TRANSMITTED, STORED IN A RETRIEVAL
+        "* SYSTEM OR TRANSLATED INTO ANY OTHER HUMAN OR COMPUTER LANGUAGE,
+        * IN ANY FORM, BY ANY MEANS, IN WHOLE OR IN PART, WITHOUT THE
+        * COMPLETE PRIOR WRITTEN PERMISSION OF ETRI.
+        *
+        * LICENSE file : LICENSE_ETRI located in the top directory
+        *
 *****************************************************************************/
 
 #ifndef GLOW_VTASAVER_H
 #define GLOW_VTASAVER_H
 
-
 #include <string>
 
-std::string const VTA_SAVE_COMMON =R"~(
+std::string const VTA_SAVE_COMMON = R"~(
 
-#include "vta/runtime.h"
 #include "VTABundle.h"
-#include <time.h>
-#include <iostream>
+#include "vta/runtime.h"
 #include <fstream>
+#include <iostream>
+#include <time.h>
 )~";
 
-std::string const VTA_RUNTIME_HEADER =R"~(
+std::string const VTA_RUNTIME_HEADER = R"~(
 
 #ifndef GLOW_VTARUNTIME_H
 #define GLOW_VTARUNTIME_H
-#include "vta/runtime.h"
 #include "VTABundle.h"
+#include "vta/runtime.h"
 #include <vector>
 
 VTACommandHandle vtaCmdH{nullptr};
@@ -204,7 +205,7 @@ void resetVTAUopBuffer3(){
 
 )~";
 
-std::string const VTA_BUNDLE_HEADER_0 =R"~(
+std::string const VTA_BUNDLE_HEADER_0 = R"~(
 
 #include <stdint.h>
 
@@ -252,11 +253,10 @@ extern "C" {
 #endif
 )~";
 
-
-std::string const VTA_BUNDLE_HEADER_1 =R"~(
+std::string const VTA_BUNDLE_HEADER_1 = R"~(
 #ifdef __cplusplus
 }
 #endif
 )~";
 
-#endif //GLOW_VTASAVER_H
+#endif // GLOW_VTASAVER_H

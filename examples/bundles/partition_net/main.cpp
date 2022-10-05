@@ -177,12 +177,12 @@ static void loadImagesAndPreprocess(const std::vector<std::string> &filenames,
   assert(filenames.size() > 0 &&
          "There must be at least one filename in filenames");
 
-  //for normalization range setting
+  // for normalization range setting
 
-  //for resnet18v2.onnx
-  //std::pair<float, float> range = std::make_pair(0., 1.0);
+  // for resnet18v2.onnx
+  // std::pair<float, float> range = std::make_pair(0., 1.0);
 
-  //for mxnet_exported_resnet18.onnx
+  // for mxnet_exported_resnet18.onnx
   std::pair<float, float> range = std::make_pair(0., 255.0);
 
   unsigned numImages = filenames.size();
@@ -283,9 +283,9 @@ static uint8_t *initConstantWeights(const char *weightsFileName,
   fseek(weightsFile, 0, SEEK_SET);
   uint8_t *baseConstantWeightVarsAddr =
       static_cast<uint8_t *>(alignedAlloc(config, fileSize));
-//  printf("Allocated weights of size: %lu\n", fileSize);
-//  printf("Expected weights of size: %" PRIu64 "\n",
-//         config.constantWeightVarsMemSize);
+  //  printf("Allocated weights of size: %lu\n", fileSize);
+  //  printf("Expected weights of size: %" PRIu64 "\n",
+  //         config.constantWeightVarsMemSize);
   assert(fileSize == config.constantWeightVarsMemSize &&
          "Wrong weights file size");
   int result = fread(baseConstantWeightVarsAddr, fileSize, 1, weightsFile);
@@ -304,15 +304,15 @@ static uint8_t *initConstantWeights(const char *weightsFileName,
 static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
   auto *weights = static_cast<uint8_t *>(
       alignedAlloc(config, config.mutableWeightVarsMemSize));
-//  printf("Allocated mutable weight variables of size: %" PRIu64 "\n",
-//         config.mutableWeightVarsMemSize);
+  //  printf("Allocated mutable weight variables of size: %" PRIu64 "\n",
+  //         config.mutableWeightVarsMemSize);
   return weights;
 }
 
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
 static int dumpInferenceResults(const BundleConfig &config,
-                                 uint8_t *mutableWeightVars, char* resultName) {
+                                uint8_t *mutableWeightVars, char *resultName) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, resultName);
   int maxIdx = 0;
@@ -330,73 +330,79 @@ static int dumpInferenceResults(const BundleConfig &config,
   return maxIdx;
 }
 
-static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT) {
+static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config,
+                                               const char *name,
+                                               float *inputT) {
 
   uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
 
   const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
-//  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
-//         inputDataVar.size*4);
-//  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+  //  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu
+  //  bytes\n",
+  //         inputDataVar.size*4);
+  //  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
   memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
-         inputDataVar.size*4);
+         inputDataVar.size * 4);
 
   return mutableWeightVarsAddr;
 }
 
-static uint8_t *copyMutableWeightVarsWithoutAlloc(const BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float* inputT) {
+static uint8_t *
+copyMutableWeightVarsWithoutAlloc(const BundleConfig &config,
+                                  uint8_t *mutableWeightVarsAddr,
+                                  const char *name, float *inputT) {
 
-//  uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
+  //  uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
 
   const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
-//  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
-//         inputDataVar.size*4);
-//  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+  //  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu
+  //  bytes\n",
+  //         inputDataVar.size*4);
+  //  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
   memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
-         inputDataVar.size*4);
+         inputDataVar.size * 4);
 
   return mutableWeightVarsAddr;
 }
 
-void transpose(float* &in, float* &out) {
+void transpose(float *&in, float *&out) {
 
-  float (*inPtr)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH];
-  float (*outPtr)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3];
+  float(*inPtr)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH];
+  float(*outPtr)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3];
 
-  inPtr = (float (*)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH])in;
-  outPtr = (float (*)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3])out;
+  inPtr = (float(*)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH])in;
+  outPtr = (float(*)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3])out;
 
-
-  for (int j=0; j<3; j++){
-    for (int k=0; k<DEFAULT_HEIGHT; k++){
-      for (int l=0; l<DEFAULT_WIDTH; l++){
+  for (int j = 0; j < 3; j++) {
+    for (int k = 0; k < DEFAULT_HEIGHT; k++) {
+      for (int l = 0; l < DEFAULT_WIDTH; l++) {
         (*outPtr)[0][k][l][j] = (*inPtr)[0][j][k][l];
       }
     }
   }
-
 }
 
-//static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT) {
+// static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char
+// *name, float* inputT) {
 //
 //  uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
 //
 //  const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
-////  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
-////         inputDataVar.size*4);
-////  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+////  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu
+/// bytes\n", /         inputDataVar.size*4); /  printf( "inputDataVar.offset =
+///%d\n", inputDataVar.offset);
 //  memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
 //         inputDataVar.size*4);
 //
 //  return mutableWeightVarsAddr;
 //}
 
-
 #define NHWC 1
 
 /// The assumed layout of the area for mutable WeightVars is:
 /// data | gpu_0/data | results
-static uint8_t *initMutableWeightVars(const BundleConfig &config, char* varName) {
+static uint8_t *initMutableWeightVars(const BundleConfig &config,
+                                      char *varName) {
   uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
   size_t inputDims[4];
   float *inputT{nullptr};
@@ -405,18 +411,18 @@ static uint8_t *initMutableWeightVars(const BundleConfig &config, char* varName)
   // mutableWeightVars area.
   size_t imageDataSizeInBytes =
       inputDims[0] * inputDims[1] * inputDims[2] * inputDims[3] * sizeof(float);
-//  printf("Copying image data into mutable weight vars: %lu bytes\n",
-//         imageDataSizeInBytes);
+  //  printf("Copying image data into mutable weight vars: %lu bytes\n",
+  //         imageDataSizeInBytes);
   const SymbolTableEntry &inputGPUDataVar =
       getMutableWeightVar(config, varName);
 
-  if(NHWC == 1) {
-    float* tmp = (float *)malloc(sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]));
+  if (NHWC == 1) {
+    float *tmp =
+        (float *)malloc(sizeof(float[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3]));
     memset(tmp, 0, imageDataSizeInBytes);
     transpose(inputT, tmp);
     memcpy(inputT, tmp, imageDataSizeInBytes);
     free(tmp);
-
   }
 
   memcpy(mutableWeightVarsAddr + inputGPUDataVar.offset, inputT,
@@ -430,47 +436,51 @@ static uint8_t *initActivations(const BundleConfig &config) {
       alignedAlloc(config, config.activationsMemSize));
 }
 
-
-static float* getInferenceResultVar(const BundleConfig &config,
-                                    uint8_t *mutableWeightVars, const char* name) {
+static float *getInferenceResultVar(const BundleConfig &config,
+                                    uint8_t *mutableWeightVars,
+                                    const char *name) {
   const SymbolTableEntry &outputWeights = getMutableWeightVar(config, name);
   float *results = (float *)(mutableWeightVars + outputWeights.offset);
   return results;
 }
 
-
 int main(int argc, char **argv) {
   parseCommandLineOptions(argc, argv);
 
-//  //======== single partition =======//
-//  uint8_t *constantWeightVarsAddr =
-//      initConstantWeights("resnet18v2.weights.bin", resnet18v2_config);
-//  uint8_t *mutableWeightVarsAddr = initMutableWeightVars(resnet18v2_config, "data");
-//  uint8_t *activationsAddr = initActivations(resnet18v2_config);
-//
-////  uint8_t *constantWeightVarsAddr =
-////      initConstantWeights("mxnet_exported_resnet18.weights.bin", mxnet_exported_resnet18_config);
-////  uint8_t *mutableWeightVarsAddr = initMutableWeightVars(mxnet_exported_resnet18_config, "data");
-////  uint8_t *activationsAddr = initActivations(mxnet_exported_resnet18_config);
-//
-//  // Perform the computation.
-//  int errCode =
-////      mxnet_exported_resnet18(constantWeightVarsAddr, mutableWeightVarsAddr, activationsAddr);
-//    resnet18v2(constantWeightVarsAddr, mutableWeightVarsAddr, activationsAddr);
-//
-//  if (errCode != GLOW_SUCCESS) {
-//    printf("Error running bundle: error code %d\n", errCode);
-//  }
-//
-//  printf("====== the value of a non-partitioned bundle ========\n");
-//  // Report the results.
-//  dumpInferenceResults(resnet18v2_config, mutableWeightVarsAddr, "resnetv22_dense0_fwd__1");
-////  dumpInferenceResults(mxnet_exported_resnet18_config, mutableWeightVarsAddr, "resnetv10_dense0_fwd__1");
-//
-//  // Free all resources.
-//  free(activationsAddr);
-//  free(constantWeightVarsAddr);
-//  free(mutableWeightVarsAddr);
+  //  //======== single partition =======//
+  //  uint8_t *constantWeightVarsAddr =
+  //      initConstantWeights("resnet18v2.weights.bin", resnet18v2_config);
+  //  uint8_t *mutableWeightVarsAddr = initMutableWeightVars(resnet18v2_config,
+  //  "data"); uint8_t *activationsAddr = initActivations(resnet18v2_config);
+  //
+  ////  uint8_t *constantWeightVarsAddr =
+  ////      initConstantWeights("mxnet_exported_resnet18.weights.bin",
+  /// mxnet_exported_resnet18_config); /  uint8_t *mutableWeightVarsAddr =
+  /// initMutableWeightVars(mxnet_exported_resnet18_config, "data"); /  uint8_t
+  ///*activationsAddr = initActivations(mxnet_exported_resnet18_config);
+  //
+  //  // Perform the computation.
+  //  int errCode =
+  ////      mxnet_exported_resnet18(constantWeightVarsAddr,
+  /// mutableWeightVarsAddr, activationsAddr);
+  //    resnet18v2(constantWeightVarsAddr, mutableWeightVarsAddr,
+  //    activationsAddr);
+  //
+  //  if (errCode != GLOW_SUCCESS) {
+  //    printf("Error running bundle: error code %d\n", errCode);
+  //  }
+  //
+  //  printf("====== the value of a non-partitioned bundle ========\n");
+  //  // Report the results.
+  //  dumpInferenceResults(resnet18v2_config, mutableWeightVarsAddr,
+  //  "resnetv22_dense0_fwd__1");
+  ////  dumpInferenceResults(mxnet_exported_resnet18_config,
+  /// mutableWeightVarsAddr, "resnetv10_dense0_fwd__1");
+  //
+  //  // Free all resources.
+  //  free(activationsAddr);
+  //  free(constantWeightVarsAddr);
+  //  free(mutableWeightVarsAddr);
 
   //======== multiple partitions =======//
   uint8_t *constantWeightVarsAddr0 =
@@ -485,11 +495,13 @@ int main(int argc, char **argv) {
     printf("Error running bundle: error code %d\n", errCode0);
   }
 
-  float* resultVar0 = getInferenceResultVar(p0_config, mutableWeightVarsAddr0, "resnetv10_pool0_fwd__1");
+  float *resultVar0 = getInferenceResultVar(p0_config, mutableWeightVarsAddr0,
+                                            "resnetv10_pool0_fwd__1");
 
   uint8_t *constantWeightVarsAddr1 =
       initConstantWeights("p1.weights.bin", p1_config);
-  uint8_t *mutableWeightVarsAddr1 = copyMutableWeightVarsWithAlloc(p1_config, "resnetv10_pool0_fwd__1", resultVar0);
+  uint8_t *mutableWeightVarsAddr1 = copyMutableWeightVarsWithAlloc(
+      p1_config, "resnetv10_pool0_fwd__1", resultVar0);
   uint8_t *activationsAddr1 = initActivations(p1_config);
 
   // Perform the computation.
@@ -499,15 +511,20 @@ int main(int argc, char **argv) {
     printf("Error running bundle: error code %d\n", errCode1);
   }
 
-//   Report the results.
-//  printf("====== the value of the final node ========\n");
-//  dumpInferenceResults(p1_config, mutableWeightVarsAddr1, "resnetv10_dense0_fwd");
+  //   Report the results.
+  //  printf("====== the value of the final node ========\n");
+  //  dumpInferenceResults(p1_config, mutableWeightVarsAddr1,
+  //  "resnetv10_dense0_fwd");
 
-  float* resultVar1 = getInferenceResultVar(p1_config, mutableWeightVarsAddr1, "resnetv10_stage1_conv0_fwd__2");
+  float *resultVar1 = getInferenceResultVar(p1_config, mutableWeightVarsAddr1,
+                                            "resnetv10_stage1_conv0_fwd__2");
   uint8_t *constantWeightVarsAddr2 =
       initConstantWeights("p2.weights.bin", p2_config);
-  uint8_t *mutableWeightVarsAddr2 = copyMutableWeightVarsWithAlloc(p2_config, "resnetv10_pool0_fwd__1", resultVar0);
-  copyMutableWeightVarsWithoutAlloc(p2_config, mutableWeightVarsAddr2, "resnetv10_stage1_conv0_fwd__2", resultVar1);
+  uint8_t *mutableWeightVarsAddr2 = copyMutableWeightVarsWithAlloc(
+      p2_config, "resnetv10_pool0_fwd__1", resultVar0);
+  copyMutableWeightVarsWithoutAlloc(p2_config, mutableWeightVarsAddr2,
+                                    "resnetv10_stage1_conv0_fwd__2",
+                                    resultVar1);
   uint8_t *activationsAddr2 = initActivations(p2_config);
 
   // Perform the computation.
@@ -517,13 +534,15 @@ int main(int argc, char **argv) {
     printf("Error running bundle: error code %d\n", errCode2);
   }
 
-
   // Report the results.
   printf("====== final result of this neural net ========\n");
- // dumpInferenceResults(p2_config, mutableWeightVarsAddr2, "resnetv22_dense0_fwd__1"); //for resnet18v2.onnx
-  int maxIdx = dumpInferenceResults(p2_config, mutableWeightVarsAddr2, "resnetv10_dense0_fwd"); //for mxnet_exported_resnet18.onnx
+  // dumpInferenceResults(p2_config, mutableWeightVarsAddr2,
+  // "resnetv22_dense0_fwd__1"); //for resnet18v2.onnx
+  int maxIdx = dumpInferenceResults(
+      p2_config, mutableWeightVarsAddr2,
+      "resnetv10_dense0_fwd"); // for mxnet_exported_resnet18.onnx
 
-//   Free all resources.
+  //   Free all resources.
   free(activationsAddr0);
   free(constantWeightVarsAddr0);
   free(mutableWeightVarsAddr0);
@@ -536,5 +555,5 @@ int main(int argc, char **argv) {
   free(constantWeightVarsAddr2);
   free(mutableWeightVarsAddr2);
 
-  return !(maxIdx==281);
+  return !(maxIdx == 281);
 }

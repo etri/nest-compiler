@@ -299,7 +299,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
 static int dumpInferenceResults(const BundleConfig &config,
-                                 uint8_t *mutableWeightVars) {
+                                uint8_t *mutableWeightVars) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, "gpu_0_softmax_1");
   int maxIdx = 0;
@@ -347,9 +347,10 @@ static uint8_t *initActivations(const BundleConfig &config) {
 int main(int argc, char **argv) {
   parseCommandLineOptions(argc, argv);
   // Allocate and initialize constant and mutable weights.
-  //uint8_t *constantWeightVarsAddr =      initConstantWeights("shufflenet.weights.bin", shufflenet_config);
+  // uint8_t *constantWeightVarsAddr =
+  // initConstantWeights("shufflenet.weights.bin", shufflenet_config);
   uint8_t *mutableWeightVarsAddr = initMutableWeightVars(shufflenet_config);
-  //uint8_t *activationsAddr = initActivations(shufflenet_config);
+  // uint8_t *activationsAddr = initActivations(shufflenet_config);
 
   // Perform the computation.
   shufflenet_load_module(0);
@@ -362,9 +363,9 @@ int main(int argc, char **argv) {
   int maxIdx = dumpInferenceResults(shufflenet_config, mutableWeightVarsAddr);
 
   // Free all resources.
-  //free(activationsAddr);
-  //free(constantWeightVarsAddr);
+  // free(activationsAddr);
+  // free(constantWeightVarsAddr);
   free(mutableWeightVarsAddr);
 
-  return !(maxIdx==281);
+  return !(maxIdx == 281);
 }

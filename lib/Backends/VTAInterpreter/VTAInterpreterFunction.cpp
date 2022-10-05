@@ -27,7 +27,7 @@
 using namespace glow;
 
 VTAInterpreterFunction::VTAInterpreterFunction(std::unique_ptr<IRFunction> F,
-                                         runtime::RuntimeBundle &&bundle)
+                                               runtime::RuntimeBundle &&bundle)
     : CompiledFunction(std::move(bundle)), F_(std::move(F)) {}
 
 VTAInterpreterFunction::~VTAInterpreterFunction() {
@@ -198,7 +198,7 @@ void BoundVTAInterpreterFunction::deleteTensor(const Value *v) {
 }
 
 Error BoundVTAInterpreterFunction::execute(IRFunction *F,
-                                        ExecutionContext *context) {
+                                           ExecutionContext *context) {
   {
     TRACE_EVENT_SCOPE(context, TraceLevel::RUNTIME, "registerTensors");
     // Make sure all referenced tensors are on the host.
@@ -242,8 +242,8 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
     if (!irInstructionProcessingHandler ||
         !irInstructionProcessingHandler(
             &I, IRInstructionProcessingStage::PROCESSING, this)) {
-      //glow::dbgs()<<I.getName() <<"    : ";
-      //glow::dbgs()<<I.getKindName() <<"\n";
+      // glow::dbgs()<<I.getName() <<"    : ";
+      // glow::dbgs()<<I.getKindName() <<"\n";
       switch (I.getKind()) {
 
 #define DEF_VALUE(CLASS, NAME)
@@ -259,7 +259,6 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
     break;                                                                     \
   }
 
-
 #ifndef DEF_INSTR
 #error The macro DEF_INSTR was not declared.
 #endif
@@ -272,32 +271,33 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
 #ifndef DEF_INSTR_RANGE
 #define DEF_INSTR_RANGE(ID, FIRST, LAST)
 #endif
-      DEF_INSTR(ConvolutionInst, convolution)
-      DEF_INSTR(AllocActivationInst, allocactivation)
-      DEF_INSTR(DeallocActivationInst, deallocactivation)
-      DEF_INSTR(MaxPoolInst, maxpool)
-      DEF_INSTR(QuantizeInst, quantize)
-      DEF_INSTR(DequantizeInst, dequantize)
-      DEF_INSTR(DebugPrintInst, debugprint)
-      DEF_INSTR(TransposeInst, transpose)
-      DEF_INSTR(SplatInst, splat)
-      DEF_INSTR(ElementMaxInst, elementmax)
-      DEF_INSTR(ElementAddInst, elementadd)
-      DEF_INSTR(AvgPoolInst, avgpool)
-      DEF_INSTR(TensorViewInst, tensorview)
-      DEF_INSTR(FullyConnectedInst, fullyconnected)
-      DEF_INSTR(SoftMaxInst, softmax)
-      DEF_INSTR(InsertTensorInst, inserttensor)
-      DEF_INSTR(ElementSubInst, elementsub)
-      DEF_INSTR(ElementDivInst, elementdiv)
-      DEF_INSTR(ReluInst, relu)
-      DEF_INSTR(ElementSignInst, elementsign)
-      DEF_BACKEND_SPECIFIC_INSTR(VTAInterpreterConvolutionInst, vtainterpreterconvolution)
+        DEF_INSTR(ConvolutionInst, convolution)
+        DEF_INSTR(AllocActivationInst, allocactivation)
+        DEF_INSTR(DeallocActivationInst, deallocactivation)
+        DEF_INSTR(MaxPoolInst, maxpool)
+        DEF_INSTR(QuantizeInst, quantize)
+        DEF_INSTR(DequantizeInst, dequantize)
+        DEF_INSTR(DebugPrintInst, debugprint)
+        DEF_INSTR(TransposeInst, transpose)
+        DEF_INSTR(SplatInst, splat)
+        DEF_INSTR(ElementMaxInst, elementmax)
+        DEF_INSTR(ElementAddInst, elementadd)
+        DEF_INSTR(AvgPoolInst, avgpool)
+        DEF_INSTR(TensorViewInst, tensorview)
+        DEF_INSTR(FullyConnectedInst, fullyconnected)
+        DEF_INSTR(SoftMaxInst, softmax)
+        DEF_INSTR(InsertTensorInst, inserttensor)
+        DEF_INSTR(ElementSubInst, elementsub)
+        DEF_INSTR(ElementDivInst, elementdiv)
+        DEF_INSTR(ReluInst, relu)
+        DEF_INSTR(ElementSignInst, elementsign)
+        DEF_BACKEND_SPECIFIC_INSTR(VTAInterpreterConvolutionInst,
+                                   vtainterpreterconvolution)
 #undef DEF_INSTR_RANGE
 #undef DEF_INSTR
 #undef DEF_BACKEND_SPECIFIC_INSTR
 #undef DEF_VALUE
-//#include "glow/AutoGenInstr.def"
+        //#include "glow/AutoGenInstr.def"
 
       default:
         glow::errs() << "Invalid instruction: " << &I << "\n";

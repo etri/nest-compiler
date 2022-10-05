@@ -75,10 +75,10 @@ struct DeviceInfo {
   float peakSramBw;
   /// Peak ingress/egress PCI-E bandwidth from device in bytes/second.
   float peakPCIeBw;
-  ///Default device of the Partitioner
+  /// Default device of the Partitioner
   bool partitionDefaultDevice;
 
-  //for the NEST compiloer
+  // for the NEST compiloer
   std::vector<std::string> fusionNodes;
   size_t deviceID;
   size_t pysicalUnitCount;
@@ -305,7 +305,7 @@ struct PartitionConfig {
   /// count is not specified for a partition the default will be one copy of the
   /// partition loaded [PartitionID, replicationCount].
   std::map<unsigned, unsigned> replicationCount;
-  //parallel partitions
+  // parallel partitions
   std::vector<std::set<std::string>> parallelPartitions;
 
   PartitionConfig() : numOfPartitions(0) {}

@@ -19,6 +19,6 @@
 
 namespace glow {
 
-    REGISTER_GLOW_BACKEND_FACTORY(VTAFactory, VTA);
+REGISTER_GLOW_BACKEND_FACTORY(VTAFactory, VTA);
 
 } // namespace glow

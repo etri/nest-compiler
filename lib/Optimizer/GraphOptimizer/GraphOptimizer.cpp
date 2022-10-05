@@ -5132,9 +5132,9 @@ void glow::transformForPrecisionMode(const Backend &B, Function *F,
   case QuantizationMode::Quantize: {
     LOG_SCOPE(F->getLogContext(), "quantization::quantizeFunction")
 
-      quantization::quantizeFunction(F, precConfig.quantConfig, B,
-                                     *cctx.loweredInfoMap,
-                                     precConfig.precisionModeKindSet);
+    quantization::quantizeFunction(F, precConfig.quantConfig, B,
+                                   *cctx.loweredInfoMap,
+                                   precConfig.precisionModeKindSet);
     break;
   }
 
@@ -5254,7 +5254,7 @@ Error glow::optimizeFunction(Function *F, const Backend &B,
   if (precConfig.quantMode == QuantizationMode::Profile) {
     cctx.info.graphPreLowerHash = F->getHash();
   } else if (precConfig.quantMode == QuantizationMode::Quantize) {
-    if(B.getBackendName().compare("CPU")) {
+    if (B.getBackendName().compare("CPU")) {
       const auto &quantConfig = cctx.precisionConfig.quantConfig;
       if (quantConfig.checkGraphPreLowerHash) {
         auto profileHash = quantConfig.graphPreLowerHash;

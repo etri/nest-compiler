@@ -81,13 +81,13 @@ DECLARE_STATELESS_BACKEND_TEST(BackendStatelessTest, std::tuple<std::string>);
 extern bool runDisabledTests;
 
 class BackendTest : public BackendStatelessTest {
- public:
+public:
   BackendTest(uint64_t deviceMemory = 0)
       : EE_(getBackendName(), deviceMemory), mod_(EE_.getModule()) {
     F_ = mod_.createFunction("main");
   }
 
- protected:
+protected:
   ExecutionEngine EE_{getBackendName()};
   Module &mod_;
   Function *F_;
@@ -143,18 +143,18 @@ extern bool useSymmetricRowwiseQuantFC;
     GTEST_SKIP();
 
 class NumericsTest : public BackendTest {
- protected:
+protected:
   PlaceholderBindings bindings_;
 };
 
 class GraphOptz : public ::testing::Test {
- public:
+public:
   GraphOptz(llvm::StringRef backendName = "Interpreter")
       : EE_(backendName), mod_(EE_.getModule()) {
     F_ = mod_.createFunction("main");
   }
 
- protected:
+protected:
   void checkNumericalEquivalence(float allowedError = 0.0001) {
     // Check that the function and its optimized complement exist.
     ASSERT_TRUE(F_);
@@ -209,9 +209,9 @@ class GraphOptz : public ::testing::Test {
 
 /// MockBackend used only for unit testing.
 class MockBackend : public Backend {
- public:
+public:
   class MockFunction : public CompiledFunction {
-   public:
+  public:
     MockFunction(runtime::RuntimeBundle &&bundle)
         : CompiledFunction(std::move(bundle)) {}
 
@@ -243,7 +243,7 @@ class MockBackend : public Backend {
 /// from Node to Instruction IR.
 class MockBackendCustomIRGen : public Backend {
   class MockFunction : public CompiledFunction {
-   public:
+  public:
     MockFunction(runtime::RuntimeBundle &&bundle)
         : CompiledFunction(std::move(bundle)) {}
 
@@ -270,29 +270,29 @@ class MockBackendCustomIRGen : public Backend {
     bool hasChanged = false;
     auto builder_ = irgen.getBuilder();
     switch (N->getKind()) {
-      case glow::Kinded::Kind::ConvolutionNodeKind: {
-        auto *CN__ = llvm::cast<ConvolutionNode>(N);
-        auto *Src = irgen.valueForNode(CN__->getInput());
-        auto *Filter = irgen.valueForNode(CN__->getFilter());
-        auto *Bias = irgen.valueForNode(CN__->getBias());
-        std::string allocName = std::string(N->getName()) + ".res";
-        auto *Dest__ = builder_->createAllocActivationInst(
-            allocName, CN__->getResult().getType());
-        auto *V = builder_->createConvolutionInst(
-            "CustomConvolutionInstruction", Dest__, Src, Filter, Bias,
-            CN__->getKernels(), CN__->getStrides(), CN__->getPads(),
-            CN__->getGroup(), CN__->getDilation(), CN__->getLayout(),
-            CN__->getFusedActivation());
-        if (N->hasPredicate()) {
-          V->setPredicate(irgen.valueForNode(N->getPredicate()));
-        }
-        irgen.registerIR(CN__->getResult(), V->getDest());
-        irgen.setNodeToIR(N, V);
-        hasChanged = true;
-        break;
+    case glow::Kinded::Kind::ConvolutionNodeKind: {
+      auto *CN__ = llvm::cast<ConvolutionNode>(N);
+      auto *Src = irgen.valueForNode(CN__->getInput());
+      auto *Filter = irgen.valueForNode(CN__->getFilter());
+      auto *Bias = irgen.valueForNode(CN__->getBias());
+      std::string allocName = std::string(N->getName()) + ".res";
+      auto *Dest__ = builder_->createAllocActivationInst(
+          allocName, CN__->getResult().getType());
+      auto *V = builder_->createConvolutionInst(
+          "CustomConvolutionInstruction", Dest__, Src, Filter, Bias,
+          CN__->getKernels(), CN__->getStrides(), CN__->getPads(),
+          CN__->getGroup(), CN__->getDilation(), CN__->getLayout(),
+          CN__->getFusedActivation());
+      if (N->hasPredicate()) {
+        V->setPredicate(irgen.valueForNode(N->getPredicate()));
       }
-      default:
-        break;
+      irgen.registerIR(CN__->getResult(), V->getDest());
+      irgen.setNodeToIR(N, V);
+      hasChanged = true;
+      break;
+    }
+    default:
+      break;
     }
     return hasChanged;
   }
@@ -305,7 +305,7 @@ using FunctionTensorPair = std::pair<Function *, Tensor *>;
 /// Signature of functions used to create and init a Function. Returns a pair of
 /// the Function created and the Placeholder of the output of the Function.
 using CreateAndInitFunction =
-std::function<FunctionTensorPair(PlaceholderBindings &, ExecutionEngine &)>;
+    std::function<FunctionTensorPair(PlaceholderBindings &, ExecutionEngine &)>;
 
 /// Given a method \p createAndInitFunction that creates and initializes a
 /// FloatTy Function with a single output Tensor, \returns a bool representing
@@ -334,7 +334,7 @@ void compareAgainstInterpreter(
     quantization::Schema schema = quantization::Schema::Asymmetric,
     ElemKind biasElemKind = ElemKind::Int32QTy, bool forceFP16AccumSLS = false,
     PrecisionConfiguration::Float16Format float16Format =
-    PrecisionConfiguration::Float16Format::FP16,
+        PrecisionConfiguration::Float16Format::FP16,
     bool convertToChannelwiseQuantization = false,
     bool skipQuantizeFCBias = false);
 
@@ -354,24 +354,28 @@ unsigned countNodeKind(Function *F, Kinded::Kind kind);
 
 void inferConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                   llvm::StringRef kind);
-void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
+void inferVTAConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
+                     unsigned_t kernel, unsigned_t stride, unsigned_t pad,
                      llvm::StringRef kind);
-void inferVTAConvNettemp2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                         llvm::StringRef kind);
+void inferVTAConvNettemp2(Tensor *inputs, Tensor *filter, Tensor *bias,
+                          Tensor *out, llvm::StringRef kind);
 void inferVTAConvNet3(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                       llvm::StringRef kind);
 void inferVTAConvNet4(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
                       llvm::StringRef kind);
-void inferVTAConvReluFusionNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                      llvm::StringRef kind);
-void inferVTAConvReluFusionNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out,
-                               llvm::StringRef kind);
-void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *filter2, Tensor *bias2, Tensor *out, Tensor *out2,
-                          llvm::StringRef kind);
-void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                         llvm::StringRef kind);
-void inferVTAConvReluNet2(Tensor *inputs, Tensor *filter, Tensor *bias, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                         llvm::StringRef kind);
+void inferVTAConvReluFusionNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                               Tensor *out, llvm::StringRef kind);
+void inferVTAConvReluFusionNet2(Tensor *inputs, Tensor *filter, Tensor *bias,
+                                Tensor *out, llvm::StringRef kind);
+void inferVTAMultiConvNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                          Tensor *filter2, Tensor *bias2, Tensor *out,
+                          Tensor *out2, llvm::StringRef kind);
+void inferVTAConvReluNet(Tensor *inputs, Tensor *filter, Tensor *bias,
+                         Tensor *out, unsigned_t kernel, unsigned_t stride,
+                         unsigned_t pad, llvm::StringRef kind);
+void inferVTAConvReluNet2(Tensor *inputs, Tensor *filter, Tensor *bias,
+                          Tensor *out, unsigned_t kernel, unsigned_t stride,
+                          unsigned_t pad, llvm::StringRef kind);
 void trainConvNet(Tensor *inputs, Tensor *kernel1, Tensor *bias1,
                   Tensor *kernel2, Tensor *bias2, Tensor *selected,
                   llvm::ArrayRef<dim_t> shape1, llvm::ArrayRef<dim_t> shape2,
@@ -434,8 +438,8 @@ void inferExtract3D(Tensor *input, Tensor *out, llvm::StringRef kind);
 
 void inferMaxSplat(Tensor *input, Tensor *out, llvm::StringRef kind);
 
-void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel, unsigned_t stride, unsigned_t pad,
-                     llvm::StringRef kind);
+void inferMaxPoolNet(Tensor *inputs, Tensor *out, unsigned_t kernel,
+                     unsigned_t stride, unsigned_t pad, llvm::StringRef kind);
 /// A helper method to insert a compiledFunction \p func into the deviceManager
 /// \p device.
 void insertCompiledFunction(llvm::StringRef name, CompiledFunction *func,

@@ -27,7 +27,7 @@
 using namespace glow;
 
 RelayFunction::RelayFunction(std::unique_ptr<IRFunction> F,
-                                         runtime::RuntimeBundle &&bundle)
+                             runtime::RuntimeBundle &&bundle)
     : CompiledFunction(std::move(bundle)), F_(std::move(F)) {}
 
 RelayFunction::~RelayFunction() {
@@ -69,8 +69,7 @@ Error RelayFunction::execute(ExecutionContext *context) {
   return res;
 }
 
-void RelayFunction::translateTraceEvents(
-    ExecutionContext *context) const {
+void RelayFunction::translateTraceEvents(ExecutionContext *context) const {
   auto &traceInfo = getTraceInfo();
   if (!traceInfo.enabled) {
     return;
@@ -169,8 +168,9 @@ Tensor *BoundRelayFunction::getOrCreateTensor(const Value *v) {
   return it->second;
 }
 
-Tensor *BoundRelayFunction::getOrCreateUnownedTensor(
-    const Value *v, const Value *src, llvm::ArrayRef<dim_t> offsets) {
+Tensor *
+BoundRelayFunction::getOrCreateUnownedTensor(const Value *v, const Value *src,
+                                             llvm::ArrayRef<dim_t> offsets) {
   assert(llvm::isa<TensorViewInst>(v) && "Expected a tensor view");
 
   // Pick the tensor.
@@ -197,8 +197,7 @@ void BoundRelayFunction::deleteTensor(const Value *v) {
   tensors_.erase(it);
 }
 
-Error BoundRelayFunction::execute(IRFunction *F,
-                                        ExecutionContext *context) {
+Error BoundRelayFunction::execute(IRFunction *F, ExecutionContext *context) {
 
   return Error::success();
 }

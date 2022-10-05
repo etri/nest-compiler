@@ -287,7 +287,8 @@ template <typename ElemTy, typename AccumulatorTy, typename BiasElemTy>
 void BoundVTAInterpreterFunction::fwdConvolutionInstQuantizedImpl(
     Value *inV, Value *outV, Value *filterV, Value *biasV,
     llvm::ArrayRef<unsigned_t> kernelSizes, llvm::ArrayRef<unsigned_t> strides,
-    llvm::ArrayRef<unsigned_t> pads, size_t group, size_t dilation, const int32_t fuseRelu) {
+    llvm::ArrayRef<unsigned_t> pads, size_t group, size_t dilation,
+    const int32_t fuseRelu) {
   auto inW = getWeightHandle<ElemTy>(inV);
   auto outW = getWeightHandle<ElemTy>(outV);
   auto filterW = getWeightHandle<ElemTy>(filterV);
@@ -400,367 +401,387 @@ void BoundVTAInterpreterFunction::fwdConvolutionInstQuantizedImpl(
   }         // N
 }
 
-void BoundVTAInterpreterFunction::fwdVTAInterpreterConvolutionInst(const glow::Instruction *I) {
-    llvm::outs() << "VTAConvolution reach out here in VTAInterpreter backend.\n";
-    assert(I->getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind);
-    auto *CI = llvm::cast<VTAInterpreterConvolutionInst>(I);
-    assert(CI);
-    auto kernelSizes = CI->getKernels();
-    auto pads = CI->getPads();
-    auto strides = CI->getStrides();
-    size_t group = CI->getGroup();
-    size_t dilation = 0;
+void BoundVTAInterpreterFunction::fwdVTAInterpreterConvolutionInst(
+    const glow::Instruction *I) {
+  llvm::outs() << "VTAConvolution reach out here in VTAInterpreter backend.\n";
+  assert(I->getKind() == Kinded::Kind::VTAInterpreterConvolutionInstKind);
+  auto *CI = llvm::cast<VTAInterpreterConvolutionInst>(I);
+  assert(CI);
+  auto kernelSizes = CI->getKernels();
+  auto pads = CI->getPads();
+  auto strides = CI->getStrides();
+  size_t group = CI->getGroup();
+  size_t dilation = 0;
 
-    assert(CI->getSrc()->getType()->isQuantizedType());
+  assert(CI->getSrc()->getType()->isQuantizedType());
 
-    auto inW = getWeightHandle<int8_t>(CI->getSrc());
-    ShapeVTAIO idim(inW.dims());
-    auto outW = getWeightHandle<int8_t>(CI->getDest());
-    ShapeVTAIO odim(outW.dims());
+  auto inW = getWeightHandle<int8_t>(CI->getSrc());
+  ShapeVTAIO idim(inW.dims());
+  auto outW = getWeightHandle<int8_t>(CI->getDest());
+  ShapeVTAIO odim(outW.dims());
 
-    assert(CI->getSrc()->getElementType() ==  ElemKind::Int8QTy &&
-           CI->getBias()->getElementType() ==  ElemKind::Int32QTy);
+  assert(CI->getSrc()->getElementType() == ElemKind::Int8QTy &&
+         CI->getBias()->getElementType() == ElemKind::Int32QTy);
 
-    Value *inV = CI->getSrc();
-    Value *outV = CI->getDest();
-    Value *filterV = CI->getFilter();
-    Value *biasV = CI->getBias();
+  Value *inV = CI->getSrc();
+  Value *outV = CI->getDest();
+  Value *filterV = CI->getFilter();
+  Value *biasV = CI->getBias();
 
-    auto filterW = getWeightHandle<int8_t>(filterV);
-    ShapeVTAKernel fdim(filterW.dims());
+  auto filterW = getWeightHandle<int8_t>(filterV);
+  ShapeVTAKernel fdim(filterW.dims());
 
-    auto biasW = getWeightHandle<int32_t>(biasV);
+  auto biasW = getWeightHandle<int32_t>(biasV);
 
-    ShapeHW kdim(kernelSizes);
-    ShapeHW sdim(strides);
-    assert(group==1);
+  ShapeHW kdim(kernelSizes);
+  ShapeHW sdim(strides);
+  assert(group == 1);
 
-    PaddingTLBR pdim(pads);
-    auto outTy = outV->getType();
-    auto inTy = inV->getType();
-    auto filterTy = filterV->getType();
-    auto biasTy = biasV->getType();
+  PaddingTLBR pdim(pads);
+  auto outTy = outV->getType();
+  auto inTy = inV->getType();
+  auto filterTy = filterV->getType();
+  auto biasTy = biasV->getType();
 
-    int32_t outOffset = outTy->getOffset();
-    int32_t inOffset = inTy->getOffset();
-    int32_t filterOffset = filterTy->getOffset();
-    int32_t biasOffset = biasTy->getOffset();
+  int32_t outOffset = outTy->getOffset();
+  int32_t inOffset = inTy->getOffset();
+  int32_t filterOffset = filterTy->getOffset();
+  int32_t biasOffset = biasTy->getOffset();
 
+  float outScale = outTy->getScale();
+  float inScale = inTy->getScale();
+  float filterScale = filterTy->getScale();
+  float biasScale = biasTy->getScale();
 
-    float outScale = outTy->getScale();
-    float inScale = inTy->getScale();
-    float filterScale = filterTy->getScale();
-    float biasScale = biasTy->getScale();
+  assert(outOffset == 0);
+  assert(inOffset == 0);
+  assert(filterOffset == 0);
+  assert(biasOffset == 0);
 
-    assert(outOffset == 0);
-    assert(inOffset == 0);
-    assert(filterOffset ==0);
-    assert(biasOffset == 0);
+  assert(pdim.top == pdim.left);
+  assert(pdim.top == pdim.right);
+  assert(pdim.top == pdim.bottom);
+  uint32_t pad_size = pdim.top;
+  assert(strides[0] == strides[1]);
+  uint32_t stride_size = strides[0];
 
+  bool doRelu = false;
+  if (CI->getFusedActivation() == FusedActivation::RELU) {
+    doRelu = true;
+  }
+  bool doBias = false;
 
-    assert(pdim.top==pdim.left);
-    assert(pdim.top==pdim.right);
-    assert(pdim.top==pdim.bottom);
-    uint32_t pad_size = pdim.top;
-    assert(strides[0] == strides[1]);
-    uint32_t stride_size = strides[0];
+  filterScale = 1 / filterScale;
+  inScale = 1 / inScale;
+  biasScale = 1 / biasScale;
+  outScale = 1 / outScale;
 
-    bool doRelu = false;
-    if (CI->getFusedActivation() == FusedActivation::RELU) {
-        doRelu = true;
+  float matMulScale = inScale * filterScale;
+  float scale = matMulScale / outScale;
+  float tempScale = 1.0;
+  assert(scale > 1);
+  uint32_t shift = 0;
+  {
+    while (tempScale < scale) {
+      tempScale *= 2;
+      shift++;
     }
-    bool doBias = false;
-
-    filterScale = 1/filterScale;
-    inScale = 1/inScale;
-    biasScale = 1/biasScale;
-    outScale = 1/outScale;
-
-    float matMulScale = inScale * filterScale;
-    float scale =  matMulScale / outScale;
-    float tempScale = 1.0;
-    assert(scale > 1);
-    uint32_t shift = 0;
-    {
-        while(tempScale<scale)
-        {
-            tempScale *= 2;
-            shift++;
+    assert(tempScale == scale);
+  }
+  // save 6dim tensors
+  {
+    std::ofstream fos("input_6dim_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < inW.size(); i++) {
+      auto data = inW.raw(i);
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
+    }
+    fos.close();
+  }
+  {
+    std::ofstream fos("kernel_6dim_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < filterW.size(); i++) {
+      auto data = filterW.raw(i);
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
+    }
+    fos.close();
+  }
+  // change 6dim to 4dim (using current functions) input
+  // transpose input Nm Cm H W Ns Cs -> Nm Ns H W Cm Cs
+  int8_t *in_NC_HW16 =
+      (int8_t *)malloc(idim.nm * idim.h * idim.w * idim.cm * idim.cs);
+  for (int n = 0; n < idim.nm; n++) {
+    for (int c_ = 0; c_ < idim.h; c_++) {
+      for (int h = 0; h < idim.w; h++) {
+        for (int w = 0; w < idim.cm; w++) {
+          for (int c = 0; c < idim.cs; c++) {
+            *(in_NC_HW16 + n * idim.h * idim.w * idim.cm * idim.cs +
+              c_ * idim.w * idim.cm * idim.cs + h * idim.cm * idim.cs +
+              w * idim.cs + c) =
+                inW.raw(n * idim.cm * idim.h * idim.w * idim.cs +
+                        w * idim.h * idim.w * idim.cs + c_ * idim.w * idim.cs +
+                        h * idim.cs + c);
+          }
         }
-        assert(tempScale==scale);
+      }
     }
-    // save 6dim tensors
-    {
-        std::ofstream fos("input_6dim_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < inW.size(); i++) {
-            auto data = inW.raw(i);
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
+  }
+  // change 6dim to 4dim (using current functions) filter
+  // transpose input:  Nm Cm H W Ns Cs -> Nm Ns H W Cm Cs
+  int8_t *filter_NC_HW16 =
+      (int8_t *)malloc(fdim.nm * fdim.ns * fdim.h * fdim.w * fdim.cm * fdim.cs);
+  for (int n = 0; n < fdim.nm; n++) {
+    for (int n_ = 0; n_ < fdim.ns; n_++) {
+      for (int h = 0; h < fdim.h; h++) {
+        for (int w = 0; w < fdim.w; w++) {
+          for (int c = 0; c < fdim.cm; c++) {
+            for (int c_ = 0; c_ < fdim.cs; c_++) {
+              *(filter_NC_HW16 +
+                n * fdim.ns * fdim.h * fdim.w * fdim.cm * fdim.cs +
+                n_ * fdim.h * fdim.w * fdim.cm * fdim.cs +
+                h * fdim.w * fdim.cm * fdim.cs + w * fdim.cm * fdim.cs +
+                c * fdim.cs + c_) =
+                  filterW.raw(n * fdim.cm * fdim.h * fdim.w * fdim.ns *
+                                  fdim.cs +
+                              c * fdim.h * fdim.w * fdim.ns * fdim.cs +
+                              h * fdim.w * fdim.ns * fdim.cs +
+                              w * fdim.ns * fdim.cs + n_ * fdim.cs + c_);
             }
+          }
         }
-        fos.close();
+      }
     }
-    {
-        std::ofstream fos("kernel_6dim_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < filterW.size(); i++) {
-            auto data = filterW.raw(i);
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
-            }
+  }
+
+  int32_t *bias_NC_HW16 =
+      (int32_t *)malloc(odim.cm * odim.cs * sizeof(int32_t));
+  for (unsigned long i = 0; i < odim.cm * odim.cs; i++) {
+    bias_NC_HW16[i] = biasW.raw(i);
+    if (bias_NC_HW16[i] != 0) {
+      doBias = true;
+    }
+  }
+
+  // save 4dim tensors
+  {
+    std::ofstream fos("input_4dim_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < inW.size(); i++) {
+      auto data = in_NC_HW16[i];
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
+    }
+    fos.close();
+  }
+
+  // save 4dim tensors
+  {
+    std::ofstream fos("kernel_4dim_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < filterW.size(); i++) {
+      auto data = filter_NC_HW16[i];
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
+    }
+    fos.close();
+  }
+
+  {
+    std::ofstream fos("bias_vtainterpreter.bin", std::ios::binary);
+    int32_t data32 = 0;
+    for (size_t i = 0, e = fdim.nm * fdim.ns; i < e; i++) {
+      auto data = bias_NC_HW16[i];
+      fos.write((const char *)&data, 4);
+    }
+    fos.close();
+  }
+
+  // data copy transposed one to input and kernel
+  for (int i = 0; i < inW.size(); i++) {
+    inW.raw(i) = in_NC_HW16[i];
+  }
+  for (int i = 0; i < filterW.size(); i++) {
+    filterW.raw(i) = filter_NC_HW16[i];
+  }
+
+  int8_t *out_NC_HW16 =
+      (int8_t *)malloc(odim.nm * odim.cm * odim.h * odim.w * odim.cs);
+  cpuvtaconvolution(in_NC_HW16, 1.0, 0, filter_NC_HW16, 1.0, 0, bias_NC_HW16,
+                    1.0, 0, out_NC_HW16, scale, 0, idim.nm * idim.ns, idim.h,
+                    idim.w, idim.cs * idim.cm, fdim.ns * fdim.nm, fdim.h,
+                    fdim.w, pad_size, stride_size, 1, 1, doRelu, doBias, odim.h,
+                    odim.w);
+
+  for (int i = 0; i < outW.size(); i++) {
+    outW.raw(i) = out_NC_HW16[i];
+  }
+
+  // save 4dim
+  {
+    std::ofstream fos("output_4dim_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < outW.size(); i++) {
+      auto data = outW.raw(i);
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
+    }
+    fos.close();
+  }
+  // out 4dim -> 6dim
+  // change 6dim to 4dim (using current functions) input
+  // transpose input Nm Ns H W Cm Cs -> Nm Cm H W Ns Cs
+  for (int n = 0; n < odim.nm; n++) {
+    for (int c_ = 0; c_ < odim.cm; c_++) {
+      for (int h = 0; h < odim.h; h++) {
+        for (int w = 0; w < odim.w; w++) {
+          for (int c = 0; c < odim.cs; c++) {
+            *(out_NC_HW16 + n * odim.cm * odim.h * odim.w * odim.cs +
+              c_ * odim.h * odim.w * odim.cs + h * odim.w * odim.cs +
+              w * odim.cs + c) =
+                outW.raw(n * odim.h * odim.w * odim.cm * odim.cs +
+                         h * odim.w * odim.cm * odim.cs +
+                         w * odim.cm * odim.cs + c_ * odim.cs + c);
+          }
         }
-        fos.close();
+      }
     }
-    //change 6dim to 4dim (using current functions) input
-    //transpose input Nm Cm H W Ns Cs -> Nm Ns H W Cm Cs
-    int8_t *in_NC_HW16 = (int8_t *)malloc(idim.nm * idim.h * idim.w * idim.cm * idim.cs);
-    for (int n = 0; n < idim.nm; n++) {
-        for (int c_ = 0; c_ < idim.h; c_++) {
-            for (int h = 0; h < idim.w; h++) {
-                for (int w = 0; w < idim.cm; w++) {
-                    for (int c = 0; c < idim.cs; c++) {
-                        *(in_NC_HW16 + n*idim.h*idim.w*idim.cm*idim.cs + c_*idim.w*idim.cm*idim.cs + h*idim.cm*idim.cs + w*idim.cs + c) =
-                                inW.raw(n*idim.cm*idim.h*idim.w*idim.cs + w*idim.h*idim.w*idim.cs + c_*idim.w*idim.cs + h*idim.cs + c);
-                    }
-                }
-            }
-        }
-    }
-    //change 6dim to 4dim (using current functions) filter
-    //transpose input:  Nm Cm H W Ns Cs -> Nm Ns H W Cm Cs
-    int8_t *filter_NC_HW16 = (int8_t *)malloc(fdim.nm * fdim.ns * fdim.h * fdim.w * fdim.cm * fdim.cs);
-    for (int n = 0; n < fdim.nm; n++) {
-        for (int n_ = 0; n_ < fdim.ns; n_++) {
-            for (int h = 0; h < fdim.h; h++) {
-                for (int w = 0; w < fdim.w; w++) {
-                    for (int c = 0; c < fdim.cm; c++) {
-                        for (int c_ = 0; c_ < fdim.cs; c_++) {
-                            *(filter_NC_HW16 + n*fdim.ns*fdim.h*fdim.w*fdim.cm*fdim.cs + n_*fdim.h*fdim.w*fdim.cm*fdim.cs +
-                            h*fdim.w*fdim.cm*fdim.cs + w*fdim.cm*fdim.cs + c*fdim.cs + c_) =
-                                    filterW.raw(n*fdim.cm*fdim.h*fdim.w*fdim.ns*fdim.cs + c*fdim.h*fdim.w*fdim.ns*fdim.cs +
-                                                        h*fdim.w*fdim.ns*fdim.cs + w*fdim.ns*fdim.cs + n_*fdim.cs +
-                                                        c_);
-                        }
-                    }
-                }
-            }
-        }
-    }
+  }
 
-    int32_t* bias_NC_HW16 = (int32_t *)malloc(odim.cm * odim.cs*sizeof(int32_t));
-    for (unsigned long i = 0 ; i < odim.cm * odim.cs ; i++)
-    {
-        bias_NC_HW16[i] = biasW.raw(i);
-        if(bias_NC_HW16[i]!=0){
-            doBias = true;
-        }
+  for (int i = 0; i < outW.size(); i++) {
+    outW.raw(i) = out_NC_HW16[i];
+  }
+  // save 6dim
+  {
+    std::ofstream fos("output_6dim_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < outW.size(); i++) {
+      auto data = outW.raw(i);
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
     }
+    fos.close();
+  }
 
-    // save 4dim tensors
-    {
-        std::ofstream fos("input_4dim_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < inW.size(); i++) {
-            auto data = in_NC_HW16[i];
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
-            }
-        }
-        fos.close();
-    }
-
-    // save 4dim tensors
-    {
-        std::ofstream fos("kernel_4dim_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < filterW.size(); i++) {
-            auto data = filter_NC_HW16[i];
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
-            }
-        }
-        fos.close();
-    }
-
-    {
-        std::ofstream fos("bias_vtainterpreter.bin", std::ios::binary);
-        int32_t data32 = 0;
-        for (size_t i = 0, e = fdim.nm*fdim.ns; i<e; i++) {
-            auto data = bias_NC_HW16[i];
-            fos.write((const char *)&data, 4);
-        }
-        fos.close();
-    }
-
-    // data copy transposed one to input and kernel
-    for (int i =0; i<inW.size(); i++){
-        inW.raw(i) = in_NC_HW16[i];
-    }
-    for (int i=0; i<filterW.size(); i++){
-        filterW.raw(i) = filter_NC_HW16[i];
-    }
-
-    int8_t *out_NC_HW16 = (int8_t *)malloc(odim.nm * odim.cm * odim.h * odim.w * odim.cs);
-    cpuvtaconvolution(in_NC_HW16, 1.0, 0,
-                      filter_NC_HW16, 1.0, 0,
-                      bias_NC_HW16, 1.0, 0,
-                      out_NC_HW16,scale, 0, idim.nm*idim.ns, idim.h, idim.w, idim.cs*idim.cm, fdim.ns*fdim.nm, fdim.h, fdim.w,
-                      pad_size, stride_size, 1, 1, doRelu, doBias, odim.h, odim.w);
-
-    for (int i =0; i<outW.size(); i++){
-        outW.raw(i) = out_NC_HW16[i];
-    }
-
-    // save 4dim
-    {
-        std::ofstream fos("output_4dim_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < outW.size(); i++) {
-            auto data = outW.raw(i);
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
-            }
-        }
-        fos.close();
-    }
-    //out 4dim -> 6dim
-    //change 6dim to 4dim (using current functions) input
-    //transpose input Nm Ns H W Cm Cs -> Nm Cm H W Ns Cs
-    for (int n = 0; n < odim.nm; n++) {
-        for (int c_ = 0; c_ < odim.cm; c_++) {
-            for (int h = 0; h < odim.h; h++) {
-                for (int w = 0; w < odim.w; w++) {
-                    for (int c = 0; c < odim.cs; c++) {
-                        *(out_NC_HW16 + n*odim.cm*odim.h*odim.w*odim.cs + c_*odim.h*odim.w*odim.cs + h*odim.w*odim.cs + w*odim.cs + c) =
-                                outW.raw(n*odim.h*odim.w*odim.cm*odim.cs + h*odim.w*odim.cm*odim.cs + w*odim.cm*odim.cs + c_*odim.cs + c);
-                    }
-                }
-            }
-        }
-    }
-
-    for (int i =0; i<outW.size(); i++){
-        outW.raw(i) = out_NC_HW16[i];
-    }
-    //save 6dim
-    {
-        std::ofstream fos("output_6dim_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < outW.size(); i++) {
-            auto data = outW.raw(i);
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
-            }
-        }
-        fos.close();
-    }
-
-    free(in_NC_HW16);
-    free(filter_NC_HW16);
-    free(bias_NC_HW16);
-    free(out_NC_HW16);
-
+  free(in_NC_HW16);
+  free(filter_NC_HW16);
+  free(bias_NC_HW16);
+  free(out_NC_HW16);
 }
 
-int BoundVTAInterpreterFunction::cpuvtaconvolution(int8_t* input, float inputScale, int32_t inputOffset, int8_t *kernel, float kernelScale, int32_t kernelOffset,
-                                                   int32_t *bias, float biasScale, int32_t biasOffset, int8_t *output, float outputScale, int32_t outputOffset, dim_t N, dim_t H, dim_t W, dim_t C, dim_t KN, dim_t KH, dim_t KW, int pad_size,
-                      int stride_size, size_t group, size_t dilation, bool doRelu, bool doBias, int out_h, int out_w) {
-    dim_t inCperG = C / group;
-    dim_t outCperG = KN / group;
+int BoundVTAInterpreterFunction::cpuvtaconvolution(
+    int8_t *input, float inputScale, int32_t inputOffset, int8_t *kernel,
+    float kernelScale, int32_t kernelOffset, int32_t *bias, float biasScale,
+    int32_t biasOffset, int8_t *output, float outputScale, int32_t outputOffset,
+    dim_t N, dim_t H, dim_t W, dim_t C, dim_t KN, dim_t KH, dim_t KW,
+    int pad_size, int stride_size, size_t group, size_t dilation, bool doRelu,
+    bool doBias, int out_h, int out_w) {
+  dim_t inCperG = C / group;
+  dim_t outCperG = KN / group;
 
-    float matMulScale = inputScale * kernelScale;
-    float scale =  outputScale / matMulScale;
-    float tempScale = 1.0;
-    assert(scale > 1);
-    uint32_t shift = 0;
-    {
-        while(tempScale<scale)
-        {
-            tempScale *= 2;
-            shift++;
-        }
+  float matMulScale = inputScale * kernelScale;
+  float scale = outputScale / matMulScale;
+  float tempScale = 1.0;
+  assert(scale > 1);
+  uint32_t shift = 0;
+  {
+    while (tempScale < scale) {
+      tempScale *= 2;
+      shift++;
     }
+  }
 
-    for (dim_t n = 0; n < N; n++) {
-        // For each group of input channels:
-        for (dim_t g = 0; g < group; g++) {
+  for (dim_t n = 0; n < N; n++) {
+    // For each group of input channels:
+    for (dim_t g = 0; g < group; g++) {
 
-            // For each output channel in the group:
-            for (dim_t d = g * outCperG; d < (g + 1) * outCperG; d++) {
+      // For each output channel in the group:
+      for (dim_t d = g * outCperG; d < (g + 1) * outCperG; d++) {
 
-                // For each convolution 'jump' in the input tensor:
-                ssize_t x = -ssize_t(pad_size);
-                for (dim_t ax = 0; ax < out_h; x += stride_size, ax++) {
-                    ssize_t y = -ssize_t(pad_size);
-                    for (dim_t ay = 0; ay < out_w; y += stride_size, ay++) {
+        // For each convolution 'jump' in the input tensor:
+        ssize_t x = -ssize_t(pad_size);
+        for (dim_t ax = 0; ax < out_h; x += stride_size, ax++) {
+          ssize_t y = -ssize_t(pad_size);
+          for (dim_t ay = 0; ay < out_w; y += stride_size, ay++) {
 
-                        // For each element in the convolution-filter:
-                        int32_t sum = 0;
-                        for (dim_t fx = 0; fx < KH; fx++) {
-                            for (dim_t fy = 0; fy < KW; fy++) {
-                                int64_t ox = x + fx * dilation;
-                                int64_t oy = y + fy * dilation;
+            // For each element in the convolution-filter:
+            int32_t sum = 0;
+            for (dim_t fx = 0; fx < KH; fx++) {
+              for (dim_t fy = 0; fy < KW; fy++) {
+                int64_t ox = x + fx * dilation;
+                int64_t oy = y + fy * dilation;
 
-                                // Ignore index access below zero (this is due to padding).
-                                if (ox < 0 || oy < 0 || ox >= ssize_t(H) ||
-                                    oy >= int64_t(W)) {
-                                    continue;
-                                }
-                                for (dim_t fd = 0; fd < inCperG; fd++) {
+                // Ignore index access below zero (this is due to padding).
+                if (ox < 0 || oy < 0 || ox >= ssize_t(H) || oy >= int64_t(W)) {
+                  continue;
+                }
+                for (dim_t fd = 0; fd < inCperG; fd++) {
 
-                                    int32_t F = (int32_t)*(kernel+d*KH*KW*inCperG + fx*KW*inCperG + fy*inCperG + fd);
-                                    int32_t I = (int32_t)*(input+n*H*W*C + ox*W*C + oy*C+ (g*inCperG +fd));
-                                    // We represent the element multiplication with offset as
-                                    // (value - offset).
-                                    sum += (F) * (I);
-                                }
-                            }
-                        }
+                  int32_t F =
+                      (int32_t) * (kernel + d * KH * KW * inCperG +
+                                   fx * KW * inCperG + fy * inCperG + fd);
+                  int32_t I = (int32_t) * (input + n * H * W * C + ox * W * C +
+                                           oy * C + (g * inCperG + fd));
+                  // We represent the element multiplication with offset as
+                  // (value - offset).
+                  sum += (F) * (I);
+                }
+              }
+            }
 
-                        // Scale the bias to match the scale of the matrix multiplication.
-                        int32_t B = *((int32_t *)bias+d);
+            // Scale the bias to match the scale of the matrix multiplication.
+            int32_t B = *((int32_t *)bias + d);
 
-                        // Add the bias.
-                        sum += B;
+            // Add the bias.
+            sum += B;
 
-                        if(doRelu && sum<0){
-                            sum = 0;
-                        }
-                        // Scale the result back to the expected destination scale.
-                        auto out32 = sum >> shift;
-                        int8_t out8;
-                        if(out32>127) out8=127;
-                        else if(out32<-128) out8=-128;
-                        else out8=(int8_t)out32;
-                        *(output + n*out_h*out_w*KN + ax*out_w*KN + ay*KN + d) = out8;
-                    } // W
-                }   // H
-            }     // C
-        }       // G
-    }         // NS
-    return 0;
-
+            if (doRelu && sum < 0) {
+              sum = 0;
+            }
+            // Scale the result back to the expected destination scale.
+            auto out32 = sum >> shift;
+            int8_t out8;
+            if (out32 > 127)
+              out8 = 127;
+            else if (out32 < -128)
+              out8 = -128;
+            else
+              out8 = (int8_t)out32;
+            *(output + n * out_h * out_w * KN + ax * out_w * KN + ay * KN + d) =
+                out8;
+          } // W
+        }   // H
+      }     // C
+    }       // G
+  }         // NS
+  return 0;
 }
-
 
 /// This is the quantized implementation of Convolution.
 void BoundVTAInterpreterFunction::fwdVTAConvolutionInstQuantizedImpl(
@@ -774,47 +795,47 @@ void BoundVTAInterpreterFunction::fwdVTAConvolutionInstQuantizedImpl(
   auto biasW = getWeightHandle<int32_t>(biasV);
 
 #ifdef VTA_DEBUG_MODE
-    // save 4dim tensors
-    {
-        std::ofstream fos("input_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < inW.size(); i++) {
-            auto data = inW.raw(i);
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
-            }
-        }
-        fos.close();
+  // save 4dim tensors
+  {
+    std::ofstream fos("input_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < inW.size(); i++) {
+      auto data = inW.raw(i);
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
     }
+    fos.close();
+  }
 
-    // save 4dim tensors
-    {
-        std::ofstream fos("kernel_vtainterpreter.bin", std::ios::binary);
-        int16_t data16 = 0;
-        for (size_t i = 0; i < filterW.size(); i++) {
-            auto data = filterW.raw(i);
-            if (i % 2 == 0) {
-                data16 = 0xff & data;
-            } else {
-                data16 = data16 | data << 8;
-                fos.write((const char *)&data16, 2);
-            }
-        }
-        fos.close();
+  // save 4dim tensors
+  {
+    std::ofstream fos("kernel_vtainterpreter.bin", std::ios::binary);
+    int16_t data16 = 0;
+    for (size_t i = 0; i < filterW.size(); i++) {
+      auto data = filterW.raw(i);
+      if (i % 2 == 0) {
+        data16 = 0xff & data;
+      } else {
+        data16 = data16 | data << 8;
+        fos.write((const char *)&data16, 2);
+      }
     }
+    fos.close();
+  }
 
-    {
-        std::ofstream fos("bias_vtainterpreter.bin", std::ios::binary);
-        int32_t data32 = 0;
-        for (size_t i = 0, e = biasW.size(); i<e; i++) {
-            auto data = biasW.raw(i);
-            fos.write((const char *)&data, 4);
-        }
-        fos.close();
+  {
+    std::ofstream fos("bias_vtainterpreter.bin", std::ios::binary);
+    int32_t data32 = 0;
+    for (size_t i = 0, e = biasW.size(); i < e; i++) {
+      auto data = biasW.raw(i);
+      fos.write((const char *)&data, 4);
     }
+    fos.close();
+  }
 #endif
 
   ShapeNHWC odim(outW.dims());
@@ -1020,7 +1041,6 @@ void BoundVTAInterpreterFunction::fwdConvolutionInst(const ConvolutionInst *I) {
   size_t group = I->getGroup();
   int32_t fuseRelu = 0;
 
-
   if (I->getFusedActivation() == FusedActivation::RELU) {
     fuseRelu = 1;
   }
@@ -1060,14 +1080,17 @@ void BoundVTAInterpreterFunction::fwdConvolutionInst(const ConvolutionInst *I) {
     int32_t inOffset = inTy->getOffset();
     int32_t filterOffset = filterTy->getOffset();
     int32_t biasOffset = biasTy->getOffset();
-    if (idim.c%16 ==0 && odim.c%16 ==0 && tempScale == scale && outOffset == 0 && inOffset == 0 &&
-        biasScale==matMulScale && filterOffset == 0 && biasOffset == 0) {
-      llvm::outs()<<"VTA Conv"<<"\n";
+    if (idim.c % 16 == 0 && odim.c % 16 == 0 && tempScale == scale &&
+        outOffset == 0 && inOffset == 0 && biasScale == matMulScale &&
+        filterOffset == 0 && biasOffset == 0) {
+      llvm::outs() << "VTA Conv"
+                   << "\n";
       fwdVTAConvolutionInstQuantizedImpl(
           I->getSrc(), I->getDest(), I->getFilter(), I->getBias(), kernelSizes,
           strides, pads, group, I->getDilation(), fuseRelu);
     } else {
-      llvm::outs()<<"CPU Conv"<<"\n";
+      llvm::outs() << "CPU Conv"
+                   << "\n";
       dispatchQuantizedWithAccumulationAndBiasImpl(
           fwdConvolutionInstQuantizedImpl, I->getSrc()->getElementType(),
           I->getBias()->getElementType(), I->getSrc(), I->getDest(),
@@ -2092,7 +2115,8 @@ void BoundVTAInterpreterFunction::fwdAdaptiveAvgPoolGradInst(
 }
 
 template <typename ElemTy>
-void BoundVTAInterpreterFunction::fwdElementSignInstImpl(const ElementSignInst *I) {
+void BoundVTAInterpreterFunction::fwdElementSignInstImpl(
+    const ElementSignInst *I) {
 
   auto inW = getWeightHandle<int8_t>(I->getSrc());
   auto outW = getWeightHandle<int8_t>(I->getDest());
@@ -2105,10 +2129,10 @@ void BoundVTAInterpreterFunction::fwdElementSignInstImpl(const ElementSignInst *
 void BoundVTAInterpreterFunction::fwdElementSignInst(
     const glow::ElementSignInst *I) {
   switch (I->getSrc()->getElementType()) {
-    case ElemKind::FloatTy:
+  case ElemKind::FloatTy:
     fwdElementSignInstImpl<float>(I);
     break;
-    case ElemKind::Int8QTy:
+  case ElemKind::Int8QTy:
     fwdElementSignInstImpl<int8_t>(I);
     break;
   default:
@@ -2116,7 +2140,6 @@ void BoundVTAInterpreterFunction::fwdElementSignInst(
     break;
   }
 }
-
 
 void BoundVTAInterpreterFunction::fwdMaxPoolWithArgmaxGradInst(
     const MaxPoolWithArgmaxGradInst *I) {
@@ -2283,7 +2306,7 @@ void BoundVTAInterpreterFunction::fwdReluInst(const ReluInst *I) {
     outScale = 1 / outScale;
     float scale = inScale / outScale;
     float tempScale = 1.0;
-    //assert(scale > 1); //in relu case, outScale could be less than inScale
+    // assert(scale > 1); //in relu case, outScale could be less than inScale
     // because of negative value.
     /*uint32_t shift = 0;
     {
@@ -2299,7 +2322,8 @@ void BoundVTAInterpreterFunction::fwdReluInst(const ReluInst *I) {
     if (outOffset == 0 && inOffset == 0) {
       fwdVTAReluInstQuantizedImpl(I->getSrc(), I->getDest(), scale);
     } else {
-      llvm::outs()<<"Unsupported Quantized Relu"<<"\n";
+      llvm::outs() << "Unsupported Quantized Relu"
+                   << "\n";
       return;
     }
   } else {
@@ -2338,7 +2362,7 @@ void BoundVTAInterpreterFunction::fwdVTAReluInstQuantizedImpl(Value *inV,
   }
   */
 
-  if (scale < 1){
+  if (scale < 1) {
     // Compute left bit shifting
     while (tempScale > scale) {
       tempScale /= 2;
@@ -2349,7 +2373,7 @@ void BoundVTAInterpreterFunction::fwdVTAReluInstQuantizedImpl(Value *inV,
       val = val << shift;
       outW.raw(i) = quantization::clip<int32_t, int8_t>(MAX(val, 0));
     }
-  }else{
+  } else {
     // Compute right bit shifting
     while (tempScale < scale) {
       tempScale *= 2;
@@ -3976,7 +4000,7 @@ void BoundVTAInterpreterFunction::fwdModuloInst(glow::ModuloInst const *I) {
 ///=============== Trigonometric Operators===============
 template <typename ElemTy, typename InstKind>
 void BoundVTAInterpreterFunction::fwdUnaryTrigonometricImpl(
-        const InstKind *I, std::function<float(float)> func) {
+    const InstKind *I, std::function<float(float)> func) {
   Value *inpV = I->getSrc();
   Value *outV = I->getDest();
   auto inpTy = inpV->getType();
@@ -3991,10 +4015,10 @@ void BoundVTAInterpreterFunction::fwdUnaryTrigonometricImpl(
     int32_t outOffset = outTy->getOffset();
     for (size_t i = 0, e = outH.size(); i < e; ++i) {
       float inpVal =
-              quantization::dequantize<ElemTy>(inpH.raw(i), {inpScale, inpOffset});
+          quantization::dequantize<ElemTy>(inpH.raw(i), {inpScale, inpOffset});
       float outVal = func(inpVal);
       outH.raw(i) =
-              quantization::quantize<ElemTy>(outVal, {outScale, outOffset});
+          quantization::quantize<ElemTy>(outVal, {outScale, outOffset});
     }
   } else {
     for (size_t i = 0, e = outH.size(); i < e; ++i) {
@@ -4475,7 +4499,7 @@ void BoundVTAInterpreterFunction::fwdBatchedReduceAddInst(
 /// Macro to define ReduceMin/Max kernel implementation.
 #define DEFINE_REDUCEMINMAX_INST_IMPL(func, compare)                           \
   template <typename ElemTy>                                                   \
-  void BoundVTAInterpreterFunction::fwdBatched##func##InstImpl(                   \
+  void BoundVTAInterpreterFunction::fwdBatched##func##InstImpl(                \
       Value *batch, Value *dest, const ShapeVector &eBatchDims,                \
       const ShapeVector &eDestDims, ElemTy init) {                             \
     static_assert(max_tensor_dimensions == 6,                                  \
@@ -4524,7 +4548,7 @@ DEFINE_REDUCEMINMAX_INST_IMPL(ReduceMin, std::min)
 
 /// Macro to define ReduceMin/Max instruction.
 #define DEFINE_REDUCEMINMAX_INST(func, init)                                   \
-  void BoundVTAInterpreterFunction::fwdBatched##func##Inst(                       \
+  void BoundVTAInterpreterFunction::fwdBatched##func##Inst(                    \
       const glow::Batched##func##Inst *I) {                                    \
                                                                                \
     auto *batch = I->getBatch();                                               \
@@ -4551,7 +4575,6 @@ DEFINE_REDUCEMINMAX_INST(ReduceMin, std::numeric_limits<int32_t>::max())
 
 // Define fwdBatchedMaxInst
 DEFINE_REDUCEMINMAX_INST(ReduceMax, std::numeric_limits<int32_t>::min())
-
 
 template <typename ElemTy>
 void BoundVTAInterpreterFunction::fwdCumSumInstImpl(Value *input, Value *dest,
@@ -6364,16 +6387,16 @@ void BoundVTAInterpreterFunction::fwdMFCCInst(glow::MFCCInst const *I) {
 namespace {
 /// Positions of the input values to be used for bilinear interpolation for each
 /// sample point and the weights to use for each.
-  template <typename T> struct BinGrid {
-    dim_t left;
-    dim_t top;
-    dim_t right;
-    dim_t bottom;
-    T leftW;
-    T topW;
-    T rightW;
-    T bottomW;
-  };
+template <typename T> struct BinGrid {
+  dim_t left;
+  dim_t top;
+  dim_t right;
+  dim_t bottom;
+  T leftW;
+  T topW;
+  T rightW;
+  T bottomW;
+};
 } // namespace
 
 /// Function to calculate the xy coordinates of the resized image (grid)
@@ -6395,10 +6418,10 @@ namespace {
 /// sample point value.
 template <typename T>
 static std::vector<BinGrid<T>> getROIAlignInterpolationCoordinates(
-        dim_t featureMapHeight, dim_t featureMapWidth, dim_t outputHeight,
-        dim_t outputWidth, dim_t samplingRatioH, dim_t samplingRatioW, T boxHeight,
-        T boxWidth, T yRef, T xRef, bool rotated, T theta, T boxCenterH,
-        T boxCenterW) {
+    dim_t featureMapHeight, dim_t featureMapWidth, dim_t outputHeight,
+    dim_t outputWidth, dim_t samplingRatioH, dim_t samplingRatioW, T boxHeight,
+    T boxWidth, T yRef, T xRef, bool rotated, T theta, T boxCenterH,
+    T boxCenterW) {
 
   T sinTheta = T(0.0f);
   T cosTheta = T(0.0f);
@@ -6478,7 +6501,7 @@ static std::vector<BinGrid<T>> getROIAlignInterpolationCoordinates(
 // pooling with minor modifications in the crop_and_resize.
 template <typename T>
 void BoundVTAInterpreterFunction::fwdROIAlignInstFloatImpl(
-        glow::ROIAlignInst const *I) {
+    glow::ROIAlignInst const *I) {
   auto featureMap = I->getFeatureMap();
   auto boxes = I->getBoxes();
   auto batchIndices = I->getBatchIndices();
@@ -6519,10 +6542,10 @@ void BoundVTAInterpreterFunction::fwdROIAlignInstFloatImpl(
     for (dim_t b = 0; b < numBoxes; b++) {
       if (batchIndicesElemKind == ElemKind::Int32ITy) {
         batchIndicesExtracted.push_back(
-                batchIndicesTensor->getHandle<int32_t>().at({b}));
+            batchIndicesTensor->getHandle<int32_t>().at({b}));
       } else {
         batchIndicesExtracted.push_back(
-                batchIndicesTensor->getHandle<int64_t>().at({b}));
+            batchIndicesTensor->getHandle<int64_t>().at({b}));
       }
     }
   }
@@ -6571,10 +6594,10 @@ void BoundVTAInterpreterFunction::fwdROIAlignInstFloatImpl(
       xRef = (T(-1.0) * boxWidth) / T(2.0);
     } else {
       llvm::SmallVector<T, 4> box = {
-              boxesH.at({b, boxesStartCol + 0}) * spatialScale - offset,
-              boxesH.at({b, boxesStartCol + 1}) * spatialScale - offset,
-              boxesH.at({b, boxesStartCol + 2}) * spatialScale - offset,
-              boxesH.at({b, boxesStartCol + 3}) * spatialScale - offset};
+          boxesH.at({b, boxesStartCol + 0}) * spatialScale - offset,
+          boxesH.at({b, boxesStartCol + 1}) * spatialScale - offset,
+          boxesH.at({b, boxesStartCol + 2}) * spatialScale - offset,
+          boxesH.at({b, boxesStartCol + 3}) * spatialScale - offset};
 
       if (aligned) {
         CHECK_GE(box[3] - box[1], T(0.0)) << "Roi height cannot be negative.";
@@ -6593,17 +6616,17 @@ void BoundVTAInterpreterFunction::fwdROIAlignInstFloatImpl(
     }
 
     const dim_t samplingRatioH =
-            (samplingRatio > 0) ? samplingRatio
-                                : std::ceil(float(boxHeight) / outputHeight);
+        (samplingRatio > 0) ? samplingRatio
+                            : std::ceil(float(boxHeight) / outputHeight);
     const dim_t samplingRatioW = (samplingRatio > 0)
-                                 ? samplingRatio
-                                 : std::ceil(float(boxWidth) / outputWidth);
+                                     ? samplingRatio
+                                     : std::ceil(float(boxWidth) / outputWidth);
 
     // get the xy coordinates in the resized image(grid)
     std::vector<BinGrid<T>> binGrids = getROIAlignInterpolationCoordinates<T>(
-            featureMapHeight, featureMapWidth, outputHeight, outputWidth,
-            samplingRatioH, samplingRatioW, boxHeight, boxWidth, yRef, xRef,
-            rotated, theta, boxCenterH, boxCenterW);
+        featureMapHeight, featureMapWidth, outputHeight, outputWidth,
+        samplingRatioH, samplingRatioW, boxHeight, boxWidth, yRef, xRef,
+        rotated, theta, boxCenterH, boxCenterW);
 
     uint64_t binCount = 0;
     for (dim_t oh = 0; oh < outputHeight; ++oh) {
@@ -6616,13 +6639,13 @@ void BoundVTAInterpreterFunction::fwdROIAlignInstFloatImpl(
               // The four values of  the i/p image surrounding the point of
               // interest (POI) in the resized image
               const T topLeft =
-                      featureMapH.at({batchIndex, bg.top, bg.left, d});
+                  featureMapH.at({batchIndex, bg.top, bg.left, d});
               const T topRight =
-                      featureMapH.at({batchIndex, bg.top, bg.right, d});
+                  featureMapH.at({batchIndex, bg.top, bg.right, d});
               const T bottomLeft =
-                      featureMapH.at({batchIndex, bg.bottom, bg.left, d});
+                  featureMapH.at({batchIndex, bg.bottom, bg.left, d});
               const T bottomRight =
-                      featureMapH.at({batchIndex, bg.bottom, bg.right, d});
+                  featureMapH.at({batchIndex, bg.bottom, bg.right, d});
 
               // bilinear interpolation
               const T value = (topLeft * (bg.topW * bg.leftW)) +
@@ -6635,9 +6658,9 @@ void BoundVTAInterpreterFunction::fwdROIAlignInstFloatImpl(
           }   // end of h
           // {Average or Max} pooling
           resultH.at({b, oh, ow, d}) =
-                  (mode == PoolingMode::AVG)
+              (mode == PoolingMode::AVG)
                   ? std::accumulate(values.begin(), values.end(), T(0.0)) /
-                    T(values.size())
+                        T(values.size())
                   : *std::max_element(values.begin(), values.end());
 
           binCount = binCount - (samplingRatioH * samplingRatioW);
@@ -6688,19 +6711,19 @@ bbox_transform_upright(Handle<float> &boxesOut, const Handle<float> &boxes,
   std::vector<float> widths(rows), heights(rows), ctrX(rows), ctrY(rows);
   for (dim_t i = 0; i < rows; i++) {
     widths[i] = boxes.at({startRowBoxes + i, startColBoxes + dim_t(2)}) *
-                scaleBeforeInv -
+                    scaleBeforeInv -
                 boxes.at({startRowBoxes + i, startColBoxes}) * scaleBeforeInv +
                 float(int(legacyPlusOne));
     heights[i] = boxes.at({startRowBoxes + i, startColBoxes + dim_t(3)}) *
-                 scaleBeforeInv -
+                     scaleBeforeInv -
                  boxes.at({startRowBoxes + i, startColBoxes + dim_t(1)}) *
-                 scaleBeforeInv +
+                     scaleBeforeInv +
                  float(int(legacyPlusOne));
 
     ctrX[i] = boxes.at({startRowBoxes + i, startColBoxes}) * scaleBeforeInv +
               float(0.5) * widths[i];
     ctrY[i] = boxes.at({startRowBoxes + i, startColBoxes + dim_t(1)}) *
-              scaleBeforeInv +
+                  scaleBeforeInv +
               float(0.5) * heights[i];
   }
 
@@ -6708,13 +6731,13 @@ bbox_transform_upright(Handle<float> &boxesOut, const Handle<float> &boxes,
   for (dim_t i = 0; i < rows; i++) {
     dx[i] = deltas.at({startRowDeltas + i, startColDeltas}) / weights[0];
     dy[i] =
-            deltas.at({startRowDeltas + i, startColDeltas + dim_t(1)}) / weights[1];
+        deltas.at({startRowDeltas + i, startColDeltas + dim_t(1)}) / weights[1];
     dw[i] = std::min(
-            deltas.at({startRowDeltas + i, startColDeltas + dim_t(2)}) / weights[2],
-            bboxXformClip);
+        deltas.at({startRowDeltas + i, startColDeltas + dim_t(2)}) / weights[2],
+        bboxXformClip);
     dh[i] = std::min(
-            deltas.at({startRowDeltas + i, startColDeltas + dim_t(3)}) / weights[3],
-            bboxXformClip);
+        deltas.at({startRowDeltas + i, startColDeltas + dim_t(3)}) / weights[3],
+        bboxXformClip);
   }
 
   std::vector<float> predCtrX(rows), predCtrY(rows), predW(rows), predH(rows);
@@ -6728,56 +6751,56 @@ bbox_transform_upright(Handle<float> &boxesOut, const Handle<float> &boxes,
   for (dim_t i = 0; i < rows; i++) {
     // x1
     boxesOut.at({startRowBoxesOut + i, startColBoxesOut}) =
-            predCtrX[i] - float(0.5) * predW[i];
+        predCtrX[i] - float(0.5) * predW[i];
     // x2
     boxesOut.at({startRowBoxesOut + i, startColBoxesOut + dim_t(1)}) =
-            predCtrY[i] - float(0.5) * predH[i];
+        predCtrY[i] - float(0.5) * predH[i];
     // y1
     boxesOut.at({startRowBoxesOut + i, startColBoxesOut + dim_t(2)}) =
-            predCtrX[i] + float(0.5) * predW[i] - float(int(legacyPlusOne));
+        predCtrX[i] + float(0.5) * predW[i] - float(int(legacyPlusOne));
     // y2
     boxesOut.at({startRowBoxesOut + i, startColBoxesOut + dim_t(3)}) =
-            predCtrY[i] + float(0.5) * predH[i] - float(int(legacyPlusOne));
+        predCtrY[i] + float(0.5) * predH[i] - float(int(legacyPlusOne));
   }
 }
 
 // Clip boxes to image boundaries
 // boxes: pixel coordinates of bounding box, size (M * 4)
 void VTA_clip_boxes_upright(Handle<float> &boxes, dim_t startRowBoxes,
-                        dim_t startColBoxes, dim_t rows, dim_t cols, int height,
-                        int width, float scaleAfter,
-                        bool legacyPlusOne = false) {
+                            dim_t startColBoxes, dim_t rows, dim_t cols,
+                            int height, int width, float scaleAfter,
+                            bool legacyPlusOne = false) {
   for (dim_t i = 0; i < rows; i++) {
     // x1 >= 0 && x1 < width
     boxes.at({startRowBoxes + i, startColBoxes}) =
-            scaleAfter *
-            std::max(std::min(boxes.at({startRowBoxes + i, startColBoxes}),
-                              float(width - int(legacyPlusOne))),
-                     float(0));
+        scaleAfter *
+        std::max(std::min(boxes.at({startRowBoxes + i, startColBoxes}),
+                          float(width - int(legacyPlusOne))),
+                 float(0));
     // y1 >= 0 && y1 < height
     boxes.at({startRowBoxes + i, startColBoxes + dim_t(1)}) =
-            scaleAfter * std::max(std::min(boxes.at({startRowBoxes + i,
-                                                     startColBoxes + dim_t(1)}),
-                                           float(height - int(legacyPlusOne))),
-                                  float(0));
+        scaleAfter * std::max(std::min(boxes.at({startRowBoxes + i,
+                                                 startColBoxes + dim_t(1)}),
+                                       float(height - int(legacyPlusOne))),
+                              float(0));
 
     // x2 >= 0 && x2 < width
     boxes.at({startRowBoxes + i, startColBoxes + 2}) =
-            scaleAfter * std::max(std::min(boxes.at({startRowBoxes + i,
-                                                     startColBoxes + dim_t(2)}),
-                                           float(width - int(legacyPlusOne))),
-                                  float(0));
+        scaleAfter * std::max(std::min(boxes.at({startRowBoxes + i,
+                                                 startColBoxes + dim_t(2)}),
+                                       float(width - int(legacyPlusOne))),
+                              float(0));
     // y2 >= 0 && y2 < height
     boxes.at({startRowBoxes + i, startColBoxes + 3}) =
-            scaleAfter * std::max(std::min(boxes.at({startRowBoxes + i,
-                                                     startColBoxes + dim_t(3)}),
-                                           float(height - int(legacyPlusOne))),
-                                  float(0));
+        scaleAfter * std::max(std::min(boxes.at({startRowBoxes + i,
+                                                 startColBoxes + dim_t(3)}),
+                                       float(height - int(legacyPlusOne))),
+                              float(0));
   }
 }
 
 void BoundVTAInterpreterFunction::fwdBBoxTransformInstFloatImpl(
-        glow::BBoxTransformInst const *I) {
+    glow::BBoxTransformInst const *I) {
   auto roiIn = I->getRois();
   auto deltaIn = I->getDeltas();
   auto imInfoIn = I->getImInfo();
@@ -6845,7 +6868,7 @@ void BoundVTAInterpreterFunction::fwdBBoxTransformInstFloatImpl(
                              bboxXformClip, scaleBeforeInv, legacyPlusOne);
 
       VTA_clip_boxes_upright(boxOutH, startRowDelta, startColDelta, rows, cols,
-                         imgH, imgW, scaleAfter, legacyPlusOne);
+                             imgH, imgW, scaleAfter, legacyPlusOne);
     }
 
     offset += rows;
@@ -6857,6 +6880,6 @@ void BoundVTAInterpreterFunction::fwdBBoxTransformInstFloatImpl(
 }
 
 void BoundVTAInterpreterFunction::fwdBBoxTransformInst(
-        glow::BBoxTransformInst const *I) {
+    glow::BBoxTransformInst const *I) {
   fwdBBoxTransformInstFloatImpl(I);
 }

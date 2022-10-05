@@ -27,11 +27,13 @@ namespace runtime {
 unsigned GlowVTAInterpreterMemory = 0;
 static llvm::cl::OptionCategory
     VTAInterpreterBackendCat("Glow VTAInterpreter Backend Options");
-static llvm::cl::opt<unsigned, /* ExternalStorage */ true> VTAInterpreterMaxMemOpt(
-    "VTAInterpreter-memory",
-    llvm::cl::desc("VTAInterpreter DeviceManager maximum memory in kilobytes"),
-    llvm::cl::location(GlowVTAInterpreterMemory),
-    llvm::cl::cat(VTAInterpreterBackendCat));
+static llvm::cl::opt<unsigned, /* ExternalStorage */ true>
+    VTAInterpreterMaxMemOpt(
+        "VTAInterpreter-memory",
+        llvm::cl::desc(
+            "VTAInterpreter DeviceManager maximum memory in kilobytes"),
+        llvm::cl::location(GlowVTAInterpreterMemory),
+        llvm::cl::cat(VTAInterpreterBackendCat));
 
 DeviceManager *createVTAInterpreterDeviceManager(const DeviceConfig &config) {
   if (GlowVTAInterpreterMemory) {
@@ -67,8 +69,8 @@ DeviceInfo VTAInterpreterDeviceManager::getDeviceInfo() const {
 }
 
 void VTAInterpreterDeviceManager::addNetworkImpl(const Module *module,
-                                              FunctionMapTy functions,
-                                              ReadyCBTy readyCB) {
+                                                 FunctionMapTy functions,
+                                                 ReadyCBTy readyCB) {
   DCHECK(readyCB != nullptr);
 
   uint64_t allFunctionsMemoryBytes{0};
@@ -87,10 +89,11 @@ void VTAInterpreterDeviceManager::addNetworkImpl(const Module *module,
     }
 
     if (func.second->getCompileBackendName() != VTAInterpreter::getName()) {
-      readyCB(module, MAKE_ERR(llvm::formatv("Failed to add network: function "
-                                             "{0} is not a VTAInterpreterFunction",
-                                             func.first)
-                                   .str()));
+      readyCB(module,
+              MAKE_ERR(llvm::formatv("Failed to add network: function "
+                                     "{0} is not a VTAInterpreterFunction",
+                                     func.first)
+                           .str()));
       return;
     }
 
@@ -149,7 +152,7 @@ void VTAInterpreterDeviceManager::transferStaticPlaceholderToDevice(
 }
 
 void VTAInterpreterDeviceManager::evictNetworkImpl(std::string functionName,
-                                                EvictFunctionCBTy evictCB) {
+                                                   EvictFunctionCBTy evictCB) {
   DCHECK(evictCB != nullptr);
 
   auto it = functions_.find(functionName);

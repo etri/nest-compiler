@@ -182,17 +182,13 @@ using namespace glow;
                        typename std::remove_cv<ElemTy>::type>::value,          \
       "This implementation is for arithmetic values only")
 
-
-
 //===----------------------------------------------------------------------===//
 //                       Arithmetic operations
 //===----------------------------------------------------------------------===//
 
-
-void BoundVTAFunction::fwdElementAddInstI8Impl(
-    const ElementAddInst *I) {
+void BoundVTAFunction::fwdElementAddInstI8Impl(const ElementAddInst *I) {
   assert(getTensor(I->getLHS())->getType().isQuantizedType() &&
-      "Wrong function");
+         "Wrong function");
   auto lhsTy = I->getLHS()->getType();
   auto rhsTy = I->getRHS()->getType();
   auto destTy = I->getDest()->getType();
@@ -231,7 +227,6 @@ void BoundVTAFunction::fwdElementAddInst(const ElementAddInst *I) {
 
   llvm_unreachable("Not supported for VTA");
 }
-
 
 template <typename ElemTy>
 void BoundVTAFunction::fwdElementSubInstArithmeticImpl(
@@ -337,11 +332,9 @@ void BoundVTAFunction::fwdElementDivInst(const ElementDivInst *I) {
   }
 }
 
-
-void BoundVTAFunction::fwdElementMaxInstI8Impl(
-    const ElementMaxInst *I) {
+void BoundVTAFunction::fwdElementMaxInstI8Impl(const ElementMaxInst *I) {
   assert(getTensor(I->getLHS())->getType().isQuantizedType() &&
-      "Wrong function");
+         "Wrong function");
   auto lhsTy = I->getLHS()->getType();
   auto rhsTy = I->getRHS()->getType();
   auto destTy = I->getDest()->getType();
@@ -364,7 +357,6 @@ void BoundVTAFunction::fwdElementMaxInstI8Impl(
   }
 }
 
-
 void BoundVTAFunction::fwdElementMaxInst(const ElementMaxInst *I) {
   if (getTensor(I->getLHS())->getType().isQuantizedType()) {
     fwdElementMaxInstI8Impl(I);
@@ -376,7 +368,7 @@ void BoundVTAFunction::fwdElementMaxInst(const ElementMaxInst *I) {
 
 void BoundVTAFunction::fwdElementSignInstI8Impl(const ElementSignInst *I) {
   assert(getTensor(I->getSrc())->getType().isQuantizedType() &&
-      "Wrong function");
+         "Wrong function");
 
   auto inW = getWeightHandle<int8_t>(I->getSrc());
   auto outW = getWeightHandle<int8_t>(I->getDest());
@@ -399,13 +391,13 @@ void BoundVTAFunction::fwdElementSignInst(const ElementSignInst *I) {
 //                       Convolution
 //===----------------------------------------------------------------------===//
 
-
 /// This is the quantized implementation of Convolution.
 template <typename ElemTy, typename AccumulatorTy, typename BiasElemTy>
 void BoundVTAFunction::fwdConvolutionInstQuantizedImpl(
     Value *inV, Value *outV, Value *filterV, Value *biasV,
     llvm::ArrayRef<unsigned_t> kernelSizes, llvm::ArrayRef<unsigned_t> strides,
-    llvm::ArrayRef<unsigned_t> pads, size_t group, size_t dilation, bool doRelu) {
+    llvm::ArrayRef<unsigned_t> pads, size_t group, size_t dilation,
+    bool doRelu) {
   auto inW = getWeightHandle<ElemTy>(inV);
   auto outW = getWeightHandle<ElemTy>(outV);
   auto filterW = getWeightHandle<ElemTy>(filterV);
@@ -481,11 +473,11 @@ void BoundVTAFunction::fwdConvolutionInstQuantizedImpl(
 
             // Scale the bias to match the scale of the matrix multiplication.
             AccumulatorTy B = std::round(float(biasW.at({d}) - biasOffset) *
-                (biasScale / matMulScale));
+                                         (biasScale / matMulScale));
 
             // Add the bias.
             sum += B;
-            if(doRelu && sum<0)
+            if (doRelu && sum < 0)
               sum = 0;
             // Scale the result back to the expected destination scale.
             outW.at({n, ax, ay, d}) = quantization::clip<AccumulatorTy, ElemTy>(
@@ -609,9 +601,9 @@ void BoundVTAFunction::fwdVTAConvolutionInstQuantizedImpl(
   }         // N
 }
 
-
 void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
-  llvm::outs() << "Found VTAConvolution but VTAConv is not yet supported on VTA\n";
+  llvm::outs()
+      << "Found VTAConvolution but VTAConv is not yet supported on VTA\n";
   assert(I->getKind() == Kinded::Kind::VTAConvolutionInstKind);
   auto *CI = llvm::cast<VTAConvolutionInst>(I);
   assert(CI);
@@ -627,8 +619,8 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   auto outW = getWeightHandle<int8_t>(CI->getDest());
   ShapeVTAIO odim(outW.dims());
 
-  assert(CI->getSrc()->getElementType() ==  ElemKind::Int8QTy &&
-     CI->getBias()->getElementType() ==  ElemKind::Int32QTy);
+  assert(CI->getSrc()->getElementType() == ElemKind::Int8QTy &&
+         CI->getBias()->getElementType() == ElemKind::Int32QTy);
 
   Value *inV = CI->getSrc();
   Value *outV = CI->getDest();
@@ -642,7 +634,7 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
 
   ShapeHW kdim(kernelSizes);
   ShapeHW sdim(strides);
-  assert(group==1);
+  assert(group == 1);
 
   PaddingTLBR pdim(pads);
   auto outTy = outV->getType();
@@ -655,7 +647,6 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   int32_t filterOffset = filterTy->getOffset();
   int32_t biasOffset = biasTy->getOffset();
 
-
   float outScale = outTy->getScale();
   float inScale = inTy->getScale();
   float filterScale = filterTy->getScale();
@@ -663,44 +654,40 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
 
   assert(outOffset == 0);
   assert(inOffset == 0);
-  assert(filterOffset ==0);
+  assert(filterOffset == 0);
   assert(biasOffset == 0);
 
-
-  assert(pdim.top==pdim.left);
-  assert(pdim.top==pdim.right);
-  assert(pdim.top==pdim.bottom);
+  assert(pdim.top == pdim.left);
+  assert(pdim.top == pdim.right);
+  assert(pdim.top == pdim.bottom);
   uint32_t pad_size = pdim.top;
   assert(strides[0] == strides[1]);
   uint32_t stride_size = strides[0];
 
   bool doRelu = false;
   if (CI->getFusedActivation() == FusedActivation::RELU) {
-      doRelu = true;
+    doRelu = true;
   }
 
   bool doBias = false;
 
-  filterScale = 1/filterScale;
-  inScale = 1/inScale;
-  biasScale = 1/biasScale;
-  outScale = 1/outScale;
+  filterScale = 1 / filterScale;
+  inScale = 1 / inScale;
+  biasScale = 1 / biasScale;
+  outScale = 1 / outScale;
 
   float matMulScale = inScale * filterScale;
-  float scale =  matMulScale / outScale;
+  float scale = matMulScale / outScale;
   float tempScale = 1.0;
   assert(scale > 1);
   uint32_t shift = 0;
   {
-    while(tempScale<scale)
-    {
+    while (tempScale < scale) {
       tempScale *= 2;
       shift++;
     }
-    assert(tempScale==scale);
+    assert(tempScale == scale);
   }
-
-
 
   int inm = idim.nm;
   int ins = idim.ns;
@@ -709,15 +696,16 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   int iw = idim.w;
   int ics = idim.cs;
 
-  int8_t *input = (int8_t *)malloc(inm*ins*icm*ih*iw*ics);
+  int8_t *input = (int8_t *)malloc(inm * ins * icm * ih * iw * ics);
   for (dim_t i0 = 0; i0 < inm; i0++) {
     for (dim_t i1 = 0; i1 < icm; i1++) {
       for (dim_t i2 = 0; i2 < ih; i2++) {
         for (dim_t i3 = 0; i3 < iw; i3++) {
           for (dim_t i4 = 0; i4 < ins; i4++) {
             for (dim_t i5 = 0; i5 < ics; i5++) {
-              *(input + i0*icm*ih*iw*ins*ics + i1*ih*iw*ins*ics +
-                i2*iw*ins*ics + i3*ins*ics + i4*ics + i5) =
+              *(input + i0 * icm * ih * iw * ins * ics +
+                i1 * ih * iw * ins * ics + i2 * iw * ins * ics +
+                i3 * ins * ics + i4 * ics + i5) =
                   inW.at({i0, i1, i2, i3, i4, i5});
             }
           }
@@ -726,11 +714,9 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
     }
   }
 
-  int KN = odim.cm*16;
+  int KN = odim.cm * 16;
   int KH = kdim.height;
   int KW = kdim.width;
-
-
 
   int fnm = fdim.nm;
   int fcm = fdim.cm;
@@ -739,15 +725,16 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   int fns = fdim.ns;
   int fcs = fdim.cs;
 
-  int8_t *kernel = (int8_t *)malloc(fnm*fcm*fh*fw*fns*fcs);
+  int8_t *kernel = (int8_t *)malloc(fnm * fcm * fh * fw * fns * fcs);
   for (dim_t i0 = 0; i0 < fnm; i0++) {
     for (dim_t i1 = 0; i1 < fcm; i1++) {
       for (dim_t i2 = 0; i2 < fh; i2++) {
         for (dim_t i3 = 0; i3 < fw; i3++) {
           for (dim_t i4 = 0; i4 < fns; i4++) {
             for (dim_t i5 = 0; i5 < fcs; i5++) {
-              *(kernel + i0*fcm*fh*fw*fns*fcs + i1*fh*fw*fns*fcs +
-                i2*fw*fns*fcs + i3*fns*fcs + i4*fcs + i5) =
+              *(kernel + i0 * fcm * fh * fw * fns * fcs +
+                i1 * fh * fw * fns * fcs + i2 * fw * fns * fcs +
+                i3 * fns * fcs + i4 * fcs + i5) =
                   filterW.at({i0, i1, i2, i3, i4, i5});
             }
           }
@@ -756,11 +743,10 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
     }
   }
 
-  int32_t* bias = (int32_t *)malloc(odim.cm * odim.cs*sizeof(int32_t));
-  for (unsigned long i = 0 ; i < odim.cm * odim.cs ; i++)
-  {
+  int32_t *bias = (int32_t *)malloc(odim.cm * odim.cs * sizeof(int32_t));
+  for (unsigned long i = 0; i < odim.cm * odim.cs; i++) {
     bias[i] = biasW.raw(i);
-    if(bias[i]!=0){
+    if (bias[i] != 0) {
       doBias = true;
     }
   }
@@ -772,10 +758,11 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
   int ow = odim.w;
   int ocs = odim.cs;
 
-  int8_t *output = (int8_t *)malloc(onm*ons*ocm*oh*ow*ocs);
+  int8_t *output = (int8_t *)malloc(onm * ons * ocm * oh * ow * ocs);
 
-  convolution_wo_tr_wo_ch(input, kernel, bias, output, inm*ins, ih, iw, icm*ics, fnm*fns, fh, fw, pad_size, stride_size, doRelu, doBias, shift, oh, ow);
-
+  convolution_wo_tr_wo_ch(input, kernel, bias, output, inm * ins, ih, iw,
+                          icm * ics, fnm * fns, fh, fw, pad_size, stride_size,
+                          doRelu, doBias, shift, oh, ow);
 
   for (dim_t i0 = 0; i0 < onm; i0++) {
     for (dim_t i1 = 0; i1 < ocm; i1++) {
@@ -783,9 +770,10 @@ void BoundVTAFunction::fwdVTAConvolutionInst(const glow::Instruction *I) {
         for (dim_t i3 = 0; i3 < ow; i3++) {
           for (dim_t i4 = 0; i4 < ons; i4++) {
             for (dim_t i5 = 0; i5 < ocs; i5++) {
-              outW.at({i0, i1, i2, i3, i4, i5})=
-                  *(output + i0*ocm*oh*ow*ons*ocs + i1*oh*ow*ons*ocs +
-                    i2*ow*ons*ocs + i3*ons*ocs + i4*ocs + i5);
+              outW.at({i0, i1, i2, i3, i4, i5}) =
+                  *(output + i0 * ocm * oh * ow * ons * ocs +
+                    i1 * oh * ow * ons * ocs + i2 * ow * ons * ocs +
+                    i3 * ons * ocs + i4 * ocs + i5);
             }
           }
         }
@@ -802,16 +790,15 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
   size_t group = I->getGroup();
 
   if (I->getSrc()->getType()->isQuantizedType()) {
-    //assert(I->getSrc()->getElementType()==ElemKind::Int8QTy);
+    // assert(I->getSrc()->getElementType()==ElemKind::Int8QTy);
     auto inW = getWeightHandle<int8_t>(I->getSrc());
     ShapeNHWC idim(inW.dims());
     auto outW = getWeightHandle<int8_t>(I->getDest());
     ShapeNHWC odim(outW.dims());
 
-    if(idim.c%16 ==0 && odim.c%16 ==0 &&
-            I->getSrc()->getElementType() ==  ElemKind::Int8QTy &&
-            I->getBias()->getElementType() ==  ElemKind::Int32QTy &&
-        group == 1) {
+    if (idim.c % 16 == 0 && odim.c % 16 == 0 &&
+        I->getSrc()->getElementType() == ElemKind::Int8QTy &&
+        I->getBias()->getElementType() == ElemKind::Int32QTy && group == 1) {
 
       Value *inV = I->getSrc();
       Value *outV = I->getDest();
@@ -826,9 +813,11 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
       ShapeNHWC idim(inW.dims());
       ShapeHW kdim(kernelSizes);
       ShapeHW sdim(strides);
-      assert(group==1);
-      assert(idim.c % group == 0 && "Input channels must be divisible by group.");
-      assert(odim.c % group == 0 && "Output channels must be divisible by group.");
+      assert(group == 1);
+      assert(idim.c % group == 0 &&
+             "Input channels must be divisible by group.");
+      assert(odim.c % group == 0 &&
+             "Output channels must be divisible by group.");
 
       PaddingTLBR pdim(pads);
       auto outTy = outV->getType();
@@ -841,7 +830,6 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
       int32_t filterOffset = filterTy->getOffset();
       int32_t biasOffset = biasTy->getOffset();
 
-
       float outScale = outTy->getScale();
       float inScale = inTy->getScale();
       float filterScale = filterTy->getScale();
@@ -849,13 +837,12 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
 
       assert(outOffset == 0);
       assert(inOffset == 0);
-      assert(filterOffset ==0);
+      assert(filterOffset == 0);
       assert(biasOffset == 0);
 
-
-      assert(pdim.top==pdim.left);
-      assert(pdim.top==pdim.right);
-      assert(pdim.top==pdim.bottom);
+      assert(pdim.top == pdim.left);
+      assert(pdim.top == pdim.right);
+      assert(pdim.top == pdim.bottom);
       uint32_t pad_size = pdim.top;
       assert(strides[0] == strides[1]);
       uint32_t stride_size = strides[0];
@@ -865,28 +852,25 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
         doRelu = true;
       }
 
-
       bool doBias = false;
 
-      filterScale = 1/filterScale;
-      inScale = 1/inScale;
-      biasScale = 1/biasScale;
-      outScale = 1/outScale;
+      filterScale = 1 / filterScale;
+      inScale = 1 / inScale;
+      biasScale = 1 / biasScale;
+      outScale = 1 / outScale;
 
       float matMulScale = inScale * filterScale;
-      float scale =  matMulScale / outScale;
+      float scale = matMulScale / outScale;
       float tempScale = 1.0;
       assert(scale > 1);
       uint32_t shift = 0;
       {
-        while(tempScale<scale)
-        {
+        while (tempScale < scale) {
           tempScale *= 2;
           shift++;
         }
-        assert(tempScale==scale);
+        assert(tempScale == scale);
       }
-
 
       int N = idim.n;
       int H = idim.h;
@@ -896,67 +880,68 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
       int KH = kdim.height;
       int KW = kdim.width;
 
-      assert(C%16 == 0);
-      assert(KN%16 == 0);
+      assert(C % 16 == 0);
+      assert(KN % 16 == 0);
 
-      int8_t *input = (int8_t *)malloc(N*C*H*W);
+      int8_t *input = (int8_t *)malloc(N * C * H * W);
       for (dim_t n = 0; n < N; n++) {
         for (dim_t h = 0; h < H; h++) {
           for (dim_t w = 0; w < W; w++) {
             for (dim_t c = 0; c < C; c++) {
-              *(input + n*H*W*C + h*W*C + w*C + c) = inW.at({n,h,w,c});
+              *(input + n * H * W * C + h * W * C + w * C + c) =
+                  inW.at({n, h, w, c});
             }
           }
         }
       }
 
-      int8_t *kernel = (int8_t *)malloc(KN*KH*KW*C +KN* sizeof(int32_t));
+      int8_t *kernel =
+          (int8_t *)malloc(KN * KH * KW * C + KN * sizeof(int32_t));
 
       for (int n = 0; n < KN; n++) {
         for (int h = 0; h < KH; h++) {
           for (int w = 0; w < KW; w++) {
             for (int c = 0; c < C; c++) {
-              *(kernel + n*KH*KW*C + h*KW*C + w*C + c) =
-                  filterW.at({(dim_t)n,(dim_t)h,(dim_t)w,(dim_t)c});
+              *(kernel + n * KH * KW * C + h * KW * C + w * C + c) =
+                  filterW.at({(dim_t)n, (dim_t)h, (dim_t)w, (dim_t)c});
             }
           }
         }
       }
 
-      int32_t* bias = (int32_t *) (kernel+KN*KH*KW*C);
-      for (unsigned long i = 0 ; i < KN ; i++)
-      {
+      int32_t *bias = (int32_t *)(kernel + KN * KH * KW * C);
+      for (unsigned long i = 0; i < KN; i++) {
         bias[i] = biasW.at({i});
-        if(bias[i]!=0){
+        if (bias[i] != 0) {
           doBias = true;
         }
       }
       int out_h = odim.h;
       int out_w = odim.w;
       int8_t *output = (int8_t *)malloc(N * out_h * out_w * KN);
-      convolution(input, kernel, output, N, H, W, C, KN, KH, KW, pad_size, stride_size, doRelu, doBias, shift, out_h, out_w);
+      convolution(input, kernel, output, N, H, W, C, KN, KH, KW, pad_size,
+                  stride_size, doRelu, doBias, shift, out_h, out_w);
       for (int n = 0; n < N; n++) {
         for (int h = 0; h < out_h; h++) {
           for (int w = 0; w < out_w; w++) {
             for (int c = 0; c < KN; c++) {
-              outW.at({(dim_t) n, (dim_t) h, (dim_t) w, (dim_t) c}) = *(output + n * out_h * out_w * KN + h * out_w * KN + w * KN + c);
+              outW.at({(dim_t)n, (dim_t)h, (dim_t)w, (dim_t)c}) =
+                  *(output + n * out_h * out_w * KN + h * out_w * KN + w * KN +
+                    c);
             }
           }
         }
       }
 
-
-    }
-    else if(group != 1) {
+    } else if (group != 1) {
       bool doRelu = false;
       if (I->getFusedActivation() == FusedActivation::RELU) {
         doRelu = true;
       }
-      fwdVTAConvolutionInstQuantizedImpl(I->getSrc(), I->getDest(),
-          I->getFilter(), I->getBias(), kernelSizes, strides, pads, group,
-          I->getDilation(), doRelu);
-    }
-    else{
+      fwdVTAConvolutionInstQuantizedImpl(
+          I->getSrc(), I->getDest(), I->getFilter(), I->getBias(), kernelSizes,
+          strides, pads, group, I->getDilation(), doRelu);
+    } else {
       bool doRelu = false;
       if (I->getFusedActivation() == FusedActivation::RELU) {
         doRelu = true;
@@ -979,8 +964,7 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
 //                  Tensor allocation operations
 //===----------------------------------------------------------------------===//
 
-void BoundVTAFunction::fwdAllocActivationInst(
-    const AllocActivationInst *I) {
+void BoundVTAFunction::fwdAllocActivationInst(const AllocActivationInst *I) {
   getOrCreateTensor(I);
 }
 
@@ -990,9 +974,8 @@ void BoundVTAFunction::fwdDeallocActivationInst(
 }
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
-void BoundVTAFunction::fwdVTAReluInstQuantizedImpl(Value *inV,
-                                                              Value *outV,
-                                                              float scale) {
+void BoundVTAFunction::fwdVTAReluInstQuantizedImpl(Value *inV, Value *outV,
+                                                   float scale) {
   auto inW = getWeightHandle<int8_t>(inV);
   auto outW = getWeightHandle<int8_t>(outV);
 
@@ -1006,7 +989,7 @@ void BoundVTAFunction::fwdVTAReluInstQuantizedImpl(Value *inV,
   }
   */
 
-  if (scale < 1){
+  if (scale < 1) {
     // Compute left bit shifting
     while (tempScale > scale) {
       tempScale /= 2;
@@ -1017,7 +1000,7 @@ void BoundVTAFunction::fwdVTAReluInstQuantizedImpl(Value *inV,
       val = val << shift;
       outW.raw(i) = quantization::clip<int32_t, int8_t>(MAX(val, 0));
     }
-  }else{
+  } else {
     // Compute right bit shifting
     while (tempScale < scale) {
       tempScale *= 2;
@@ -1048,7 +1031,7 @@ void BoundVTAFunction::fwdReluInst(const ReluInst *I) {
     outScale = 1 / outScale;
     float scale = inScale / outScale;
     float tempScale = 1.0;
-    //assert(scale > 1); //in relu case, outScale could be less than inScale
+    // assert(scale > 1); //in relu case, outScale could be less than inScale
     // because of negative value.
     /*uint32_t shift = 0;
     {
@@ -1064,14 +1047,15 @@ void BoundVTAFunction::fwdReluInst(const ReluInst *I) {
     if (outOffset == 0 && inOffset == 0) {
       fwdVTAReluInstQuantizedImpl(I->getSrc(), I->getDest(), scale);
     } else {
-      llvm::outs()<<"Unsupported Quantized Relu"<<"\n";
+      llvm::outs() << "Unsupported Quantized Relu"
+                   << "\n";
       return;
     }
   } else {
-    llvm::outs()<<"Unsupported Relu"<<"\n";
+    llvm::outs() << "Unsupported Relu"
+                 << "\n";
   }
 }
-
 
 //===----------------------------------------------------------------------===//
 //                       Pooling
@@ -1125,7 +1109,7 @@ static void fwdMaxPool(Tensor *inW, Tensor *outW, Tensor *argmaxW,
                 max_value = val;
                 if (argmaxW) {
                   argmaxNHWC = &inHandle.at({n, (dim_t)ox, (dim_t)oy, z}) -
-                      &inHandle.raw(0);
+                               &inHandle.raw(0);
                 }
               }
             }
@@ -1142,7 +1126,6 @@ static void fwdMaxPool(Tensor *inW, Tensor *outW, Tensor *argmaxW,
   }       // N
 }
 
-
 void BoundVTAFunction::fwdMaxPoolInst(const MaxPoolInst *I) {
   auto inW = getTensor(I->getSrc());
   auto outW = getTensor(I->getDest());
@@ -1158,13 +1141,6 @@ void BoundVTAFunction::fwdMaxPoolInst(const MaxPoolInst *I) {
                             outW, nullptr, I->getKernels(), I->getStrides(),
                             I->getPads());
 }
-
-
-
-
-
-
-
 
 void BoundVTAFunction::fwdAvgPoolInstI8Impl(const AvgPoolInst *I) {
   ShapeNHWC odim(I->getDest()->dims());
@@ -1212,16 +1188,12 @@ void BoundVTAFunction::fwdAvgPoolInstI8Impl(const AvgPoolInst *I) {
           // Instead of dividing by filterArea, just change scale.
           outW.at({n, ax, ay, z}) = quantization::clip<int32_t, int8_t>(
               std::round(float(sum) * (inQP.scale / outQP.scale / filterArea) +
-                  outQP.offset));
+                         outQP.offset));
         } // W
       }   // H
     }     // C
   }       // N
 }
-
-
-
-
 
 void BoundVTAFunction::fwdAvgPoolInst(const AvgPoolInst *I) {
   bool isConv3D = is3DData(ConvolutionLayout(I->getLayout()));
@@ -1233,21 +1205,15 @@ void BoundVTAFunction::fwdAvgPoolInst(const AvgPoolInst *I) {
 
     } else {
       llvm_unreachable("DebugPrint format not supported!");
-
     }
   } else {
     if (isQuantized) {
       fwdAvgPoolInstI8Impl(I);
     } else {
       llvm_unreachable("DebugPrint format not supported!");
-
     }
   }
 }
-
-
-
-
 
 //===----------------------------------------------------------------------===//
 //                Instructions used by Quantization
@@ -1266,8 +1232,7 @@ void BoundVTAFunction::fwdQuantizeInst(const glow::QuantizeInst *I) {
 
 /// Dequantize integer tensor. Scale and Offset are based
 /// on the source tensor type.
-void BoundVTAFunction::fwdDequantizeInst(
-    const glow::DequantizeInst *I) {
+void BoundVTAFunction::fwdDequantizeInst(const glow::DequantizeInst *I) {
   auto *srcTensor = getTensor(I->getSrc());
   auto *destTensor = getTensor(I->getDest());
   auto destTy = destTensor->getType();
@@ -1275,7 +1240,6 @@ void BoundVTAFunction::fwdDequantizeInst(
       quantization::dequantizeTensor(*srcTensor, destTy.getElementType());
   destTensor->assign(&fTensor);
 }
-
 
 //===----------------------------------------------------------------------===//
 //                       Debug instructions
@@ -1317,14 +1281,11 @@ void BoundVTAFunction::fwdDebugPrintInst(const DebugPrintInst *I) {
   }
 }
 
-
 //===----------------------------------------------------------------------===//
 //                       Tensor shape (copy/transpose/concat/...)
 //===----------------------------------------------------------------------===//
 
-
-void BoundVTAFunction::fwdInsertTensorInst(
-        const glow::InsertTensorInst *I) {
+void BoundVTAFunction::fwdInsertTensorInst(const glow::InsertTensorInst *I) {
   Tensor *outT = getTensor(I->getDest());
   Tensor *inT = getTensor(I->getSrc());
   ElemKind k = outT->getElementType();
@@ -1351,8 +1312,6 @@ void BoundVTAFunction::fwdTensorViewInst(const TensorViewInst *I) {
   getOrCreateUnownedTensor(I, I->getSrc(), I->getOffsets());
 }
 
-
-
 void BoundVTAFunction::fwdTransposeInst(const TransposeInst *I) {
   auto inT = getTensor(I->getSrc());
   (void)inT;
@@ -1366,7 +1325,6 @@ void BoundVTAFunction::fwdTransposeInst(const TransposeInst *I) {
     inT->transpose(outT, I->getShuffle());
   }
 }
-
 
 void BoundVTAFunction::fwdSplatInst(const glow::SplatInst *I) {
   auto *T = getTensor(I->getDest());
@@ -1416,7 +1374,6 @@ void BoundVTAFunction::fwdSplatInst(const glow::SplatInst *I) {
   llvm_unreachable("Unsupported tensor type");
 }
 
-
 //===----------------------------------------------------------------------===//
 //                                 FC
 //===----------------------------------------------------------------------===//
@@ -1465,7 +1422,7 @@ void BoundVTAFunction::fwdFullyConnectedInstQuantizedImpl(
 
       // Scale the bias to match the scale of the matrix multiplication.
       AccumulatorTy B = std::round(float(biasW.at({j}) - biasOffset) *
-          (biasScale / matMulScale));
+                                   (biasScale / matMulScale));
 
       // Add the bias.
       sum += B;
@@ -1486,16 +1443,13 @@ void BoundVTAFunction::fwdFullyConnectedInst(
         I->getBias()->getElementType(), I);
     return;
   } else {
-    llvm_unreachable("Type is not supported");                                 \
+    llvm_unreachable("Type is not supported");
   }
 }
-
-
 
 //===----------------------------------------------------------------------===//
 //                        Loss Functions (Softmax/regression/...)
 //===----------------------------------------------------------------------===//
-
 
 template <typename ElemTy>
 void BoundVTAFunction::fwdSoftMaxInstImpl(const SoftMaxInst *I) {
@@ -1531,4 +1485,3 @@ void BoundVTAFunction::fwdSoftMaxInst(const SoftMaxInst *I) {
   dispatchFloatingPointImpl(fwdSoftMaxInstImpl, I->getSrc()->getElementType(),
                             I);
 }
-

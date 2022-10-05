@@ -21,70 +21,70 @@
 #include "glow/Runtime/StatsExporter.h"
 
 namespace glow {
-    namespace runtime {
+namespace runtime {
 
 /// A class controlling a single "VTA Device", a thread of execution in
 /// the IR-VTA. Many VTAFunctions may be added, but only one
 /// inference is executed at a time.
-        class VTADeviceManager : public QueueBackedDeviceManager {
-            /// Compiled function list by name.
-            FunctionMapTy functions_;
+class VTADeviceManager : public QueueBackedDeviceManager {
+  /// Compiled function list by name.
+  FunctionMapTy functions_;
 
-            /// Map from PH to functionName for static placeholders.
-            std::unordered_map<Placeholder *, std::vector<std::string>>
-                    staticPlaceholderToFunctions_;
+  /// Map from PH to functionName for static placeholders.
+  std::unordered_map<Placeholder *, std::vector<std::string>>
+      staticPlaceholderToFunctions_;
 
-            /// String constant for logging number of in-use devices.
-            static constexpr const char *kDevicesUsedVTA =
-                    "glow.devices_used.interpreter";
+  /// String constant for logging number of in-use devices.
+  static constexpr const char *kDevicesUsedVTA =
+      "glow.devices_used.interpreter";
 
-        public:
-            explicit VTADeviceManager(const DeviceConfig &config)
-                    : QueueBackedDeviceManager(config) {
-                statsExporterRegistry_->incrementCounter(kDevicesUsedVTA);
-                exportMemoryCounters();
-            }
+public:
+  explicit VTADeviceManager(const DeviceConfig &config)
+      : QueueBackedDeviceManager(config) {
+    statsExporterRegistry_->incrementCounter(kDevicesUsedVTA);
+    exportMemoryCounters();
+  }
 
-            ~VTADeviceManager() override {
-                statsExporterRegistry_->incrementCounter(kDevicesUsedVTA, -1);
-                zeroMemoryCounters();
-            }
+  ~VTADeviceManager() override {
+    statsExporterRegistry_->incrementCounter(kDevicesUsedVTA, -1);
+    zeroMemoryCounters();
+  }
 
-            /// Returns the amount of memory in bytes available on the device when no
-            /// models are loaded.
-            uint64_t getMaximumMemory() const override;
+  /// Returns the amount of memory in bytes available on the device when no
+  /// models are loaded.
+  uint64_t getMaximumMemory() const override;
 
-            /// Returns the amount of memory in bytes currently availbe on the device.
-            uint64_t getAvailableMemory() const override;
+  /// Returns the amount of memory in bytes currently availbe on the device.
+  uint64_t getAvailableMemory() const override;
 
-            /// Returns true if a function requiring the \p estimate size will fit on the
-            /// device. This is not a promise as memory cost could vary due to alignment,
-            /// etc.
-            bool isMemoryAvailable(uint64_t estimate) const override;
+  /// Returns true if a function requiring the \p estimate size will fit on the
+  /// device. This is not a promise as memory cost could vary due to alignment,
+  /// etc.
+  bool isMemoryAvailable(uint64_t estimate) const override;
 
-            /// Returns the DeviceInfo for this device containing peak limits for
-            /// compute and bandwidths (used in partitioning).
-            DeviceInfo getDeviceInfo() const override;
+  /// Returns the DeviceInfo for this device containing peak limits for
+  /// compute and bandwidths (used in partitioning).
+  DeviceInfo getDeviceInfo() const override;
 
-            /// Copies the contents of Tensor \p T to the device resource allocated to
-            /// Placeholder \p PH. once finished calls \p resultCB with the result of the
-            /// operation.
-            void transferStaticPlaceholderToDevice(
-                    Placeholder *PH, Tensor *T, std::function<void(Error)> resultCB) override;
+  /// Copies the contents of Tensor \p T to the device resource allocated to
+  /// Placeholder \p PH. once finished calls \p resultCB with the result of the
+  /// operation.
+  void transferStaticPlaceholderToDevice(
+      Placeholder *PH, Tensor *T, std::function<void(Error)> resultCB) override;
 
-        protected:
-            void addNetworkImpl(const Module *module, FunctionMapTy functions,
-                                ReadyCBTy cb) override;
-            void evictNetworkImpl(std::string functionName,
-                                  EvictFunctionCBTy evictCB) override;
-            void runFunctionImpl(runtime::RunIdentifierTy id, std::string functionName,
-                                 std::unique_ptr<ExecutionContext> context,
-                                 ResultCBTy cb) override;
-        };
+protected:
+  void addNetworkImpl(const Module *module, FunctionMapTy functions,
+                      ReadyCBTy cb) override;
+  void evictNetworkImpl(std::string functionName,
+                        EvictFunctionCBTy evictCB) override;
+  void runFunctionImpl(runtime::RunIdentifierTy id, std::string functionName,
+                       std::unique_ptr<ExecutionContext> context,
+                       ResultCBTy cb) override;
+};
 
-        DeviceManager *createVTADeviceManager(const DeviceConfig &config);
+DeviceManager *createVTADeviceManager(const DeviceConfig &config);
 
-    } // namespace runtime
+} // namespace runtime
 } // namespace glow
 
 #endif // GLOW_BACKENBDS_INTERPRETER_INTERPRETERDEVICEMANAGER_H

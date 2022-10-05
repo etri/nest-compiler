@@ -27,7 +27,7 @@ namespace glow {
 /// This is the IR-Relay. It owns the IR, and the heap, and is able to
 /// execute the instructions one at a time.
 class Relay final : public BackendUsingGlowIR,
-                             public IRInstructionProcessingHandler {
+                    public IRInstructionProcessingHandler {
 public:
   /// Ctor.
   Relay() = default;
@@ -86,20 +86,24 @@ public:
   }
 
   void parseBackendSpecificOptions(const BackendOptions &opts) const;
-  void setTarget(std::string target) {target_ = target;}
-  void setTargetHost(std::string target_host) {target_host_ = target_host;}
-  void setExportOption(std::string export_option) {export_option_ = export_option;}
-  void setRequiredPass(std::string req_pass) {required_pass_ = req_pass;}
-  void setDisabledPass(std::string disabled_pass) {disabled_pass_ = disabled_pass;}
-  void setOptLevel(uint32_t opt_level) {opt_level_ = opt_level;}
-  void setDebugMode(std::string debug_mode) {debug_mode_ = debug_mode;}
+  void setTarget(std::string target) { target_ = target; }
+  void setTargetHost(std::string target_host) { target_host_ = target_host; }
+  void setExportOption(std::string export_option) {
+    export_option_ = export_option;
+  }
+  void setRequiredPass(std::string req_pass) { required_pass_ = req_pass; }
+  void setDisabledPass(std::string disabled_pass) {
+    disabled_pass_ = disabled_pass;
+  }
+  void setOptLevel(uint32_t opt_level) { opt_level_ = opt_level; }
+  void setDebugMode(std::string debug_mode) { debug_mode_ = debug_mode; }
 
-  std::string getTarget() {return target_;}
+  std::string getTarget() { return target_; }
 
 private:
   std::string target_;
   std::string target_host_;
-  std::string export_option_;  // option for export lib
+  std::string export_option_; // option for export lib
   std::string required_pass_;
   std::string disabled_pass_;
   uint32_t opt_level_;

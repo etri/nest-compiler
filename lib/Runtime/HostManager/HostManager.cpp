@@ -15,7 +15,6 @@
  * Modifications copyright (C) 2022 <ETRI/Yongin Kwon>
  */
 
-
 #include "glow/Runtime/HostManager/HostManager.h"
 #include "glow/Backends/DeviceManager.h"
 #include "glow/Exporter/ONNXModelWriter.h"
@@ -253,9 +252,11 @@ std::vector<DeviceInfo> HostManager::getDeviceInfoList() {
     info.nonSupportedNodes = device.second->getParamByName("nonSupportedNodes");
     info.supportedNodes = device.second->getParamByName("supportedNodes");
     info.deviceID = std::atol(device.second->getParamByName("deviceID").data());
-    info.pysicalUnitCount = std::atol(device.second->getParamByName("pysicalUnitCount").data());
-    std::istringstream isDefaultDevice(device.second->getParamByName("partitionDefaultDevice").data());
-    isDefaultDevice >>  std::boolalpha >> info.partitionDefaultDevice;
+    info.pysicalUnitCount =
+        std::atol(device.second->getParamByName("pysicalUnitCount").data());
+    std::istringstream isDefaultDevice(
+        device.second->getParamByName("partitionDefaultDevice").data());
+    isDefaultDevice >> std::boolalpha >> info.partitionDefaultDevice;
 
     deviceInfoList.push_back(info);
   }
@@ -595,7 +596,6 @@ Error HostManager::addNetwork(std::unique_ptr<Module> module,
   return Error::success();
 }
 
-
 std::unordered_map<std::string, std::vector<DeviceIDTy>>
 HostManager::getDevicePartitionMapping(llvm::StringRef network) {
   std::unordered_map<std::string, std::vector<DeviceIDTy>> mapping;
@@ -613,9 +613,11 @@ HostManager::getDevicePartitionMapping(llvm::StringRef network) {
   return mapping;
 }
 
-Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
-                              CompilationContext &cctx, size_t exeType,std::string profilePath,
-                                            std::string partitionPlanFile, std::string bundleDir, std::string quantFileName, int profileMode, int partitionExe) {
+Error HostManager::addNetworkForNestPartition(
+    std::unique_ptr<Module> module, CompilationContext &cctx, size_t exeType,
+    std::string profilePath, std::string partitionPlanFile,
+    std::string bundleDir, std::string quantFileName, int profileMode,
+    int partitionExe) {
   ScopeGuard debugDumpDAGGuard([&]() {
     if (cctx.dumpFinalGraph) {
       for (Function *F : module->getFunctions()) {
@@ -676,18 +678,19 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
   }
 
   std::vector<DeviceInfo> deviceInfo = getDeviceInfoList();
-//  {
-//    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
-//    for (auto &device : availableDevices_) {
-//      DeviceInfo info = devices_[device]->getDeviceInfo();
-//      info.availableMemory = devices_[device]->getAvailableMemory();
-//      info.backendName = devices_[device]->getBackendName();
-//      info.nonSupportedNodes =
-//          devices_[device]->getParamByName("nonSupportedNodes");
-//      info.supportedNodes = devices_[device]->getParamByName("supportedNodes");
-//      deviceInfo.push_back(info);
-//    }
-//  }
+  //  {
+  //    std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
+  //    for (auto &device : availableDevices_) {
+  //      DeviceInfo info = devices_[device]->getDeviceInfo();
+  //      info.availableMemory = devices_[device]->getAvailableMemory();
+  //      info.backendName = devices_[device]->getBackendName();
+  //      info.nonSupportedNodes =
+  //          devices_[device]->getParamByName("nonSupportedNodes");
+  //      info.supportedNodes =
+  //      devices_[device]->getParamByName("supportedNodes");
+  //      deviceInfo.push_back(info);
+  //    }
+  //  }
 
   // Optimize Functions only if we don't have any backendSpecificNodeInfo,
   // because if we do then the Functions were already optimized and Nodes had
@@ -718,19 +721,22 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
       }
     }
   }
-  NestPartitioner partitioner(module.get(), deviceInfo, skipOptimizations, PartitionConfig(), quantFileName);
+  NestPartitioner partitioner(module.get(), deviceInfo, skipOptimizations,
+                              PartitionConfig(), quantFileName);
   if (cctx.enableP2P || cctx.enableDRT) {
     partitioner.setContextCount(cctx.maxActiveRequestsPerInstance);
   } else {
     partitioner.setContextCount(2);
   }
   DAGListTy nodeList;
-  //auto result = partitioner.partition(cctx);
+  // auto result = partitioner.partition(cctx);
   std::cout << "bundle dir = " << bundleDir << std::endl;
   partitioner.setOutputDir(bundleDir);
 
   std::map<std::string, int> puIdxMap;
-  auto result = partitioner.partition(cctx, exeType, profilePath, partitionPlanFile, profileMode, partitionExe, &puIdxMap);
+  auto result =
+      partitioner.partition(cctx, exeType, profilePath, partitionPlanFile,
+                            profileMode, partitionExe, &puIdxMap);
   if (result) {
     nodeList = std::move(result.get());
   } else {
@@ -792,7 +798,7 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
       RETURN_ERR_IF_NOT(
           B.verify(*F, cctx.verboseCompile),
           "Unsupported node(s) found after delayed constant folding Function " +
-          F->getName().str() + " for backend " + B.getBackendName());
+              F->getName().str() + " for backend " + B.getBackendName());
     }
   }
 
@@ -826,7 +832,7 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
           RETURN_ERR_IF_NOT(
               B.verify(*F, cctx.verboseCompile),
               "Unsupported node(s) found after transformPostOptPipeline() " +
-              F->getName().str() + " for backend " + B.getBackendName());
+                  F->getName().str() + " for backend " + B.getBackendName());
         }
       }
     }
@@ -887,8 +893,9 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
   // Functions and PHs used for constant folding.
   cleanupConstantFolding(*module, record);
 
-  //auto err = provisioner_->provision(nodeList, *module, cctx);
-  auto err = provisioner_->provisionForNestPartition(nodeList, *module, cctx, bundleDir, &puIdxMap);
+  // auto err = provisioner_->provision(nodeList, *module, cctx);
+  auto err = provisioner_->provisionForNestPartition(nodeList, *module, cctx,
+                                                     bundleDir, &puIdxMap);
   if (err) {
     {
       std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
@@ -952,7 +959,6 @@ Error HostManager::addNetworkForNestPartition(std::unique_ptr<Module> module,
 
   return Error::success();
 }
-
 
 Error HostManager::removeNetwork(llvm::StringRef networkName) {
   std::unique_lock<std::shared_timed_mutex> networkLock(networkLock_);
@@ -1292,8 +1298,8 @@ bool runtime::loadDeviceConfigsFromFile(
     auto parameters = getBackendParams(lists[i].parameters_.str);
     auto config = glow::make_unique<runtime::DeviceConfig>(configBackendName,
                                                            name, parameters);
-    //msyu
-    //config->setDeviceMemory(memSize);
+    // msyu
+    // config->setDeviceMemory(memSize);
     config->setDeviceMemory(stoi(lists[i].dramMemory_));
     configs.push_back(std::move(config));
   }

@@ -66,16 +66,16 @@ Relay::compileIR(std::unique_ptr<IRFunction> IR) const {
   return function;
 }
 
-std::unique_ptr<CompiledFunction> Relay::compileIRWithoutConstants(
-    std::unique_ptr<IRFunction> IR) const {
+std::unique_ptr<CompiledFunction>
+Relay::compileIRWithoutConstants(std::unique_ptr<IRFunction> IR) const {
   MemoryAllocator constantWeightsAllocator("ConstantWeights", 0);
   MemoryAllocator placeholderWeightsAllocator("PlaceholderWeights", 0);
   MemoryAllocator activationsAllocator("Activations", 0);
   runtime::RuntimeBundle bundle = runtime::RuntimeBundle::create(
       *IR, constantWeightsAllocator, placeholderWeightsAllocator,
       activationsAllocator);
-  auto compiledFunction = glow::make_unique<RelayFunction>(
-      std::move(IR), std::move(bundle));
+  auto compiledFunction =
+      glow::make_unique<RelayFunction>(std::move(IR), std::move(bundle));
   compiledFunction->setIRInstructionProcessingHandler(
       getIRInstructionProcessingHandler());
   return compiledFunction;
@@ -933,9 +933,9 @@ static bool channelwiseQuantizeFloatBias(
   return true;
 }
 
-Expected<bool> Relay::transformPostLowering(
-    Function *F, CompilationContext &cctx,
-    const glow::runtime::DeviceInfo *devInfo) const {
+Expected<bool>
+Relay::transformPostLowering(Function *F, CompilationContext &cctx,
+                             const glow::runtime::DeviceInfo *devInfo) const {
   LOG_SCOPE(F->getLogContext(), "Relay::transformPostLowering")
 
   bool changed = false;
@@ -954,14 +954,11 @@ Expected<bool> Relay::transformPostLowering(
   return changed;
 }
 
-void Relay::parseBackendSpecificOptions(
-    const BackendOptions &opts) const {
-  auto RelayMaxMemOpt =
-      opts.backendSpecificOpts.find("Relay-memory");
+void Relay::parseBackendSpecificOptions(const BackendOptions &opts) const {
+  auto RelayMaxMemOpt = opts.backendSpecificOpts.find("Relay-memory");
   if (RelayMaxMemOpt != opts.backendSpecificOpts.end()) {
-    glow::runtime::GlowRelayMemory =
-        std::stoi(RelayMaxMemOpt->second);
-    llvm::outs() << "Relay memory set to "
-                 << glow::runtime::GlowRelayMemory << "\n";
+    glow::runtime::GlowRelayMemory = std::stoi(RelayMaxMemOpt->second);
+    llvm::outs() << "Relay memory set to " << glow::runtime::GlowRelayMemory
+                 << "\n";
   }
 }

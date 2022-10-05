@@ -27,4 +27,5 @@ BB.newBackendSpecificInstr("VTAInterpreterConvolution")
     .addMember(MEMBER_TYPE_INFO(FusedActivation), "FusedActivation")
     .autoIRGen();
 
-BB.includeBackendSpecificVerification("glow/VTAInterpreterSpecificInstrsVerification.h");
+BB.includeBackendSpecificVerification(
+    "glow/VTAInterpreterSpecificInstrsVerification.h");

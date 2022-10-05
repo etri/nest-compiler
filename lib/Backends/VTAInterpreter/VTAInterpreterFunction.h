@@ -263,12 +263,16 @@ private:
   template <typename ElemTy>
   void fwdElementSignInstImpl(const glow::ElementSignInst *I);
 
-  int cpuvtaconvolution(int8_t* input, float inputScale, int32_t inputOffset, int8_t *kernel, float kernelScale, int32_t kernelOffset,
-                        int32_t *bias, float biasScale, int32_t biasOffset, int8_t *output, float outputScale, int32_t outputOffset, dim_t N, dim_t H, dim_t W, dim_t C, dim_t KN, dim_t KH, dim_t KW, int pad_size,
-                      int stride_size, size_t group, size_t dilation, bool doRelu, bool doBias, int out_h, int out_w);
+  int cpuvtaconvolution(int8_t *input, float inputScale, int32_t inputOffset,
+                        int8_t *kernel, float kernelScale, int32_t kernelOffset,
+                        int32_t *bias, float biasScale, int32_t biasOffset,
+                        int8_t *output, float outputScale, int32_t outputOffset,
+                        dim_t N, dim_t H, dim_t W, dim_t C, dim_t KN, dim_t KH,
+                        dim_t KW, int pad_size, int stride_size, size_t group,
+                        size_t dilation, bool doRelu, bool doBias, int out_h,
+                        int out_w);
 
-
-        template <typename ElemTy> void fwdSigmoidInstFloatImpl(const SigmoidInst *I);
+  template <typename ElemTy> void fwdSigmoidInstFloatImpl(const SigmoidInst *I);
 
   template <typename ElemTy> void fwdTanhInstFloatImpl(const TanhInst *I);
 

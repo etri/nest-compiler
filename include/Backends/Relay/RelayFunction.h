@@ -44,7 +44,7 @@ class Constant;
 
 /// Function "compiled" for execution by the Relay.
 class RelayFunction final : public CompiledFunction,
-                                     public IRInstructionProcessingHandler {
+                            public IRInstructionProcessingHandler {
   /// The IR to be executed.
   std::unique_ptr<IRFunction> F_;
 
@@ -52,8 +52,7 @@ class RelayFunction final : public CompiledFunction,
   std::unordered_map<std::string, Tensor *> constants_;
 
 public:
-  RelayFunction(std::unique_ptr<IRFunction> F,
-                         runtime::RuntimeBundle &&bundle);
+  RelayFunction(std::unique_ptr<IRFunction> F, runtime::RuntimeBundle &&bundle);
 
   /// \name CompiledFunction interface
   ///@{
@@ -75,9 +74,7 @@ public:
   void translateTraceEvents(ExecutionContext *context) const override;
 
   /// \returns the backend used to compile this function.
-  virtual std::string getCompileBackendName() const override {
-    return "Relay";
-  }
+  virtual std::string getCompileBackendName() const override { return "Relay"; }
   ///@}
 };
 

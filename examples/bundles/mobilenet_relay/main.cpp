@@ -301,7 +301,7 @@ static uint8_t *allocateMutableWeightVars(const BundleConfig &config) {
 /// Dump the result of the inference by looking at the results vector and
 /// finding the index of the max element.
 static int dumpInferenceResults(const BundleConfig &config,
-                                 uint8_t *mutableWeightVars) {
+                                uint8_t *mutableWeightVars) {
   const SymbolTableEntry &outputWeights =
       getMutableWeightVar(config, "mobilenetv20_output_flatten0_reshape0__2");
   int maxIdx = 0;
@@ -332,8 +332,7 @@ static uint8_t *initMutableWeightVars(const BundleConfig &config) {
       inputDims[0] * inputDims[1] * inputDims[2] * inputDims[3] * sizeof(float);
   printf("Copying image data into mutable weight vars: %lu bytes\n",
          imageDataSizeInBytes);
-  const SymbolTableEntry &inputGPUDataVar =
-      getMutableWeightVar(config, "data");
+  const SymbolTableEntry &inputGPUDataVar = getMutableWeightVar(config, "data");
   memcpy(mutableWeightVarsAddr + inputGPUDataVar.offset, inputT,
          imageDataSizeInBytes);
   free(inputT);
@@ -346,54 +345,56 @@ static uint8_t *initActivations(const BundleConfig &config) {
       alignedAlloc(config, config.activationsMemSize));
 }
 
-
-static float* getInferenceResultVar(const BundleConfig &config,
-                                    uint8_t *mutableWeightVars, const char* name) {
+static float *getInferenceResultVar(const BundleConfig &config,
+                                    uint8_t *mutableWeightVars,
+                                    const char *name) {
   const SymbolTableEntry &outputWeights = getMutableWeightVar(config, name);
   float *results = (float *)(mutableWeightVars + outputWeights.offset);
   return results;
 }
 
-static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT) {
+static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config,
+                                               const char *name,
+                                               float *inputT) {
 
   uint8_t *mutableWeightVarsAddr = allocateMutableWeightVars(config);
 
   const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
-//  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
-//         inputDataVar.size*4);
-//  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+  //  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu
+  //  bytes\n",
+  //         inputDataVar.size*4);
+  //  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
   memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
-         inputDataVar.size*4);
+         inputDataVar.size * 4);
 
   return mutableWeightVarsAddr;
 }
 
-
 int main(int argc, char **argv) {
   parseCommandLineOptions(argc, argv);
-//  // Allocate and initialize constant and mutable weights.
-  //uint8_t *constantWeightVarsAddr =
-//      initConstantWeights("onnxzoo_mobilenet_v210.weights.bin", onnxzoo_mobilenet_v210_config);
-  uint8_t *mutableWeightVarsAddr = initMutableWeightVars(onnxzoo_mobilenet_v210_config);
-//  uint8_t *activationsAddr = initActivations(onnxzoo_mobilenet_v210_config);
-//
-//  // Perform the computation.
+  //  // Allocate and initialize constant and mutable weights.
+  // uint8_t *constantWeightVarsAddr =
+  //      initConstantWeights("onnxzoo_mobilenet_v210.weights.bin",
+  //      onnxzoo_mobilenet_v210_config);
+  uint8_t *mutableWeightVarsAddr =
+      initMutableWeightVars(onnxzoo_mobilenet_v210_config);
+  //  uint8_t *activationsAddr = initActivations(onnxzoo_mobilenet_v210_config);
+  //
+  //  // Perform the computation.
   onnxzoo_mobilenet_v210_load_module(0);
-  int errCode =
-      onnxzoo_mobilenet_v210(0, mutableWeightVarsAddr, 0);
+  int errCode = onnxzoo_mobilenet_v210(0, mutableWeightVarsAddr, 0);
   if (errCode != GLOW_SUCCESS) {
     printf("Error running bundle: error code %d\n", errCode);
   }
 
-  
-
   // Report the results.
-  int maxIdx = dumpInferenceResults(onnxzoo_mobilenet_v210_config, mutableWeightVarsAddr);
+  int maxIdx = dumpInferenceResults(onnxzoo_mobilenet_v210_config,
+                                    mutableWeightVarsAddr);
 
   // Free all resources.
-//  free(activationsAddr1);
-//  free(constantWeightVarsAddr1);
+  //  free(activationsAddr1);
+  //  free(constantWeightVarsAddr1);
   free(mutableWeightVarsAddr);
 
-  return !(maxIdx==285);
+  return !(maxIdx == 285);
 }

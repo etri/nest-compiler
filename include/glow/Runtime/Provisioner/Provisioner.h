@@ -27,14 +27,14 @@
 namespace glow {
 
 struct PartitionerCompileOptions {
-    unsigned idxMultiEVTA_;
-    std::string relayTarget_;
-    std::string relayTargetHost_;
-    unsigned relayOptLevel_;
-    std::string relayRequiredPass_;
-    std::string relayDisabledPass_;
-    std::string relayExportOption_;
-    std::string relayDebugMode_;
+  unsigned idxMultiEVTA_;
+  std::string relayTarget_;
+  std::string relayTargetHost_;
+  unsigned relayOptLevel_;
+  std::string relayRequiredPass_;
+  std::string relayDisabledPass_;
+  std::string relayExportOption_;
+  std::string relayDebugMode_;
 };
 
 namespace runtime {
@@ -44,7 +44,7 @@ namespace runtime {
 /// device.
 class Provisioner final {
 public:
-    Provisioner(DeviceManagerMapTy &devices);
+  Provisioner(DeviceManagerMapTy &devices);
 
   /// Traverses the DAG \p networks and:
   ///   1. Retrieves each node's Function from the provided \p module.
@@ -54,7 +54,9 @@ public:
   Error provision(DAGListTy &networks, Module &module,
                   CompilationContext &cctx);
   Error provisionForNestPartition(DAGListTy &networks, Module &module,
-                   CompilationContext &cctx, std::string bundleDir, std::map<std::string, int>* puIdxMap);
+                                  CompilationContext &cctx,
+                                  std::string bundleDir,
+                                  std::map<std::string, int> *puIdxMap);
   /// Remove stored compiledFunction.
   Error removeFunction(llvm::StringRef name);
 
@@ -75,8 +77,9 @@ public:
     deviceMappings_ = mappings;
   }
 
-  void addBackend(std::string backendName, std::unique_ptr<glow::Backend>& newBackend);
-  void setCompileOptions(PartitionerCompileOptions* compileOptions);
+  void addBackend(std::string backendName,
+                  std::unique_ptr<glow::Backend> &newBackend);
+  void setCompileOptions(PartitionerCompileOptions *compileOptions);
 
 private:
   /// Map of backends for all devices, one backend per device type.
