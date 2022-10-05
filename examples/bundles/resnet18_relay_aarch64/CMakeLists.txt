@@ -1,4 +1,3 @@
-option(NESTC_USE_PRECOMPILED_BUNDLE "Use pre-compiled bundle" OFF)
 option(NESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS "Download bundles from AWS S3" OFF)
 
 if(NOT NESTC_USE_PRECOMPILED_BUNDLE)

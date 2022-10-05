@@ -1,5 +1,3 @@
-option(NESTC_USE_PRECOMPILED_BUNDLE "Use pre-compiled bundle" OFF)
-
 if(NOT NESTC_USE_PRECOMPILED_BUNDLE)
     add_custom_command(
             OUTPUT
