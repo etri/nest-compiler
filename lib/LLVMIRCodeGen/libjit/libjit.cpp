@@ -3333,6 +3333,9 @@ __attribute__((noinline)) void libjit_dump_tensor_console(uint8_t *tensor,
   case ElemKind::Int8QTy:
     libjit_dump_tensor_console_impl((int8_t *)tensor, tensorDim, numDimsTensor);
     break;
+  case ElemKind::Int16QTy:
+    libjit_dump_tensor_console_impl((int16_t *)tensor, tensorDim, numDimsTensor);
+    break;
   case ElemKind::Int32QTy:
     libjit_dump_tensor_console_impl((int32_t *)tensor, tensorDim,
                                     numDimsTensor);
