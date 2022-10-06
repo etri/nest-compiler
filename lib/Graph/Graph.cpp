@@ -1617,6 +1617,8 @@ TransposeNode *Function::createTranspose(llvm::StringRef name, NodeValue input,
       currLayout = "HWNC";
     } else if (compareShuffle(CNHW2NHWC)) {
       currLayout = "NHWC";
+    } else if (compareShuffle(HW2WH)) {
+      currLayout = "WH";
     }
   }
 
