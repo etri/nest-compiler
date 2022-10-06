@@ -795,6 +795,7 @@ void Loader::compile(CompilationContext &cctx) {
     // same optimizations seen during normal execution inside addNetwork().
     EXIT_ON_ERR(::glow::optimizeFunctionBeforeLowering(F_, cctx));
     EXIT_ON_ERR(::glow::optimizeFunction(F_, *backend_, cctx));
+    EXIT_ON_ERR(backend_->transformPostOptPipeline(F_, cctx));
     backend_->save(F_, emitBundle, networkName,
                    mainEntryName.empty() ? networkName : mainEntryName);
   } else {
