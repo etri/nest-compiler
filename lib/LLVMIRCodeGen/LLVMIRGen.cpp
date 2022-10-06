@@ -2367,8 +2367,11 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::ConvolutionInstKind: {
     auto *CI = cast<ConvolutionInst>(I);
+#ifdef GLOW_WITH_NMP
+#else
     assert(CI->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Convolutions");
+#endif
     auto *dest = CI->getDest();
     auto *src = CI->getSrc();
     auto *filter = CI->getFilter();
@@ -2856,8 +2859,11 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::MaxPoolInstKind: {
     auto *PM = cast<MaxPoolInst>(I);
+#ifdef GLOW_WITH_NMP
+#else
     assert(PM->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Pools");
+#endif
     auto *dest = PM->getDest();
     auto *src = PM->getSrc();
     auto *destPtr = emitValueAddress(builder, dest);
@@ -2886,8 +2892,11 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::MaxPoolWithArgmaxInstKind: {
     auto *PMXY = cast<MaxPoolWithArgmaxInst>(I);
+#ifdef GLOW_WITH_NMP
+#else
     assert(PMXY->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Pools");
+#endif
     auto *dest = PMXY->getDest();
     auto *src = PMXY->getSrc();
     auto *destPtr = emitValueAddress(builder, dest);
@@ -2960,8 +2969,11 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::AvgPoolInstKind: {
     auto *PA = cast<AvgPoolInst>(I);
+#ifdef GLOW_WITH_NMP
+#else
     assert(PA->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Pools");
+#endif
     auto *dest = PA->getDest();
     auto *src = PA->getSrc();
     auto *destPtr = emitValueAddress(builder, dest);
