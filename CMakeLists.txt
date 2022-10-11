@@ -19,6 +19,7 @@ option(NESTC_USE_PRECOMPILED_BUNDLE "use pre-compiled bundle code from nestc-dat
 option(NESTC_OPENCL_TEST "Enable OpenCL TEST" OFF)
 option(NESTC_CUDA_TEST "Enable CUDA TEST" OFF)
 option(NESTC_BNN "Enable BNN mode" OFF)
+option(NESTC_WITH_TVM "Build TVM backend" ON)
 
 include(CTest)
 include(NESTCTestSupport)
@@ -68,16 +69,19 @@ include_directories(BEFORE
         ${NESTC_ROOT_DIR}/include
         ${NESTC_ROOT_DIR}/include/tools/loader
 )
-message(STATUS "START CMAKE TVM")
-SET(USE_LLVM ON)
-if(NESTC_OPENCL_TEST)
-    SET(USE_OPENCL ON)
-endif()
 
-if(NESTC_CUDA_TEST)
-    SET(USE_CUDA ON)
+if(NESTC_WITH_TVM)
+    message(STATUS "START CMAKE TVM")
+    SET(USE_LLVM ON)
+    if(NESTC_OPENCL_TEST)
+        SET(USE_OPENCL ON)
+    endif()
+
+    if(NESTC_CUDA_TEST)
+        SET(USE_CUDA ON)
+    endif()
+    add_subdirectory(tvm)
 endif()
-add_subdirectory(tvm)
 
 if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
     include(FetchContent)
