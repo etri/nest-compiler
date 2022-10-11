@@ -10,6 +10,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/glow/cmake/modules")
 project(NESTC C CXX)
 
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
+option(NESTC_WITH_NEWTON "Build the Newton backend" OFF)
 option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_EVTA_RUN_ON_ZCU102 "Run on ZCU102 board" OFF)
 option(NESTC_EVTA_MULTI "use Multi-EVTA" OFF)
@@ -18,7 +19,7 @@ option(NESTC_USE_PRECOMPILED_BUNDLE "use pre-compiled bundle code from nestc-dat
 option(NESTC_OPENCL_TEST "Enable OpenCL TEST" OFF)
 option(NESTC_CUDA_TEST "Enable CUDA TEST" OFF)
 option(NESTC_BNN "Enable BNN mode" OFF)
-option(NESTC_WITH_NMP "Build the NMP backend" OFF)
+option(NESTC_WITH_TVM "Build TVM backend" ON)
 
 include(CTest)
 include(NESTCTestSupport)
@@ -57,28 +58,30 @@ if (NESTC_WITH_EVTA)
     add_definitions(-DGLOW_WITH_VTA)
 endif()
 
-if(NESTC_WITH_NMP)
-    message("NESTC WITH NMP")
-    add_definitions(-DGLOW_WITH_NMP=1)
-    option(TENSOR_DIMS_32_BITS "Set the max bitwidth of the tensor dimension and related indices to 32b instead of 64b." ON)
-    set(RISCV_NMP_TOOLCHAIN $ENV{RISCV_NMP_TOOLCHAIN})
+if (NESTC_WITH_NEWTON)
+    message("NESTC WITH NEWTON in graph cmake")
+    add_definitions(-DGLOW_WITH_NEWTON)
 endif()
+
 
 include_directories(BEFORE
         ${NESTC_ROOT_DIR}/
         ${NESTC_ROOT_DIR}/include
         ${NESTC_ROOT_DIR}/include/tools/loader
 )
-message(STATUS "START CMAKE TVM")
-SET(USE_LLVM ON)
-if(NESTC_OPENCL_TEST)
-    SET(USE_OPENCL ON)
-endif()
 
-if(NESTC_CUDA_TEST)
-    SET(USE_CUDA ON)
+if(NESTC_WITH_TVM)
+    message(STATUS "START CMAKE TVM")
+    SET(USE_LLVM ON)
+    if(NESTC_OPENCL_TEST)
+        SET(USE_OPENCL ON)
+    endif()
+
+    if(NESTC_CUDA_TEST)
+        SET(USE_CUDA ON)
+    endif()
+    add_subdirectory(tvm)
 endif()
-add_subdirectory(tvm)
 
 if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
     include(FetchContent)
@@ -129,15 +132,22 @@ if(NESTC_USE_PRECOMPILED_EVTA_LIBRARY)
     INCLUDE_DIRECTORIES(${vtalib_SOURCE_DIR}/include/Bundle/ ${vtalib_SOURCE_DIR}/include/simulator ${vtalib_SOURCE_DIR}/include/simulator/vta)
 endif()
 
+if(NESTC_WITH_NEWTON)
+    add_subdirectory(examples/newton_bundles)
+endif()
+
 message(STATUS "START CMAKE GLOW")
 add_subdirectory(glow)
 
 get_property(NESTC_TEST_DEPENDS GLOBAL PROPERTY NESTC_TEST_DEPENDS)
 get_property(ZCU102_TEST_DEPENDS GLOBAL PROPERTY ZCU102_TEST_DEPENDS)
+get_property(NEWTON_TEST_DEPENDS GLOBAL PROPERTY NEWTON_TEST_DEPENDS)
 get_property(MULTIEVTA_TEST_DEPENDS GLOBAL PROPERTY MULTIEVTA_TEST_DEPENDS)
 add_custom_target(check_nestc COMMAND ${CMAKE_CTEST_COMMAND} -L NESTC
         DEPENDS ${NESTC_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_zcu102 COMMAND ${CMAKE_CTEST_COMMAND} -L ZCU102
         DEPENDS ${ZCU102_TEST_DEPENDS} USES_TERMINAL)
+add_custom_target(check_newton COMMAND ${CMAKE_CTEST_COMMAND} -L NEWTON
+        DEPENDS ${NEWTON_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_multievta COMMAND ${CMAKE_CTEST_COMMAND} -L MULTIEVTA
         DEPENDS ${MULTIEVTA_TEST_DEPENDS} USES_TERMINAL)
