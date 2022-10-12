@@ -479,6 +479,14 @@ public:
              llvm::ArrayRef<unsigned_t> dilation = {1, 1},
              ConvolutionLayout layout = ConvolutionLayout::NHWC);
 
+  BNNConvolutionNode *	
+  createBNNConv(llvm::StringRef name, NodeValue input, NodeValue filter,
+             NodeValue bias, NodeValue scalingfactor, TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
+             llvm::ArrayRef<unsigned_t> strides,
+             llvm::ArrayRef<unsigned_t> pads, unsigned_t group,
+             llvm::ArrayRef<unsigned_t> dilation = {1, 1},
+             ConvolutionLayout layout = ConvolutionLayout::NHWC);
+
   /// Creates a ConvolutionNode with the given \p name which convolves the 4D
   /// \p input with \p filter and \bias. \p kernel defines the size of the
   /// height and width dimensions of the filters. \p stride defines the number
@@ -493,6 +501,13 @@ public:
   createConv(llvm::StringRef name, NodeValue input, NodeValue filter,
              NodeValue bias, TypeRef outTy, unsigned_t kernel,
              unsigned_t stride, unsigned_t pad, unsigned_t group,
+             llvm::ArrayRef<unsigned_t> dilation = {1, 1},
+             ConvolutionLayout layout = ConvolutionLayout::NHWC);
+
+  BNNConvolutionNode *
+  createBNNConv(llvm::StringRef name, NodeValue input, NodeValue filter,
+             NodeValue bias, NodeValue scalingfactor, TypeRef outTy, unsigned_t kernels,
+             unsigned_t strides, unsigned_t pads, unsigned_t group,
              llvm::ArrayRef<unsigned_t> dilation = {1, 1},
              ConvolutionLayout layout = ConvolutionLayout::NHWC);
 
@@ -1932,6 +1947,15 @@ public:
                               llvm::ArrayRef<unsigned_t> pads, unsigned_t group,
                               llvm::ArrayRef<unsigned_t> dilation = {1, 1},
                               ConvolutionLayout layout = NHWC);
+
+  BNNConvolutionNode *createBNNConv(PlaceholderBindings &bindings,
+                              llvm::StringRef name, NodeValue input,
+                              dim_t outChannels,
+                              llvm::ArrayRef<unsigned_t> kernels,
+                              llvm::ArrayRef<unsigned_t> strides,
+                              llvm::ArrayRef<unsigned_t> pads, unsigned_t group,
+                              llvm::ArrayRef<unsigned_t> dilation = {1, 1},
+                              ConvolutionLayout layout = NHWC);
 #ifdef GLOW_WITH_VTA
   VTAConvolutionNode *createVTAConv(
       llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
@@ -1975,6 +1999,14 @@ public:
                               dim_t outChannels, unsigned_t kernel,
                               unsigned_t stride, unsigned_t pad,
                               unsigned_t group,
+                              llvm::ArrayRef<unsigned_t> dilation = {1, 1},
+                              ConvolutionLayout layout = NHWC);
+
+  BNNConvolutionNode *createBNNConv(PlaceholderBindings &bindings,
+                              llvm::StringRef name, NodeValue input,
+                              dim_t outChannels, unsigned_t kernel,
+                              unsigned_t stride, unsigned_t pad,
+                              unsigned_t group, 
                               llvm::ArrayRef<unsigned_t> dilation = {1, 1},
                               ConvolutionLayout layout = NHWC);
 

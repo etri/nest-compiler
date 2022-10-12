@@ -146,6 +146,20 @@ bool VTA::isOpSupported(const NodeInfo &NI) const {
             (NI.getInElemTy(ConvolutionNode::BiasIdx) == ElemKind::Int16QTy ||
              NI.getInElemTy(ConvolutionNode::BiasIdx) == ElemKind::Int32QTy));
 
+   case Kinded::Kind::BNNConvolutionNodeKind:
+      if (!NI.getInTy(BNNConvolutionNode::InputIdx)->isQuantizedType()) {
+          return NI.allInputsAndOutputsHaveSameElemKind(
+                  {ElemKind::FloatTy, ElemKind::Float16Ty});
+      }
+      return (NI.allInputsAndOutputsHaveSameElemKind(
+              {ElemKind::Int8QTy}, {BNNConvolutionNode::BiasIdx, BNNConvolutionNode::ScalingfactorIdx}) &&
+              (NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int8QTy ||
+               NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int32QTy)) ||
+             (NI.allInputsAndOutputsHaveSameElemKind(
+                     {ElemKind::Int16QTy}, {BNNConvolutionNode::BiasIdx, BNNConvolutionNode::ScalingfactorIdx}) &&
+              (NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int16QTy ||
+               NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int32QTy));
+
   case Kinded::Kind::QuantizeNodeKind:
     return ((NI.getInElemTy(QuantizeNode::InputIdx) == ElemKind::FloatTy) ||
             (NI.getInElemTy(QuantizeNode::InputIdx) == ElemKind::Float16Ty) ||
@@ -628,8 +642,10 @@ void VTA::parseBackendSpecificOptions(const BackendOptions &opts) const {}
 
 void VTA::save(Function *F, llvm::StringRef outputDir,
                llvm::StringRef bundleName, llvm::StringRef mainEntryName,
-               unsigned idxMultiEVTA) {
+               unsigned idxMultiEVTA,
+               bool BNNWithScale) {
   setIdxMultiEVTA(idxMultiEVTA);
+  setBNNWithScale(BNNWithScale);
   save(F, outputDir, bundleName, mainEntryName);
 }
 

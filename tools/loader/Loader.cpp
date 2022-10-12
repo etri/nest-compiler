@@ -264,9 +264,6 @@ llvm::cl::opt<std::string>
                                  "This name is used as the function name "
                                  "of the entry point to the network."),
                   llvm::cl::cat(loaderCat));
-
-llvm::cl::opt<bool> BNNOpt("bnn", llvm::cl::desc("Quantization scale = 1"),
-                           llvm::cl::init(false), llvm::cl::cat(loaderCat));
 } // namespace
 
 // These are outside the namespace so they can be used by the image-classifier.
@@ -310,6 +307,11 @@ llvm::cl::opt<unsigned> numDevices("num-devices",
                                    llvm::cl::desc("Number of Devices to use"),
                                    llvm::cl::init(1), llvm::cl::value_desc("N"),
                                    llvm::cl::cat(loaderCat));
+
+llvm::cl::opt<bool> BNNwithScale("bnn-with-scale",
+                                 llvm::cl::desc("bnn with scale factor"),
+                                 llvm::cl::Optional, llvm::cl::init(false),
+                                 llvm::cl::cat(loaderCat));
 
 llvm::cl::opt<bool> runAllInputsOnAllDevices(
     "run-all-inputs-on-all-devices",
@@ -676,7 +678,6 @@ quantization::QuantizationConfiguration Loader::getQuantizationConfiguration() {
   quantConfig.enableRowwise = enableRowwiseOpt;
   quantConfig.enableChannelwise = enableChannelwiseOpt;
   quantConfig.assertAllNodesQuantized = assertAllNodesQuantizedOpt;
-  quantConfig.bnn = BNNOpt;
   if (!loadProfileFileOpt.empty()) {
     auto fileExists = deserializeProfilingInfosFromYaml(
         loadProfileFileOpt, quantConfig.graphPreLowerHash, quantConfig.infos);
@@ -1039,6 +1040,7 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
   backend_ = std::unique_ptr<Backend>(createBackend(ExecutionBackend));
   if (backend_->getBackendName() == "VTA") {
     static_cast<VTA *>(backend_.get())->setIdxMultiEVTA(idxMultiEVTA);
+    static_cast<VTA*>(backend_.get())->setBNNWithScale(BNNwithScale);
   }
 
   if (backend_->getBackendName() == "Relay") {
@@ -1064,6 +1066,7 @@ Loader::Loader(llvm::ArrayRef<size_t> configDeviceIDs) {
   compileOptions.relayRequiredPass_ = relayRequiredPass;
   compileOptions.relayDisabledPass_ = relayDisabledPass;
   compileOptions.relayOptLevel_ = relayOptLevel;
+  compileOptions.BNNwithScale_ = BNNwithScale;
 
   hostManager_->setCompileOptions(&compileOptions);
 

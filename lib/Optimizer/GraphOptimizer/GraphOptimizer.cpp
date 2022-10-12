@@ -2469,6 +2469,274 @@ bool OptimizeBatchNorm::run(Function *F, const CompilationContext &cctx) {
   return changed;
 }
 
+bool EliminateTransposeSign::run(Function *F, const CompilationContext &cctx) {
+  LOG_SCOPE(F->getLogContext(), getName());
+  bool changed = false;
+  auto &nodes = F->getNodes();
+  auto *M = F->getParent();
+
+  // For each node:
+  for (auto &node : nodes) {
+    if (auto *TN = dyn_cast<TransposeNode>(&node)) {
+      auto *SN = dyn_cast<SignNode>(TN->getInput());
+
+      if (!SN){
+        continue;
+      }
+      auto *TN2 = dyn_cast<TransposeNode>(SN->getInput());
+
+      if (!TN2) {
+        continue;
+      }
+
+      auto *newS = F->createSign(SN->getName(), TN2->getInput());
+
+      TN->getResult().replaceAllUsesOfWith(newS);
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+template <typename ElemTy>
+bool normalizeBNNWeights(Module *M, BNNConvolutionNode &BCV,
+                      BatchNormalizationNode &BN) {
+  static_assert(
+      std::is_floating_point<ElemTy>::value ||
+          std::is_same<float16_t,
+                       typename std::remove_cv<ElemTy>::type>::value ||
+          std::is_same<bfloat16_t,
+                       typename std::remove_cv<ElemTy>::type>::value,
+      "This implementation is for floating-point values only");
+
+  Constant *filterC = getUniquelyUsedConstant(M, *BCV.getFilter().getNode());
+  Constant *cbiasC = getUniquelyUsedConstant(M, *BCV.getBias().getNode());
+  Constant *bnn_scaleC = getUniquelyUsedConstant(M, *BCV.getScalingfactor().getNode());
+
+  if (!filterC || !cbiasC || !bnn_scaleC) {
+    return false;
+  }
+
+  // Perform normalization when Convolution layout is NHWC and BatchNorm
+  // ChannelIdx points to C.
+  if (BN.getChannelIdx() != 3) {
+    return false;
+  }
+
+  // Set the new filter and bias on CV if necessary.
+  if (filterC != BCV.getFilter().getNode()) {
+    BCV.getParent()->getLogContext()->logNodeInputChange(
+        BCV, BCV.getNthInput(BNNConvolutionNode::FilterIdx), filterC);
+    BCV.setNthInput(BNNConvolutionNode::FilterIdx, filterC);
+  }
+  if (cbiasC != BCV.getBias().getNode()) {
+    BCV.getParent()->getLogContext()->logNodeInputChange(
+        BCV, BCV.getNthInput(BNNConvolutionNode::BiasIdx), cbiasC);
+    BCV.setNthInput(BNNConvolutionNode::BiasIdx, cbiasC);
+  }
+
+  Constant *scaleC = cast<Constant>(BN.getScale());
+  Constant *biasC = cast<Constant>(BN.getBias());
+  Constant *meanC = cast<Constant>(BN.getMean());
+  Constant *var = cast<Constant>(BN.getVar());
+
+  auto filterH = filterC->getHandle<ElemTy>();
+  auto cbiasH = cbiasC->getHandle<ElemTy>();
+  auto bnn_scaleH = bnn_scaleC->getHandle<ElemTy>();
+
+  auto scaleH = scaleC->getHandle<ElemTy>();
+  auto biasH = biasC->getHandle<ElemTy>();
+  auto meanH = meanC->getHandle<ElemTy>();
+  auto varH = var->getHandle<ElemTy>();
+
+  // Update the filter/bias constants of the Conv node.
+  auto epsilon = BN.getEpsilon();
+  for (size_t i = 0, e = filterH.size(); i < e; i++) {
+    // Dimension zero is the 'channel' dimension. If we ever change the
+    // layout of the filter then we need to change this optimization.
+    dim_t channelId = filterH.getDimForPtr(0, i);
+    float value = varH.at({channelId});
+    float stdvar = 1.0f / std::sqrt(value + epsilon);
+    float gamma = scaleH.at({channelId});
+    float A = gamma * stdvar;
+    filterH.raw(i) = ElemTy(float(filterH.raw(i)) * A);
+  }
+
+  for (size_t i = 0, e = cbiasH.size(); i < e; i++) {
+    // Dimension zero is the 'channel' dimension. If we ever change the
+    // layout of the filter then we need to change this optimization.
+    dim_t channelId = cbiasH.getDimForPtr(0, i);
+    float mu = meanH.at({channelId});
+    float value = varH.at({channelId});
+    float stdvar = 1.0f / std::sqrt(value + epsilon);
+    float gamma = scaleH.at({channelId});
+    float beta = biasH.at({channelId});
+    float A = gamma * stdvar;
+    float B = beta - mu * A;
+    cbiasH.raw(i) = ElemTy(float(cbiasH.raw(i)) * A + B);
+  }
+
+  for (size_t i = 0, e = bnn_scaleH.size(); i < e; i++) {
+    dim_t channelId = bnn_scaleH.getDimForPtr(0, i);
+    float val = filterH.at({channelId,0,0,0});
+    bnn_scaleH.raw(i) = ElemTy(abs(val));
+  }
+  return true;
+}
+
+bool BNNOptimizeBatchNorm::run(Function *F, const CompilationContext &cctx) {
+  LOG_SCOPE(F->getLogContext(), getName());
+  bool changed = false;
+  auto &nodes = F->getNodes();
+  auto *M = F->getParent();
+
+  // For each node:
+  for (auto &node : nodes) {
+    // Merge the Batch Normalization operation into the convolution that comes
+    // before it by updating the weights of the filter and bias.
+    if (auto *BN = dyn_cast<BatchNormalizationNode>(&node)) {
+      auto *BCV = dyn_cast<BNNConvolutionNode>(BN->getInput());
+      if (!BCV) {
+        continue;
+      }
+      // We can't modify conv operators that have multiple users.
+      if (!BCV->hasOneUse()) {
+        continue;
+      }
+      bool normalizationHappened = false;
+      switch (BCV->getElementType(BNNConvolutionNode::ResultIdx)) {
+      case ElemKind::FloatTy:
+        normalizationHappened = normalizeBNNWeights<float>(M, *BCV, *BN);
+        break;
+      case ElemKind::Float16Ty:
+        normalizationHappened = normalizeBNNWeights<float16_t>(M, *BCV, *BN);
+        break;
+      case ElemKind::BFloat16Ty:
+        normalizationHappened = normalizeBNNWeights<bfloat16_t>(M, *BCV, *BN);
+        break;
+      default:
+        llvm_unreachable("Type not supported");
+      }
+
+      if (!normalizationHappened) {
+        continue;
+      }
+      // Take the predicate of what was expected for the output.
+      BCV->setPredicate(BN->getPredicate());
+      BN->getResult().replaceAllUsesOfWith(BCV);
+      changed = true;
+      continue;
+    }
+  } // For all nodes in the graph.
+  return changed;
+}
+
+template <typename ElemTy>
+bool createBNNConv(Module *M, ConvolutionNode &CV,
+                      BNNConvolutionNode &BCV) {
+  static_assert(
+      std::is_floating_point<ElemTy>::value ||
+          std::is_same<float16_t,
+                       typename std::remove_cv<ElemTy>::type>::value ||
+          std::is_same<bfloat16_t,
+                       typename std::remove_cv<ElemTy>::type>::value,
+      "This implementation is for floating-point values only");
+
+  Constant *filterC = getUniquelyUsedConstant(M, *BCV.getFilter().getNode());
+  Constant *cbiasC = getUniquelyUsedConstant(M, *BCV.getBias().getNode());
+
+  if (!filterC || !cbiasC) {
+    return false;
+  }
+
+  // Set the new filter and bias on CV if necessary.
+  if (filterC != BCV.getFilter().getNode()) {
+    BCV.getParent()->getLogContext()->logNodeInputChange(
+        BCV, BCV.getNthInput(BNNConvolutionNode::FilterIdx), filterC);
+    BCV.setNthInput(BNNConvolutionNode::FilterIdx, filterC);
+  }
+  if (cbiasC != BCV.getBias().getNode()) {
+    BCV.getParent()->getLogContext()->logNodeInputChange(
+        BCV, BCV.getNthInput(BNNConvolutionNode::BiasIdx), cbiasC);
+    BCV.setNthInput(BNNConvolutionNode::BiasIdx, cbiasC);
+  }
+
+  auto filterH = filterC->getHandle<ElemTy>();
+  auto cbiasH = cbiasC->getHandle<ElemTy>();
+
+  Constant *scalingC = getUniquelyUsedConstant(M, *BCV.getScalingfactor().getNode());
+  auto sfH = scalingC->getHandle<ElemTy>();
+
+
+  for (dim_t i = 0, e = cbiasH.size(); i < e; i++) {
+    cbiasH.raw(i) = ElemTy(float(cbiasH.raw(i)));
+  }
+
+  for (dim_t i = 0, e = sfH.size(); i < e; i++) {
+    dim_t channelId = sfH.getDimForPtr(0, i);
+    float val = filterH.at({channelId,0,0,0});
+    //sfH.raw(i) = abs(val);
+    sfH.raw(i) = ElemTy(abs(val));
+  }
+  return true;
+}
+
+bool ConvertToBNNConvolution::run(Function *F, const CompilationContext &cctx) {
+  LOG_SCOPE(F->getLogContext(), getName());
+  bool changed = false;
+  auto &nodes = F->getNodes();
+  auto *M = F->getParent();
+
+  // For each node:
+  for (auto &node : nodes) {
+    // Merge the Batch Normalization operation into the convolution that comes
+    // before it by updating the weights of the filter and bias.
+
+    if (auto *CV = dyn_cast<ConvolutionNode>(&node)) {
+      auto *TR = dyn_cast<TransposeNode>(CV->getInput());
+
+      if (!TR){
+        continue;
+      }
+      auto *S = dyn_cast<SignNode>(TR->getInput());
+      if(!S) {
+        continue;
+      }
+
+      if(!CV->hasOneUse()) {
+        continue;
+      }
+
+      auto *scalingfactor = F->getParent()->createConstant(CV->getBias().getType(), CV->getName().str() + "_scalingfactor");
+      auto *BCV = F->createBNNConv("bnn_" + CV->getName().str(), CV->getInput(),
+                                    CV->getFilter(), CV->getBias(), scalingfactor,
+                                    CV->getResult().getType(), CV->getKernels(),
+                                    CV->getStrides(), CV->getPads(),
+                                    CV->getGroup(), CV->getDilation());
+      bool convertBNN = false;
+      switch (CV->getElementType(BNNConvolutionNode::ResultIdx)) {
+      case ElemKind::FloatTy:
+        convertBNN = createBNNConv<float>(M, *CV, *BCV);
+        break;
+      case ElemKind::Float16Ty:
+        convertBNN = createBNNConv<float16_t>(M, *CV, *BCV);
+        break;
+      case ElemKind::BFloat16Ty:
+        convertBNN = createBNNConv<bfloat16_t>(M, *CV, *BCV);
+        break;
+      default:
+        llvm_unreachable("Type not supported");
+      }
+
+      CV->getResult().replaceAllUsesOfWith(BCV);
+      changed = convertBNN;
+      continue;
+
+    }
+  } // For all nodes in the graph.
+  return changed;
+}
+
 /// If \p node has uses, and all of them have one user node, return this user
 /// node. Otherwise, return nullptr.
 static Node *getOnlyUser(Node &node) {
@@ -5040,7 +5308,26 @@ static bool sinkRescaleQuantizedNode(Function *F,
       }
       continue;
     }
+    if (auto *BCN = dyn_cast<BNNConvolutionNode>(&node)) {
+      auto *rescaleX = dyn_cast<RescaleQuantizedNode>(BCN->getInput());
+      auto *rescaleF = dyn_cast<RescaleQuantizedNode>(BCN->getFilter());
+      auto *rescaleB = dyn_cast<RescaleQuantizedNode>(BCN->getBias());
+      auto *rescaleS = dyn_cast<RescaleQuantizedNode>(BCN->getScalingfactor());
+      auto newX = rescaleX ? rescaleX->getInput() : BCN->getInput();
+      auto newF = rescaleF ? rescaleF->getInput() : BCN->getFilter();
+      auto newB = rescaleB ? rescaleB->getInput() : BCN->getBias();
+      auto newS = rescaleS ? rescaleS->getInput() : BCN->getScalingfactor();
 
+      if (rescaleX || rescaleF || rescaleB || rescaleS) {
+        auto *newBCN = F->createBNNConv(BCN->getName(), newX, newF, newB, newS,
+                                    BCN->getResult().getType(), BCN->getKernels(),
+                                    BCN->getStrides(), BCN->getPads(),
+                                    BCN->getGroup(), BCN->getDilation());
+        BCN->getResult().replaceAllUsesOfWith(newBCN);
+        changed = true;
+      }
+      continue;
+    }
     if (auto *AN = dyn_cast<AddNode>(&node)) {
       changed |= combineDownRescaleToArithmeticNode<AddNode>(*F, AN);
       continue;
@@ -5210,6 +5497,7 @@ bool OptimizeQuantization::run(Function *F, const CompilationContext &cctx) {
       case Kinded::Kind::MinNodeKind:
       case Kinded::Kind::MatMulNodeKind:
       case Kinded::Kind::ConvolutionNodeKind:
+      case Kinded::Kind::BNNConvolutionNodeKind:
       case Kinded::Kind::ChannelwiseQuantizedConvolutionNodeKind:
       case Kinded::Kind::FullyConnectedNodeKind:
       case Kinded::Kind::SparseLengthsWeightedSumNodeKind: {

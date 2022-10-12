@@ -260,6 +260,7 @@ Error BoundVTAInterpreterFunction::execute(IRFunction *F,
         DEF_INSTR(TensorViewInst, tensorview)
         DEF_INSTR(DeallocActivationInst, deallocactivation)
         DEF_INSTR(ConvolutionInst, convolution)
+        DEF_INSTR(BNNConvolutionInst, bnnconvolution)
         DEF_INSTR(MaxPoolInst, maxpool)
         DEF_INSTR(AvgPoolInst, avgpool)
         DEF_INSTR(FullyConnectedInst, fullyconnected)

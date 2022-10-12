@@ -340,6 +340,16 @@ bool VTAInterpreter::isOpSupported(const NodeInfo &NI) const {
             (NI.getInElemTy(ConvolutionNode::BiasIdx) == ElemKind::Int16QTy ||
              NI.getInElemTy(ConvolutionNode::BiasIdx) == ElemKind::Int32QTy));
 
+   case Kinded::Kind::BNNConvolutionNodeKind:
+     if (!NI.getInTy(BNNConvolutionNode::InputIdx)->isQuantizedType()) {
+       return NI.allInputsAndOutputsHaveSameElemKind(
+           {ElemKind::FloatTy, ElemKind::Float16Ty, ElemKind::BFloat16Ty});
+     }
+     return (NI.allInputsAndOutputsHaveSameElemKind(
+                 {ElemKind::Int8QTy}, {BNNConvolutionNode::BiasIdx, BNNConvolutionNode::ScalingfactorIdx}) &&
+             (NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int8QTy ||
+              NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int32QTy));
+
   case Kinded::Kind::ChannelwiseQuantizedConvolutionNodeKind:
     return (NI.getInElemTy(ChannelwiseQuantizedConvolutionNode::InputIdx) ==
             ElemKind::Int8QTy) &&

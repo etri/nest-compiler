@@ -95,7 +95,7 @@ public:
                     llvm::StringRef mainEntryName) const override;
 
   void save(Function *F, llvm::StringRef outputDir, llvm::StringRef bundleName,
-            llvm::StringRef mainEntryName, unsigned idxMultiEVTA);
+            llvm::StringRef mainEntryName, unsigned idxMultiEVTA, bool BNNWithScale = false);
 
   bool supportsFusedActivation(Node *parent, Node *activation) const override {
 #ifdef VTA_FUSION
@@ -110,9 +110,10 @@ public:
   }
 
   void setIdxMultiEVTA(uint32_t idx) { idxMultiEVTA = idx; }
-
+  void setBNNWithScale(bool scale){ BNNWithScale = scale; }
 private:
   uint32_t idxMultiEVTA = 1;
+  bool BNNWithScale = false;
 };
 
 } // namespace glow

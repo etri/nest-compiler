@@ -48,6 +48,7 @@ struct PartitionerCompileOptions {
   std::string relayDisabledPass_;
   std::string relayExportOption_;
   std::string relayDebugMode_;
+  bool BNNwithScale_;
 };
 
 namespace runtime {

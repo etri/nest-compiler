@@ -918,6 +918,53 @@ ConvolutionNode *Function::createConv(
                                      FusedActivation::NONE, {}));
 }
 
+BNNConvolutionNode *Function::createBNNConv(
+    llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
+    NodeValue scalingfactor ,TypeRef outTy, llvm::ArrayRef<unsigned_t> kernels,
+    llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation, ConvolutionLayout layout) {
+  auto OT = getParent()->uniqueType(*outTy);
+
+  // If the input is quantized but the bias is not then auto-quantize the
+  // bias.
+  if (input.getType()->isQuantizedType()) {
+    auto biasType = bias.getElementType();
+    if (biasType == ElemKind::Int32QTy || biasType == ElemKind::Int8QTy) {
+      // Nothing to do
+    } else if (biasType == ElemKind::FloatTy) {
+      auto biasTy = getParent()->uniqueType(
+          glow::ElemKind::Int32QTy, bias.dims(),
+          input.getType()->getScale() * filter.getType()->getScale(),
+          /* offset */ 0);
+      bias = createQuantize("quantized_bias", bias, biasTy);
+    } else {
+      LOG(DFATAL)
+          << "Unsupported element type for bias of quantized convolution: "
+          << Type::getElementName(biasType).str();
+    }
+
+    auto scaleType = scalingfactor.getElementType();
+    assert(scaleType == biasType && "scaleType == biasType");
+    if (scaleType == ElemKind::Int32QTy || scaleType == ElemKind::Int8QTy) {
+      // Nothing to do
+    } else if (scaleType == ElemKind::FloatTy) {
+      auto scaleTy = getParent()->uniqueType(
+          glow::ElemKind::Int32QTy, scalingfactor.dims(),
+          input.getType()->getScale() * filter.getType()->getScale(),
+          /* offset */ 0);
+      scalingfactor = createQuantize("quantized_scale", scalingfactor, scaleTy);
+    } else {
+      LOG(DFATAL)
+          << "Unsupported element type for scalingfactor of quantized convolution: "
+          << Type::getElementName(scaleType).str();
+    }
+  }
+
+  return addNode(new BNNConvolutionNode(name, OT, input, filter, bias, scalingfactor,
+                                     kernels, strides, pads, group, dilation, layout
+                                     ));
+}
+
 #ifdef GLOW_WITH_VTA
 VTAConvolutionNode *Function::createVTAConv(
     llvm::StringRef name, NodeValue input, NodeValue filter, NodeValue bias,
@@ -1022,6 +1069,19 @@ ConvolutionNode *Function::createConv(llvm::StringRef name, NodeValue input,
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
   llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
   return createConv(name, input, filter, bias, outTy, kernels, strides, pads,
+                    group, dilation, layout);
+}
+
+BNNConvolutionNode *Function::createBNNConv(llvm::StringRef name, NodeValue input,
+                                      NodeValue filter, NodeValue bias, NodeValue scalingfactor,
+                                      TypeRef outTy, unsigned_t kernel,
+                                      unsigned_t stride, unsigned_t pad,
+                                      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
+                                      ConvolutionLayout layout) {
+  llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
+  llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
+  llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
+  return createBNNConv(name, input, filter, bias, scalingfactor, outTy, kernels, strides, pads,
                     group, dilation, layout);
 }
 
@@ -3574,6 +3634,71 @@ ConvolutionNode *Function::createConv(PlaceholderBindings &bindings,
   llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
   llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
   return createConv(bindings, name, input, outChannels, kernels, strides, pads,
+                    group, dilation, layout);
+}
+
+BNNConvolutionNode *Function::createBNNConv(
+    PlaceholderBindings &bindings, llvm::StringRef name, NodeValue input,
+    dim_t outChannels, llvm::ArrayRef<unsigned_t> kernels,
+    llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
+    unsigned_t group, llvm::ArrayRef<unsigned_t> dilation, ConvolutionLayout layout) {
+  ShapeNHWC idim = ShapeNHWC(input.dims());
+  ShapeHW kdim(kernels);
+  PaddingTLBR pdim(pads);
+  (void)pdim;
+  assert((idim.w + pdim.left + pdim.right) >= kdim.width &&
+         (idim.h + pdim.top + pdim.bottom) >= kdim.height &&
+         "buffer too small for selected stride");
+
+  assert(group > 0 && "group should be larger than 0");
+  assert(idim.c % group == 0 && "channels number must be divisible by groups");
+  assert(outChannels % group == 0 && "outChannels must be divisible by groups");
+
+  // Calculate the size and allocate the output buffer.
+  auto outSz = calculateConvPoolOutputDims(idim.h, idim.w, kernels, strides,
+                                           pads, dilation);
+
+  std::array<dim_t, 4> outDims = {
+      {idim.n, outSz.first, outSz.second, outChannels}};
+
+  // Allocate the Filter and Bias tensors.
+  std::array<dim_t, 4> filterDim = {
+      {outChannels, kdim.height, kdim.width, idim.c / group}};
+  size_t fanIn = kdim.height * kdim.width * idim.c;
+  ElemKind inputTy = input.getType()->getElementType();
+  assert(isFloatElemKind(inputTy) && "Convolution on non-floating point type?");
+  auto *filter =
+      getParent()->createPlaceholder(inputTy, filterDim, "filter", true);
+  bindings.allocate(filter)->init(glow::Tensor::InitKind::Xavier, fanIn,
+                                  getPRNG());
+
+  auto *bias =
+      getParent()->createPlaceholder(inputTy, {outChannels}, "bias", true);
+  bindings.allocate(bias)->init(glow::Tensor::InitKind::Broadcast, 0.1,
+                                getPRNG());
+
+  auto *scalingfactor =
+      getParent()->createPlaceholder(inputTy, {outChannels}, "scalingfactor", true);
+  bindings.allocate(scalingfactor)->init(glow::Tensor::InitKind::Broadcast, 0.1,
+                                getPRNG());
+
+  auto OT = getParent()->uniqueType(inputTy, outDims);
+
+  return addNode(new BNNConvolutionNode(name, OT, input, filter, bias,scalingfactor, kernels,
+                                     strides, pads, group, dilation, layout
+                                     ));
+}
+
+BNNConvolutionNode *Function::createBNNConv(PlaceholderBindings &bindings,
+                                      llvm::StringRef name, NodeValue input,
+                                      dim_t outChannels, unsigned_t kernel,
+                                      unsigned_t stride, unsigned_t pad,
+                                      unsigned_t group, llvm::ArrayRef<unsigned_t> dilation,
+                                      ConvolutionLayout layout) {
+  llvm::SmallVector<unsigned_t, 4> pads = {pad, pad, pad, pad};
+  llvm::SmallVector<unsigned_t, 2> strides = {stride, stride};
+  llvm::SmallVector<unsigned_t, 2> kernels = {kernel, kernel};
+  return createBNNConv(bindings, name, input, outChannels, kernels, strides, pads,
                     group, dilation, layout);
 }
 

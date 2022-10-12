@@ -5,11 +5,19 @@ include(GlowSerialize)
 
 # LIBJIT LLVM common source files.
 set(LIBJIT_CPU_SOURCE_FILES)
-list(APPEND LIBJIT_CPU_SOURCE_FILES
-  ${NESTC_ROOT_DIR}/lib/LLVMIRCodeGen/libjit/libjit.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../LLVMIRCodeGen/libjit/libjit_conv.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../LLVMIRCodeGen/libjit/libjit_matmul.cpp
-)
+if(NESTC_BNN)
+	list(APPEND LIBJIT_CPU_SOURCE_FILES
+	  ${NESTC_ROOT_DIR}/lib/LLVMIRCodeGen/libjit/libjit.cpp
+	  ${NESTC_ROOT_DIR}/lib/LLVMIRCodeGen/libjit/libjit_conv.cpp
+	  ${NESTC_ROOT_DIR}/lib/LLVMIRCodeGen/libjit/libjit_matmul.cpp
+	)
+else()
+	list(APPEND LIBJIT_CPU_SOURCE_FILES
+	  ${CMAKE_CURRENT_SOURCE_DIR}/../../LLVMIRCodeGen/libjit/libjit.cpp
+	  ${CMAKE_CURRENT_SOURCE_DIR}/../../LLVMIRCodeGen/libjit/libjit_conv.cpp
+	  ${CMAKE_CURRENT_SOURCE_DIR}/../../LLVMIRCodeGen/libjit/libjit_matmul.cpp
+	)
+endif()
 
 # LIBJIT CPU specific source files.
 list(APPEND LIBJIT_CPU_SOURCE_FILES

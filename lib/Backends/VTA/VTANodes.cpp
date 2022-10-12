@@ -858,6 +858,181 @@ void BoundVTAFunction::fwdConvolutionInst(const ConvolutionInst *I) {
 }
 
 //===----------------------------------------------------------------------===//
+//                       BNN Convolution
+//===----------------------------------------------------------------------===//
+
+
+void BoundVTAFunction::fwdBNNConvolutionInst(const BNNConvolutionInst *I) {
+  auto kernelSizes = I->getKernels();
+  auto pads = I->getPads();
+  auto strides = I->getStrides();
+  size_t group = I->getGroup();
+
+  if (I->getSrc()->getType()->isQuantizedType()) {
+    //assert(I->getSrc()->getElementType()==ElemKind::Int8QTy);
+    auto inW = getWeightHandle<int8_t>(I->getSrc());
+    ShapeNHWC idim(inW.dims());
+    auto outW = getWeightHandle<int8_t>(I->getDest());
+    ShapeNHWC odim(outW.dims());
+
+    if(idim.c%16 ==0 && odim.c%16 ==0 &&
+            I->getSrc()->getElementType() ==  ElemKind::Int8QTy &&
+            I->getBias()->getElementType() ==  ElemKind::Int32QTy &&
+        group == 1) {
+
+      Value *inV = I->getSrc();
+      Value *outV = I->getDest();
+      Value *filterV = I->getFilter();
+      Value *biasV = I->getBias();
+      auto inW = getWeightHandle<int8_t>(inV);
+      auto outW = getWeightHandle<int8_t>(outV);
+      auto filterW = getWeightHandle<int8_t>(filterV);
+      auto biasW = getWeightHandle<int32_t>(biasV);
+
+      ShapeNHWC odim(outW.dims());
+      ShapeNHWC idim(inW.dims());
+      ShapeHW kdim(kernelSizes);
+      ShapeHW sdim(strides);
+      assert(group==1);
+      assert(idim.c % group == 0 && "Input channels must be divisible by group.");
+      assert(odim.c % group == 0 && "Output channels must be divisible by group.");
+
+      PaddingTLBR pdim(pads);
+      auto outTy = outV->getType();
+      auto inTy = inV->getType();
+      auto filterTy = filterV->getType();
+      auto biasTy = biasV->getType();
+
+      int32_t outOffset = outTy->getOffset();
+      int32_t inOffset = inTy->getOffset();
+      int32_t filterOffset = filterTy->getOffset();
+      int32_t biasOffset = biasTy->getOffset();
+
+
+      float outScale = outTy->getScale();
+      float inScale = inTy->getScale();
+      float filterScale = filterTy->getScale();
+      float biasScale = biasTy->getScale();
+
+      assert(outOffset == 0);
+      assert(inOffset == 0);
+      assert(filterOffset ==0);
+      assert(biasOffset == 0);
+
+      assert(pdim.top==pdim.left);
+      assert(pdim.top==pdim.right);
+      assert(pdim.top==pdim.bottom);
+      uint32_t pad_size = pdim.top;
+      assert(strides[0] == strides[1]);
+      uint32_t stride_size = strides[0];
+
+
+      bool doBias = false;
+
+      filterScale = 1/filterScale;
+      inScale = 1/inScale;
+      biasScale = 1/biasScale;
+      outScale = 1/outScale;
+
+      float matMulScale = inScale * filterScale;
+      float scale =  matMulScale / outScale;
+      float tempScale = 1.0;
+      assert(scale > 1);
+      uint32_t shift = 0;
+      {
+        while(tempScale<scale)
+        {
+          tempScale *= 2;
+          shift++;
+        }
+        assert(tempScale==scale);
+      }
+
+
+      int N = idim.n;
+      int H = idim.h;
+      int W = idim.w;
+      int C = idim.c;
+      int KN = odim.c;
+      int KH = kdim.height;
+      int KW = kdim.width;
+
+      assert(C%16 == 0);
+      assert(KN%16 == 0);
+
+      int8_t *input = (int8_t *)malloc(N*C*H*W);
+      for (dim_t n = 0; n < N; n++) {
+        for (dim_t h = 0; h < H; h++) {
+          for (dim_t w = 0; w < W; w++) {
+            for (dim_t c = 0; c < C; c++) {
+              *(input + n*H*W*C + h*W*C + w*C + c) = inW.at({n,h,w,c});
+            }
+          }
+        }
+      }
+
+      int8_t *kernel = (int8_t *)malloc(KN*KH*KW*C +KN* sizeof(int32_t));
+
+      for (int n = 0; n < KN; n++) {
+        for (int h = 0; h < KH; h++) {
+          for (int w = 0; w < KW; w++) {
+            for (int c = 0; c < C; c++) {
+              *(kernel + n*KH*KW*C + h*KW*C + w*C + c) =
+                  filterW.at({(dim_t)n,(dim_t)h,(dim_t)w,(dim_t)c});
+            }
+          }
+        }
+      }
+      bool doRelu = false;
+
+      int32_t* bias = (int32_t *) (kernel+KN*KH*KW*C);
+      for (unsigned long i = 0 ; i < KN ; i++)
+      {
+        bias[i] = biasW.at({i});
+        if(bias[i]!=0){
+          doBias = true;
+        }
+      }
+      int out_h = odim.h;
+      int out_w = odim.w;
+      int8_t *output = (int8_t *)malloc(N * out_h * out_w * KN);
+      convolution(input, kernel, output, N, H, W, C, KN, KH, KW, pad_size, stride_size, doRelu, doBias, shift, out_h, out_w);
+      for (int n = 0; n < N; n++) {
+        for (int h = 0; h < out_h; h++) {
+          for (int w = 0; w < out_w; w++) {
+            for (int c = 0; c < KN; c++) {
+              outW.at({(dim_t) n, (dim_t) h, (dim_t) w, (dim_t) c}) = *(output + n * out_h * out_w * KN + h * out_w * KN + w * KN + c);
+            }
+          }
+        }
+      }
+
+
+    }
+    else if(group != 1) {
+      bool doRelu = false;
+      fwdVTAConvolutionInstQuantizedImpl(I->getSrc(), I->getDest(),
+          I->getFilter(), I->getBias(),
+          kernelSizes, strides, pads, group, I->getDilation(), doRelu);
+    }
+    else{
+      bool doRelu = false;
+
+      dispatchQuantizedWithAccumulationAndBiasImpl(
+          fwdConvolutionInstQuantizedImpl, I->getSrc()->getElementType(),
+          I->getBias()->getElementType(), I->getSrc(), I->getDest(),
+          I->getFilter(), I->getBias(), kernelSizes, strides, pads, group,
+          I->getDilation(), doRelu);
+    }
+    return;
+  }
+
+  llvm_unreachable("Not supported for VTA");
+  return;
+}
+
+
+//===----------------------------------------------------------------------===//
 //                       Pooling
 //===----------------------------------------------------------------------===//
 template <class T>

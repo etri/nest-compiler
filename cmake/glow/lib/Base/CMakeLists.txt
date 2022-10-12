@@ -14,7 +14,7 @@ target_link_libraries(Base
                         glog::glog)
 
 if(PNG_FOUND)
-  target_sources(Base PRIVATE Image.cpp)
+  target_sources(Base PRIVATE ${NESTC_ROOT_DIR}/lib/Base/Image.cpp)
   target_include_directories(Base
                              PRIVATE
                                ${PNG_INCLUDE_DIR})

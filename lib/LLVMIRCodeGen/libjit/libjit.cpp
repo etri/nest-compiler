@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * Modifications copyright (C) 2022 <ETRI/Yongin Kwon>
  */
 #include <algorithm>
 #include <assert.h>
@@ -1674,9 +1673,7 @@ DEFINE_DATA_PARALLEL_KERNEL(libjit_element_sin_kernel_f, float,
 DEFINE_DATA_PARALLEL_KERNEL(libjit_element_cos_kernel_f, float,
                             std::cos(LHS[idx]))
 DEFINE_DATA_PARALLEL_KERNEL(libjit_element_sign_kernel_f, float,
-                            float(LHS[idx] > 0.0) - float(LHS[idx] <= 0.0))
-DEFINE_DATA_PARALLEL_KERNEL(libjit_element_sign_kernel_i8, int8_t,
-                            int(LHS[idx] > 0) - int(LHS[idx] <= 0))
+                float((LHS[idx] >= 0.0)*64 - float(LHS[idx] < 0.0)*64))
 DEFINE_DATA_PARALLEL_KERNEL_QUANTIZED(libjit_element_add_kernel_i8, int8_t,
                                       lhs + rhs)
 DEFINE_DATA_PARALLEL_KERNEL_QUANTIZED(libjit_element_sub_kernel_i8, int8_t,

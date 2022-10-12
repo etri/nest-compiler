@@ -131,6 +131,16 @@ protected:
       return getBiasType(
           getTargetTypeForInput(use, Convolution3DNode::InputIdx),
           getTargetTypeForInput(use, Convolution3DNode::FilterIdx));
+    }  else if (use.getKind() == glow::Kinded::Kind::BNNConvolutionNodeKind &&
+        idx == BNNConvolutionNode::BiasIdx) {
+      return getBiasType(
+          getTargetTypeForInput(use, BNNConvolutionNode::InputIdx),
+          getTargetTypeForInput(use, BNNConvolutionNode::FilterIdx));
+    } else if (use.getKind() == glow::Kinded::Kind::BNNConvolutionNodeKind &&
+        idx == BNNConvolutionNode::ScalingfactorIdx) {
+      return getBiasType(
+          getTargetTypeForInput(use, BNNConvolutionNode::InputIdx),
+          getTargetTypeForInput(use, BNNConvolutionNode::FilterIdx));
     } else if (use.getKind() == glow::Kinded::Kind::ConvTransposeNodeKind &&
                idx == ConvTransposeNode::BiasIdx) {
       // Get the input and weights types. This ensures the types will be
@@ -584,7 +594,6 @@ private:
   // If true, don't apply quantization to FC bias inputs.
   const bool skipQuantizeFCBias_;
 
-  const bool bnn_;
 
 public:
   /// Creates a function quantizer for function \p F using the quantization
@@ -603,8 +612,7 @@ public:
         doNotQuantizeKinds_(doNotQuantizeKinds), loweredMap_(loweredMap),
         assertAllNodesQuantized_(quantConfig.assertAllNodesQuantized),
         quantizationPrecisionBias_(quantConfig.precisionBias),
-        skipQuantizeFCBias_(quantConfig.skipQuantizeFCBias),
-        bnn_(quantConfig.bnn) {
+        skipQuantizeFCBias_(quantConfig.skipQuantizeFCBias) {
 
     // Compute the TensorQuantizationParams using the profiling infos.
     auto quantizationInfos =
@@ -1047,6 +1055,20 @@ generateNodeQuantizationInfos(Function *F,
         calibration = Calibration::None;
         continue;
       }
+      if ((user->getKind() == glow::Kinded::Kind::BNNConvolutionNodeKind) &&
+          (user->getNthInput(BNNConvolutionNode::BiasIdx) == nodeOutput)) {
+        // Found bias for BNNConvolutionNode.
+        precision = quantConfig.precisionBias;
+        calibration = Calibration::None;
+        continue;
+      }
+      if ((user->getKind() == glow::Kinded::Kind::BNNConvolutionNodeKind) &&
+          (user->getNthInput(BNNConvolutionNode::ScalingfactorIdx) == nodeOutput)) {
+        // Found bias for BNNConvolutionNode.
+        precision = quantConfig.precisionBias;
+        calibration = Calibration::None;
+        continue;
+      }
       if ((user->getKind() == glow::Kinded::Kind::Convolution3DNodeKind) &&
           (user->getNthInput(Convolution3DNode::BiasIdx) == nodeOutput)) {
         // Found bias for Convolution3DNode.
@@ -1097,11 +1119,6 @@ generateNodeQuantizationInfos(Function *F,
     TensorProfilingParams TPP = profilingInfo.tensorProfilingParams_;
     TensorQuantizationParams TQP =
         chooseQuantizationParams(TPP, schema, precision, calibration);
-
-    if (quantConfig.bnn) {
-      TQP.offset = 0;
-      TQP.scale = 1;
-    }
 
     quantizationInfos.emplace_back(nodeOutputName, TQP);
   }

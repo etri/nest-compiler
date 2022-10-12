@@ -1095,6 +1095,71 @@ void BoundVTAInterpreterFunction::fwdVTAConvolutionInstQuantizedImpl(
   }         // N
 }
 
+void BoundVTAInterpreterFunction::fwdBNNConvolutionInst(const BNNConvolutionInst *I) {
+  auto kernelSizes = I->getKernels();
+  auto pads = I->getPads();
+  auto strides = I->getStrides();
+  size_t group = I->getGroup();
+  int32_t fuseRelu = 0;
+
+  if (I->getSrc()->getType()->isQuantizedType()) {
+    assert(I->getSrc()->getElementType() == ElemKind::Int8QTy);
+    auto inW = getWeightHandle<int8_t>(I->getSrc());
+    ShapeNHWC idim(inW.dims());
+    auto outW = getWeightHandle<int8_t>(I->getDest());
+    ShapeNHWC odim(outW.dims());
+
+    auto inTy = I->getSrc()->getType();
+    auto filterTy = I->getFilter()->getType();
+    auto biasTy = I->getBias()->getType();
+    float filterScale = filterTy->getScale();
+    filterScale = 1 / filterScale;
+    float inScale = inTy->getScale();
+    inScale = 1 / inScale;
+    float biasScale = biasTy->getScale();
+    biasScale = 1 / biasScale;
+    float matMulScale = inScale * filterScale;
+    auto outTy = I->getDest()->getType();
+    float outScale = outTy->getScale();
+    outScale = 1 / outScale;
+    float scale = matMulScale / outScale;
+    float tempScale = 1.0;
+    assert(scale > 1);
+    uint32_t shift = 0;
+    {
+      while (tempScale < scale) {
+        tempScale *= 2;
+        shift++;
+      }
+    }
+
+    int32_t outOffset = outTy->getOffset();
+    int32_t inOffset = inTy->getOffset();
+    int32_t filterOffset = filterTy->getOffset();
+    int32_t biasOffset = biasTy->getOffset();
+    if (idim.c%16 ==0 && odim.c%16 ==0 && tempScale == scale && outOffset == 0 && inOffset == 0 &&
+        biasScale==matMulScale && filterOffset == 0 && biasOffset == 0) {
+      llvm::outs()<<"VTA Conv"<<"\n";
+      fwdVTAConvolutionInstQuantizedImpl(
+          I->getSrc(), I->getDest(), I->getFilter(), I->getBias(), kernelSizes,
+          strides, pads, group, I->getDilation(), fuseRelu);
+    } else {
+      llvm::outs()<<"CPU Conv"<<"\n";
+      dispatchQuantizedWithAccumulationAndBiasImpl(
+          fwdConvolutionInstQuantizedImpl, I->getSrc()->getElementType(),
+          I->getBias()->getElementType(), I->getSrc(), I->getDest(),
+          I->getFilter(), I->getBias(), kernelSizes, strides, pads, group,
+          I->getDilation(), fuseRelu);
+    }
+    return;
+  }
+
+  dispatchFloatingPointImpl(
+      fwdConvolutionInstFloatImpl, I->getSrc()->getElementType(), I->getSrc(),
+      I->getDest(), I->getFilter(), I->getBias(), kernelSizes, strides, pads,
+      group, I->getDilation());
+}
+
 /// This is the floating point implementation of ConvTranspose.
 template <typename ElemTy>
 void BoundVTAInterpreterFunction::fwdConvTransposeInstFloatImpl(

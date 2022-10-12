@@ -1,9 +1,9 @@
 add_executable(NodeGen
-                 NodeGen.cpp
+                 ${NESTC_ROOT_DIR}/tools/ClassGen/NodeGen.cpp
                  NodeBuilder.cpp)
 
 add_executable(InstrGen
-                 InstrGen.cpp
+                 ${NESTC_ROOT_DIR}/tools/ClassGen/InstrGen.cpp
                  InstrBuilder.cpp)
 
 target_link_libraries(NodeGen

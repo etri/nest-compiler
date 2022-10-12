@@ -195,6 +195,73 @@ static bool verifyConvolution(NodeValue src, NodeValue dest, NodeValue filter,
   return isValid;
 }
 
+template <typename Shape>
+static bool verifyBNNConvolution(NodeValue src, NodeValue dest, NodeValue filter,
+                              NodeValue bias, NodeValue scalingfactor,
+                              llvm::ArrayRef<unsigned_t> kernels,
+                              llvm::ArrayRef<unsigned_t> strides,
+                              llvm::ArrayRef<unsigned_t> pads, unsigned_t group,
+                              llvm::ArrayRef<unsigned_t> dilation, bool checkBiasType = true) {
+  const Node *parent = dest.getNode();
+  bool isValid = checkType(src, dest.getElementType(), parent);
+  isValid &= checkType(src, filter.getElementType(), parent);
+  if (checkBiasType) {
+    // Non quantization type check.
+    if (src.getElementType() == ElemKind::FloatTy) {
+      isValid &= checkType(bias, ElemKind::FloatTy, parent);
+    }
+    // Quantization type check.
+    if (src.getElementType() == ElemKind::Int8QTy) {
+      isValid &=
+          expectCompareTrue("Bias type should be float, Int8 or Int32 for Conv",
+                            bias.getElementType() == ElemKind::FloatTy ||
+                                bias.getElementType() == ElemKind::Int8QTy ||
+                                bias.getElementType() == ElemKind::Int32QTy,
+                            true, parent);
+    }
+    if (src.getElementType() == ElemKind::Int8QTy) {
+      isValid &=
+          expectCompareTrue("Scalingfactor type should be float, Int8 or Int32 for Conv",
+                            scalingfactor.getElementType() == ElemKind::FloatTy ||
+                            scalingfactor.getElementType() == ElemKind::Int8QTy ||
+                            scalingfactor.getElementType() == ElemKind::Int32QTy,
+                            true, parent);
+    }
+  }
+  Shape idim(src.getType()->dims());
+  Shape odim(dest.getType()->dims());
+  PaddingTLBR pdim(pads);
+  ShapeHW kdim(kernels);
+  isValid &= expectCompareTrue("buffer height too small for selected stride",
+                               idim.h + pdim.top + pdim.bottom, kdim.height,
+                               parent, CompareOperatorGreaterEqual<dim_t>());
+  isValid &= expectCompareTrue("buffer width too small for selected stride",
+                               idim.w + pdim.left + pdim.right, kdim.width,
+                               parent, CompareOperatorGreaterEqual<dim_t>());
+  isValid &= expectCompareTrue("channels number must be divisible by groups",
+                               idim.c % group, dim_t(0), parent);
+
+  auto outSz = calculateConvPoolOutputDims(idim.h, idim.w, kernels, strides,
+                                           pads, dilation);
+  isValid &=
+      expectCompareTrue("Invalid output dimension N", odim.n, idim.n, parent);
+  isValid &= expectCompareTrue("Invalid output dimension H", odim.h,
+                               outSz.first, parent);
+  isValid &= expectCompareTrue("Invalid output dimension W", odim.w,
+                               outSz.second, parent);
+  isValid &= expectCompareTrue("Invalid output dimension C", odim.c % group,
+                               dim_t(0), parent);
+
+  isValid &= verifyConvFilter(parent, filter, idim, odim, kdim, group);
+
+  const dim_t biasDims[] = {odim.c};
+
+  isValid &=
+      expectCompareTrue("Invalid bias dimensions", bias.getType()->dims(),
+                        llvm::makeArrayRef(biasDims), parent);
+  return isValid;
+}
+
 static bool verifyConvolution3D(NodeValue src, NodeValue dest, NodeValue filter,
                                 NodeValue bias,
                                 llvm::ArrayRef<unsigned_t> kernels,
@@ -672,6 +739,18 @@ bool ConvolutionNode::verify() const {
                                         Group_, Dilation_);
   } else {
     return verifyConvolution<ShapeNCHW>(getInput(), getResult(), getFilter(),
+                                        getBias(), Kernels_, Strides_, Pads_,
+                                        Group_, Dilation_);
+  }
+}
+
+bool BNNConvolutionNode::verify() const {
+  if (getLayout() == NHWC) {
+    return verifyBNNConvolution<ShapeNHWC>(getInput(), getResult(), getFilter(), getScalingfactor(),
+                                        getBias(), Kernels_, Strides_, Pads_,
+                                        Group_, Dilation_);
+  } else {
+    return verifyBNNConvolution<ShapeNCHW>(getInput(), getResult(), getFilter(), getScalingfactor(),
                                         getBias(), Kernels_, Strides_, Pads_,
                                         Group_, Dilation_);
   }

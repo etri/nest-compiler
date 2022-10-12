@@ -2465,6 +2465,99 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     break;
   }
 
+  case Kinded::Kind::BNNConvolutionInstKind: {
+    auto *CI = cast<BNNConvolutionInst>(I);
+    assert(CI->getLayout() == NHWC &&
+           "Glow CPU Backend supports only NHWC Convolutions");
+    auto *dest = CI->getDest();
+    auto *src = CI->getSrc();
+    auto *filter = CI->getFilter();
+    auto *bias = CI->getBias();
+
+    auto *destPtr = emitValueAddress(builder, dest);
+    auto *srcPtr = emitValueAddress(builder, src);
+    auto *filterPtr = emitValueAddress(builder, filter);
+    auto *biasPtr = emitValueAddress(builder, bias);
+
+    auto *destDims = emitValueDims(builder, dest);
+    auto *srcDims = emitValueDims(builder, src);
+    auto *filterDims = emitValueDims(builder, filter);
+    auto *biasDims = emitValueDims(builder, bias);
+
+    auto *kernels = emitConstDimTArray(builder, CI->getKernels());
+    auto *strides = emitConstDimTArray(builder, CI->getStrides());
+    auto *pads = emitConstDimTArray(builder, CI->getPads());
+    auto *group = emitConstDimT(builder, CI->getGroup());
+    auto *dilation = emitConstDimTArray(builder, CI->getDilation());
+
+    auto destDepth = dest->dims()[3];
+
+    // Try to 'block' the convolution on the 'depth' dimension. We will process
+    // this number output slices each iteration.
+    unsigned unrollDFactor = 1;
+
+    // In libjit_convolution_f function, 'unrollDFactor' output
+    // layers will be processed together. Therefore, the number of
+    // output layers in each group should be divisible by 'unrollDFactor'
+    bool groupDividedBy8 = ((destDepth / CI->getGroup()) % 8) == 0;
+    if (groupDividedBy8) {
+      unrollDFactor = 8;
+    }
+
+    auto *unrollD = emitConstI32(builder, unrollDFactor);
+
+    if (src->getType()->isQuantizedType()) {
+      auto *destTy = dest->getType();
+      auto *srcTy = src->getType();
+      auto *filterTy = filter->getType();
+      auto *biasTy = bias->getType();
+
+      auto *destOffset = emitConstI32(builder, destTy->getOffset());
+      auto *srcOffset = emitConstI32(builder, srcTy->getOffset());
+      auto *filterOffset = emitConstI32(builder, filterTy->getOffset());
+      auto *biasOffset = emitConstI32(builder, biasTy->getOffset());
+
+      // Calculate the scale of the values that come out of the matrix
+      // multiplication part of the calculation.
+      float matMulScale = srcTy->getScale() * filterTy->getScale();
+
+      // Calculate the scaling parameters for the bias and output.
+      auto biasScaleParam = quantization::quantizeScaleOffset32To8(
+          biasTy->getScale() / matMulScale, biasTy->getOffset());
+      auto outScaleParam = quantization::quantizeScaleOffset32To8(
+          matMulScale / destTy->getScale(), 0);
+
+      // Pass the pre-shift, post-shift and integer scale parameters for the
+      // bias and output calculation.
+      auto *biasPre = emitConstI32(builder, biasScaleParam.pre);
+      auto *biasPost = emitConstI32(builder, biasScaleParam.post);
+      auto *biasScale = emitConstI32(builder, biasScaleParam.scale);
+      auto *outPre = emitConstI32(builder, outScaleParam.pre);
+      auto *outPost = emitConstI32(builder, outScaleParam.post);
+      auto *outScale = emitConstI32(builder, outScaleParam.scale);
+
+      auto *F = getFunction("bnn_conv2d",
+                            {dest->getElementType(), bias->getElementType()});
+
+      createCall(builder, F,
+                 {destPtr,    srcPtr,     filterPtr,  biasPtr,
+                 destDims,    srcDims,    filterDims, biasDims,
+                 kernels,     strides,    pads,       group,      destOffset,
+                 srcOffset, filterOffset, biasOffset,
+                 biasPre,    biasPost,   biasScale,
+                 outPre, outPost, outScale,   unrollD,    dilation});
+    } else {
+
+      auto *F = getFunction("bnn_conv2d", dest->getElementType());
+
+      createCall(builder, F,
+                 {destPtr, srcPtr, filterPtr, biasPtr, destDims, srcDims,
+                  filterDims, biasDims, kernels, strides, pads, group,
+									unrollD, dilation});
+    }
+    break;
+  }
+
   case Kinded::Kind::ConvolutionGradInstKind: {
     auto *CG = cast<ConvolutionGradInst>(I);
     auto *srcGrad = CG->getSrcGrad();

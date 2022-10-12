@@ -1,0 +1,88 @@
+/**
+ * Copyright (c) Glow Contributors. See CONTRIBUTORS file.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef FUN_PASS
+#error "FUN_PASS must be defined by includer."
+#endif
+
+FUN_PASS(DCE)
+FUN_PASS(SinkCode)
+FUN_PASS(SinkConversions)
+FUN_PASS(SinkReshapes)
+FUN_PASS(HoistCode)
+FUN_PASS(MergeMatMulOnLHS)
+FUN_PASS(MergeMatMulOnRHS)
+FUN_PASS(MergePadIntoConvolution)
+FUN_PASS(OptimizeSmallConv)
+FUN_PASS(MergeTransposeIntoMatMulOrFC)
+FUN_PASS(ConvertBroadcastedBatchMatMul)
+FUN_PASS(MergeBatchedAdd)
+FUN_PASS(OptimizeReduceMean)
+FUN_PASS(FoldArithmeticChainUnderConvIntoBN)
+FUN_PASS(FoldBatchNormalizationWithArithmeticChain)
+FUN_PASS(ConvTransposeBiasAddFold)
+FUN_PASS(OptimizeBatchNorm)
+FUN_PASS(OptimizeConcatNodes)
+FUN_PASS(OptimizeArithmeticNodes)
+FUN_PASS(TransposeConstants)
+FUN_PASS(CSE)
+FUN_PASS(OptimizeSplat)
+FUN_PASS(OptimizeTransposeIntoReshape)
+FUN_PASS(OptimizeReshape)
+FUN_PASS(OptimizeResize)
+FUN_PASS(OptimizeInsert)
+FUN_PASS(EliminateNoop)
+FUN_PASS(OptimizeClips)
+FUN_PASS(OptimizeConversions)
+FUN_PASS(OptimizeQuantization)
+FUN_PASS(FoldLeakyRelu)
+FUN_PASS(FoldChannelShuffle)
+FUN_PASS(ConstantFold)
+FUN_PASS(GatherToSlice)
+FUN_PASS(FoldTileAddIntoBatchedAdd)
+FUN_PASS(FoldElemKindConversionIntoOutputs)
+FUN_PASS(FoldElemKindConversionIntoInputs)
+FUN_PASS(FoldMatMulAddIntoFullyConnected)
+FUN_PASS(ConvertMatMulToFullyConnected)
+FUN_PASS(FoldSlicesIntoConstants)
+FUN_PASS(FoldDilatedConv)
+FUN_PASS(EliminateConcatSlice)
+FUN_PASS(EliminateSliceConcat)
+FUN_PASS(RaiseClipsAboveShapeNodes)
+FUN_PASS(EliminateClipsOutsideFP16Range)
+FUN_PASS(OptimizeQuantizeClip)
+FUN_PASS(OptimizeOutIntermediateConversions)
+FUN_PASS(OptimizeQuantFCFloatRelu)
+FUN_PASS(OptimizeConcatQuantization)
+FUN_PASS(SinkConcatBelowQuantize)
+FUN_PASS(FoldLayerNormArithmetic)
+FUN_PASS(QuantizeSwish)
+FUN_PASS(ConvertFullyConnectedToConvolution)
+FUN_PASS(FoldMinMaxToClip)
+FUN_PASS(ReplaceZeroScaleFP16QuantNodes)
+FUN_PASS(ReplaceQuantizedHardSwishWithLookupTable)
+FUN_PASS(FoldExpSumDivIntoSoftmax)
+FUN_PASS(RemoveIdentityRelu)
+FUN_PASS(RemoveIdentityClip)
+FUN_PASS(ConvertToBNNConvolution)
+FUN_PASS(BNNOptimizeBatchNorm)
+FUN_PASS(EliminateTransposeSign)
+
+
+// NOTE: This pass must be last; it's used to count the total number of passes.
+FUN_PASS(EmptyPass)
+
+#undef FUN_PASS

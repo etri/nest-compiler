@@ -5,7 +5,7 @@ add_definitions(-DGOOGLE_PROTOBUF_NO_RTTI)
 
 add_library(Exporter
               ProtobufWriter.cpp
-              ONNXModelWriter.cpp)
+              ${NESTC_ROOT_DIR}/lib/Exporter/ONNXModelWriter.cpp)
 target_compile_definitions(Exporter
                            INTERFACE
                              -DGOOGLE_PROTOBUF_NO_RTTI)

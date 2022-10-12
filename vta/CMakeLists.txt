@@ -12,5 +12,8 @@ endif()
 
 add_subdirectory(bundles)
 if(NESTC_EVTA_MULTI)
-    add_subdirectory(multievta_bundles)
+    if(NOT NESTC_BNN)
+        add_subdirectory(multievta_bundles)
+    endif()
 endif()
+

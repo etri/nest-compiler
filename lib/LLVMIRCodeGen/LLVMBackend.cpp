@@ -280,6 +280,16 @@ bool LLVMBackend::isOpSupported(const NodeInfo &NI) const {
            (NI.getInElemTy(ConvolutionNode::BiasIdx) == ElemKind::Int8QTy ||
             NI.getInElemTy(ConvolutionNode::BiasIdx) == ElemKind::Int32QTy);
 
+case Kinded::Kind::BNNConvolutionNodeKind:
+  if (!NI.getInTy(BNNConvolutionNode::InputIdx)->isQuantizedType()) {
+    return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy});
+  }
+
+  return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::Int8QTy},
+																			{BNNConvolutionNode::BiasIdx, BNNConvolutionNode::ScalingfactorIdx}) &&
+          (NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int8QTy ||
+					 NI.getInElemTy(BNNConvolutionNode::BiasIdx) == ElemKind::Int32QTy);
+
   case Kinded::Kind::ChannelwiseQuantizedConvolutionNodeKind:
     return (NI.getInElemTy(ChannelwiseQuantizedConvolutionNode::InputIdx) ==
             ElemKind::Int8QTy) &&
