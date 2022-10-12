@@ -43,6 +43,19 @@ if(EXISTS ${NESTC_ROOT_DIR}/glow/include/glow/Quantization/Base/Base.h)
 
 endif()
 
+if(EXISTS ${NESTC_ROOT_DIR}/glow/include/glow/Base/Image.h)
+    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/include/glow/Base/Image.h")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/include/glow/Base/Image.h)
+
+endif()
+
+if(EXISTS ${NESTC_ROOT_DIR}/include/glow/Optimizer/GraphOptimizer/FunctionPasses.def)
+    message(STATUS "Delete ${NESTC_ROOT_DIR}/glow/include/glow/Optimizer/GraphOptimizer/FunctionPasses.def")
+    execute_process(COMMAND ${CMAKE_COMMAND} -E remove -f ${NESTC_ROOT_DIR}/glow/include/glow/Optimizer/GraphOptimizer/FunctionPasses.def)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E copy ${NESTC_ROOT_DIR}/include/glow/Optimizer/GraphOptimizer/FunctionPasses.def 
+						     ${NESTC_ROOT_DIR}/glow/include/glow/Optimizer/GraphOptimizer/FunctionPasses.def)
+endif()
+
 execute_process(COMMAND ${CMAKE_COMMAND} -E copy_directory ${NESTC_ROOT_DIR}/cmake/glow ${NESTC_ROOT_DIR}/glow)
 
 if (NESTC_WITH_EVTA)
@@ -68,6 +81,7 @@ include_directories(BEFORE
         ${NESTC_ROOT_DIR}/
         ${NESTC_ROOT_DIR}/include
         ${NESTC_ROOT_DIR}/include/tools/loader
+	${NESTC_ROOT_DIR}/tools/ClassGen/
 )
 
 if(NESTC_WITH_TVM)

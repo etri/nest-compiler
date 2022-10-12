@@ -2367,11 +2367,8 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::ConvolutionInstKind: {
     auto *CI = cast<ConvolutionInst>(I);
-#ifdef GLOW_WITH_NMP
-#else
     assert(CI->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Convolutions");
-#endif
     auto *dest = CI->getDest();
     auto *src = CI->getSrc();
     auto *filter = CI->getFilter();
@@ -2476,6 +2473,7 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *src = CI->getSrc();
     auto *filter = CI->getFilter();
     auto *bias = CI->getBias();
+
     auto *destPtr = emitValueAddress(builder, dest);
     auto *srcPtr = emitValueAddress(builder, src);
     auto *filterPtr = emitValueAddress(builder, filter);
@@ -2542,19 +2540,20 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
                             {dest->getElementType(), bias->getElementType()});
 
       createCall(builder, F,
-                 {destPtr,     srcPtr,     filterPtr,  biasPtr,   destDims,
-                  srcDims,     filterDims, biasDims,   kernels,   strides,
-                  pads,        group,      destOffset, srcOffset, filterOffset,
-                  biasOffset,  biasPre,    biasPost,   biasScale, outPre,
-                  outPost,     outScale,   unrollD,    dilation});
+                 {destPtr,    srcPtr,     filterPtr,  biasPtr,
+                 destDims,    srcDims,    filterDims, biasDims,
+                 kernels,     strides,    pads,       group,      destOffset,
+                 srcOffset, filterOffset, biasOffset,
+                 biasPre,    biasPost,   biasScale,
+                 outPre, outPost, outScale,   unrollD,    dilation});
     } else {
 
       auto *F = getFunction("bnn_conv2d", dest->getElementType());
 
       createCall(builder, F,
                  {destPtr, srcPtr, filterPtr, biasPtr, destDims, srcDims,
-                  filterDims, biasDims, kernels, strides, pads, group, unrollD,
-                  dilation});
+                  filterDims, biasDims, kernels, strides, pads, group,
+									unrollD, dilation});
     }
     break;
   }
@@ -2859,11 +2858,8 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::MaxPoolInstKind: {
     auto *PM = cast<MaxPoolInst>(I);
-#ifdef GLOW_WITH_NMP
-#else
     assert(PM->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Pools");
-#endif
     auto *dest = PM->getDest();
     auto *src = PM->getSrc();
     auto *destPtr = emitValueAddress(builder, dest);
@@ -2892,11 +2888,8 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::MaxPoolWithArgmaxInstKind: {
     auto *PMXY = cast<MaxPoolWithArgmaxInst>(I);
-#ifdef GLOW_WITH_NMP
-#else
     assert(PMXY->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Pools");
-#endif
     auto *dest = PMXY->getDest();
     auto *src = PMXY->getSrc();
     auto *destPtr = emitValueAddress(builder, dest);
@@ -2969,11 +2962,8 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
 
   case Kinded::Kind::AvgPoolInstKind: {
     auto *PA = cast<AvgPoolInst>(I);
-#ifdef GLOW_WITH_NMP
-#else
     assert(PA->getLayout() == NHWC &&
            "Glow CPU Backend supports only NHWC Pools");
-#endif
     auto *dest = PA->getDest();
     auto *src = PA->getSrc();
     auto *destPtr = emitValueAddress(builder, dest);

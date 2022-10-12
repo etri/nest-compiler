@@ -1673,7 +1673,7 @@ DEFINE_DATA_PARALLEL_KERNEL(libjit_element_sin_kernel_f, float,
 DEFINE_DATA_PARALLEL_KERNEL(libjit_element_cos_kernel_f, float,
                             std::cos(LHS[idx]))
 DEFINE_DATA_PARALLEL_KERNEL(libjit_element_sign_kernel_f, float,
-                           (float(LHS[idx] >= 0.0) * 64.0 - float(LHS[idx] < 0.0) * 64.0))
+                float((LHS[idx] >= 0.0)*64 - float(LHS[idx] < 0.0)*64))
 DEFINE_DATA_PARALLEL_KERNEL_QUANTIZED(libjit_element_add_kernel_i8, int8_t,
                                       lhs + rhs)
 DEFINE_DATA_PARALLEL_KERNEL_QUANTIZED(libjit_element_sub_kernel_i8, int8_t,
@@ -3332,9 +3332,6 @@ __attribute__((noinline)) void libjit_dump_tensor_console(uint8_t *tensor,
     break;
   case ElemKind::Int8QTy:
     libjit_dump_tensor_console_impl((int8_t *)tensor, tensorDim, numDimsTensor);
-    break;
-  case ElemKind::Int16QTy:
-    libjit_dump_tensor_console_impl((int16_t *)tensor, tensorDim, numDimsTensor);
     break;
   case ElemKind::Int32QTy:
     libjit_dump_tensor_console_impl((int32_t *)tensor, tensorDim,
