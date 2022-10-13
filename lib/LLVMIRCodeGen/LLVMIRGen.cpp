@@ -2473,7 +2473,6 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
     auto *src = CI->getSrc();
     auto *filter = CI->getFilter();
     auto *bias = CI->getBias();
-
     auto *destPtr = emitValueAddress(builder, dest);
     auto *srcPtr = emitValueAddress(builder, src);
     auto *filterPtr = emitValueAddress(builder, filter);
@@ -2540,20 +2539,19 @@ void LLVMIRGen::generateLLVMIRForInstr(llvm::IRBuilder<> &builder,
                             {dest->getElementType(), bias->getElementType()});
 
       createCall(builder, F,
-                 {destPtr,    srcPtr,     filterPtr,  biasPtr,
-                 destDims,    srcDims,    filterDims, biasDims,
-                 kernels,     strides,    pads,       group,      destOffset,
-                 srcOffset, filterOffset, biasOffset,
-                 biasPre,    biasPost,   biasScale,
-                 outPre, outPost, outScale,   unrollD,    dilation});
+                 {destPtr,     srcPtr,     filterPtr,  biasPtr,   destDims,
+                  srcDims,     filterDims, biasDims,   kernels,   strides,
+                  pads,        group,      destOffset, srcOffset, filterOffset,
+                  biasOffset,  biasPre,    biasPost,   biasScale, outPre,
+                  outPost,     outScale,   unrollD,    dilation});
     } else {
 
       auto *F = getFunction("bnn_conv2d", dest->getElementType());
 
       createCall(builder, F,
                  {destPtr, srcPtr, filterPtr, biasPtr, destDims, srcDims,
-                  filterDims, biasDims, kernels, strides, pads, group,
-									unrollD, dilation});
+                  filterDims, biasDims, kernels, strides, pads, group, unrollD,
+                  dilation});
     }
     break;
   }
