@@ -234,68 +234,6 @@ static void loadImagesAndPreprocess(const std::vector<std::string> &filenames,
   }
 }
 
-static void loadImagesAndPreprocess_(const char* filenames,
-                                    float *&resultT, size_t *resultDims) {
-  assert(filenames.size() > 0 &&
-         "There must be at least one filename in filenames");
-
-  //for normalization range setting
-
-  //for resnet18v2.onnx
-  //std::pair<float, float> range = std::make_pair(0., 1.0);
-
-  //for mxnet_exported_resnet18.onnx
-  std::pair<float, float> range = std::make_pair(0., 255.0);
-
-  // N x C x H x W
-  resultDims[0] = 1;
-  resultDims[1] = 3;
-  resultDims[2] = DEFAULT_HEIGHT;
-  resultDims[3] = DEFAULT_WIDTH;
-  size_t resultSizeInBytes =
-      1 * 3 * DEFAULT_HEIGHT * DEFAULT_WIDTH * sizeof(float);
-
-
-  //resultT = static_cast<float *>(malloc(resultSizeInBytes));
-  resultT = static_cast<float *>(malloc(resultSizeInBytes));
-
-  // We iterate over all the png files, reading them all into our result tensor
-  // for processing
-  for (unsigned n = 0; n < 1; n++) {
-    float *imageT{nullptr};
-    size_t dims[3];
-
-    bool loadSuccess = !readPngImage(filenames, range, imageT, dims);
-    assert(loadSuccess && "Error reading input image.");
-    (void)loadSuccess;
-
-    assert((dims[0] == DEFAULT_HEIGHT && dims[1] == DEFAULT_WIDTH) &&
-           "All images must have the same Height and Width");
-
-    // Convert to BGR, as this is what NN is expecting.
-    for (unsigned z = 0; z < 3; z++) {
-      for (unsigned y = 0; y < dims[1]; y++) {
-        for (unsigned x = 0; x < dims[0]; x++) {
-          resultT[getXYZW(resultDims, n, 2 - z, x, y)] =
-              imageT[getXYZ(dims, x, y, z)];
-        }
-      }
-    }
-
-    for (unsigned y = 0; y < dims[1]; y++) {
-      for (unsigned x = 0; x < dims[0]; x++) {
-        resultT[getXYZW(resultDims, n, 0, x, y)] =
-            (resultT[getXYZW(resultDims, n, 0, x, y)] - 0.4850) / 0.229;
-        resultT[getXYZW(resultDims, n, 1, x, y)] =
-            (resultT[getXYZW(resultDims, n, 1, x, y)] - 0.4560) / 0.224;
-        resultT[getXYZW(resultDims, n, 2, x, y)] =
-            (resultT[getXYZW(resultDims, n, 2, x, y)] - 0.4060) / 0.225;
-
-      }
-    }
-  }
-}
-
 /// Parse images file names into a vector.
 void parseCommandLineOptions(int argc, char **argv) {
   int arg = 1;

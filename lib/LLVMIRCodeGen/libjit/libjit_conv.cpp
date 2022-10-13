@@ -498,7 +498,7 @@ void libjit_bnn_conv2d_f(float *outW, const float *inW, const float *filterW,
                      const dim_t *inWdims, const dim_t *filterWdims,
                      const dim_t *biasWdims, const dim_t *kernelSizes,
                      const dim_t *strides, const dim_t *pads, dim_t group,
-                     unsigned depthUnroll, dim_t dilation) {
+                     unsigned depthUnroll, const dim_t *dilation) {
   dim_t inChannels = inWdims[3];
   dim_t outChannels = outWdims[3];
   dim_t inCperG = inChannels / group;
@@ -529,6 +529,7 @@ void libjit_bnn_conv2d_f(float *outW, const float *inW, const float *filterW,
 
     // For each group of input channels:
     for (dim_t g = 0; g < group; g++) {
+
       // Process the body of the loop in tiles of "channel-block".
       for (dim_t cb = 0; cb < inCperG; cb += cbSize) {
 
@@ -539,6 +540,12 @@ void libjit_bnn_conv2d_f(float *outW, const float *inW, const float *filterW,
           // For each element in the convolution-filter:
           for (dim_t fx = 0; fx < kernel_h; fx++) {
             for (dim_t fy = 0; fy < kernel_w; fy++) {
+
+              // Flag to signal whether this is the last iteration in which we
+              // finalize the accumulation and is time to apply the activation.
+              bool lastSumIter = (fx == (kernel_h - 1)) &&
+                                 (fy == (kernel_w - 1)) &&
+                                 ((cb + cbSize) >= inCperG);
 
               // For each convolution 'jump' in the input tensor:
               for (dim_t outx = 0; outx < outWdims[1]; outx++) {
@@ -557,12 +564,16 @@ void libjit_bnn_conv2d_f(float *outW, const float *inW, const float *filterW,
 
                   // Calculate the specific input x,y that we process in this
                   // iteration.
-                  sdim_t inx = (sdim_t)outx * stride_h - pad_t + fx * dilation;
-                  sdim_t iny = (sdim_t)outy * stride_w - pad_l + fy * dilation;
+                  sdim_t inx =
+                      (sdim_t)outx * stride_h - pad_t + fx * dilation[0];
+                  sdim_t iny =
+                      (sdim_t)outy * stride_w - pad_l + fy * dilation[1];
 
                   // Ignore index access below zero (this is due to padding).
                   if (inx < 0 || iny < 0 || inx >= (sdim_t)inWdims[1] ||
                       iny >= (sdim_t)inWdims[2]) {
+                    // If this is the last iteration and we skip it we apply
+                    // the activation.
                     continue;
                   }
 
@@ -579,7 +590,7 @@ void libjit_bnn_conv2d_f(float *outW, const float *inW, const float *filterW,
                        fd++) {
                     float in = inW[inIdx + fd];
                     for (unsigned i = 0; i < MIN(4, depthUnroll); i++) {
-                      sum[i] += filterW[filterIdx + (sliceSize * i) + fd] * (in / 64);
+                      sum[i] += filterW[filterIdx + (sliceSize * i) + fd] * in / 64;
                     }
                   }
 
@@ -590,15 +601,18 @@ void libjit_bnn_conv2d_f(float *outW, const float *inW, const float *filterW,
                          fd++) {
                       float in = inW[inIdx + fd];
                       for (unsigned i = 4; i < MIN(8, depthUnroll); i++) {
-                        sum[i] += filterW[filterIdx + (sliceSize * i) + fd] * (in / 64);
+                        sum[i] +=
+                            filterW[filterIdx + (sliceSize * i) + fd] * in / 64;
                       }
                     }
                   }
 
                   // Store the results to the output buffer.
                   for (unsigned i = 0; i < depthUnroll; i++) {
-                    outW[libjit_getXYZW(outWdims, n, outx, outy, d + i)] +=
-                        sum[i];
+                    dim_t outIdx =
+                        libjit_getXYZW(outWdims, n, outx, outy, d + i);
+                    float sumIter = outW[outIdx] + sum[i];
+                    outW[outIdx] = sumIter;
                   }
                 }
               }
