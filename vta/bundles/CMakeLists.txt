@@ -37,7 +37,7 @@ FILE(GLOB subdirs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DI
 if (NOT NESTC_BNN)
   foreach(object ${subdirs})
       if(IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${object})
-          if(NOT ${object} STREQUAL bnn)
+          if(NOT(${object} STREQUAL "BiRealNet" OR ${object} STREQUAL "BinaryNet"))
               message(STATUS "Adding ${object} Bundles.")
               add_subdirectory(${object})
           endif()
