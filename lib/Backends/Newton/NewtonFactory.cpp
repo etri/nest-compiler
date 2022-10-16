@@ -19,6 +19,6 @@
 
 namespace glow {
 
-    REGISTER_GLOW_BACKEND_FACTORY(NewtonFactory, Newton);
+REGISTER_GLOW_BACKEND_FACTORY(NewtonFactory, Newton);
 
 } // namespace glow

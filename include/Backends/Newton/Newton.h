@@ -42,6 +42,11 @@ class Newton final : public BackendUsingGlowIR,
   }
   static std::string getName() { return "Newton"; }
   static unsigned numDevices() { return std::thread::hardware_concurrency(); }
+  static std::vector<unsigned> scanDeviceIDs() {
+    std::vector<unsigned> deviceIDs(Newton::numDevices());
+    std::iota(std::begin(deviceIDs), std::end(deviceIDs), 0);
+    return deviceIDs;
+  }
 
   std::unique_ptr<CompiledFunction>
   compileIR(std::unique_ptr<IRFunction> IR) const override;
