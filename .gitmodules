@@ -10,6 +10,6 @@
 	path = tvm
 	url = https://github.com/apache/tvm.git
 	ignore = dirty
-[submodule "onnx_yaml-parser"]
-	path = onnx_yaml-parser
-	url = https://github.com/kjun25/onnx_yaml-parser.git
+[submodule "external_libs/newton"]
+	path = external_libs/newton
+	url = ../newton
