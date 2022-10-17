@@ -8,7 +8,7 @@ stages:
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_HOST: tcp://docker:2375
-  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_STRATEGY: none
 
 before_script:
   - apk update && apk add python3 git wget
@@ -51,8 +51,7 @@ docker-build:
     - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
     - docker container ls -a
     - df -h
-  tags:
-    - etri
+
 
 
 
@@ -64,6 +63,9 @@ build:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -102,6 +104,9 @@ build_from_aws:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -131,7 +136,6 @@ build_from_aws:
     - du -h -d 1
   tags:
     - etri
-  allow_failure: true
 
 build-publish:
   stage: build
@@ -141,6 +145,9 @@ build-publish:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - PWD=`pwd`
     - cd utils/docker
     - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
@@ -162,7 +169,6 @@ build-publish:
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet18RelayAarch64BundleCPPGen"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaMxnetResnet18PartitionBundleNet"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaMxnetResnet18RelayEVTAPartitionBundleCPPGen"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaVGG16Cifar10Bundle"
     - mkdir -p build_ci2
     - rm -rf build_ci2/*
     - docker exec build sh -c "ls;cd build_ci2; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON -DNESTC_EVTA_PROFILE_AUTOTUNE=ON"
@@ -192,6 +198,9 @@ build-autotune-publish:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - PWD=`pwd`
     - cd utils/docker
     - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
@@ -236,6 +245,8 @@ build-multievta:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive vta
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -272,6 +283,9 @@ build-vtaconv:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -301,41 +315,6 @@ build-vtaconv:
   tags:
     - etri
 
-build-openedge:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
-  script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_OPENEDGE=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet50_openedgeBundle"
-    - du -h -d 1
-  tags:
-    - etri
-
 
 build-debug:
   stage: build
@@ -345,6 +324,9 @@ build-debug:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -383,6 +365,8 @@ build-without-VTA:
   services:
     - docker:18.09.7-dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -409,7 +393,7 @@ build-without-VTA:
     - du -h -d 1
   tags:
     - etri
-  allow_failure: true
+
 
 build_bnn:
   stage: build
@@ -417,6 +401,9 @@ build_bnn:
   services:
     - docker:18.09.7-dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -452,6 +439,9 @@ build-all:
     - docker:18.09.7-dind
   #    - docker:dind
   script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive tvm
+    - git submodule update --init --recursive vta
     - df -h
     - PWD=`pwd`
     - echo $PWD
@@ -478,7 +468,7 @@ build-all:
     - du -h -d 1
   tags:
     - etri
-  allow_failure: true
+
 
 test-all:
   stage: test
@@ -506,43 +496,43 @@ test-all:
   tags:
     - etri
 
-#build-newton:
-#  stage: build
-#  image: docker:latest
-#  services:
-#    #    - docker:19.03.7-dind
-#    - docker:18.09.7-dind
-#  #    - docker:dind
-#  script:
-#    - git submodule update --init --recursive glow
-#    - git submodule update --init --recursive external_libs/newton
-#    - df -h
-#    - PWD=`pwd`
-#    - echo $PWD
-#    - ls -al
-#    - DATE=`date '+%Y%m%d'`
-#    - cd utils/docker
-#    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-#    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-#    - docker images
-#    - docker volume ls
-#    - docker ps -a
-#    - cd ../../
-#    - mkdir -p build_ci
-#    - ls
-#    - rm -rf build_ci/*
-#    - df -h
-#    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-#    - docker images
-#    - docker volume ls
-#    - docker ps -a
-#    - docker start build
-#    - docker exec build sh -c "update-alternatives --set cc /usr/bin/gcc; update-alternatives --set c++ /usr/bin/g++"
-#    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=OFF -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_NEWTON=ON"
-#    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_newton_tests.txt | xargs -I {} ninja {}"
-#    - du -h -d 1
-#  tags:
-#    - etri
+build-newton:
+  stage: build
+  image: docker:latest
+  services:
+    #    - docker:19.03.7-dind
+    - docker:18.09.7-dind
+  #    - docker:dind
+  script:
+    - git submodule update --init --recursive glow
+    - git submodule update --init --recursive external_libs/newton
+    - df -h
+    - PWD=`pwd`
+    - echo $PWD
+    - ls -al
+    - DATE=`date '+%Y%m%d'`
+    - cd utils/docker
+    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
+    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - cd ../../
+    - mkdir -p build_ci
+    - ls
+    - rm -rf build_ci/*
+    - df -h
+    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
+    - docker images
+    - docker volume ls
+    - docker ps -a
+    - docker start build
+    - docker exec build sh -c "update-alternatives --set cc /usr/bin/gcc; update-alternatives --set c++ /usr/bin/g++"
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=OFF -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_NEWTON=ON"
+    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_newton_tests.txt | xargs -I {} ninja {}"
+    - du -h -d 1
+  tags:
+    - etri
 
 publish:
   stage: publish
