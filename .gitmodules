@@ -10,3 +10,6 @@
 	path = tvm
 	url = https://github.com/apache/tvm.git
 	ignore = dirty
+[submodule "external_libs/newton"]
+	path = external_libs/newton
+	url = ../newton
