@@ -4,7 +4,7 @@ INCLUDE_DIRECTORIES(${NESTC_ROOT_DIR}/external_libs/newton/aimddk/libaim
         ${NESTC_ROOT_DIR}/external_libs/newton/aimddk/libaim/external/eigen
         )
 set(CMAKE_CXX_STANDARD 17)
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp")
 add_library(Newton
         Newton.cpp
         NewtonFunction.cpp
