@@ -86,6 +86,28 @@ TEST(NewtonOpTest, fcTest2_2) {
   EXPECT_TRUE(out1.isEqual(out2, 1));
 }
 
+TEST(NewtonOpTest, fcTest2_3) {
+  PseudoRNG PRNG;
+  Tensor inputs(ElemKind::FloatTy, {1, 512});
+  Tensor filter(ElemKind::FloatTy, {512, 1000});
+  Tensor bias(ElemKind::FloatTy, {1000});
+
+  inputs.getHandle<float>().randomize(-1, 1, PRNG);
+  filter.getHandle<float>().randomize(-1, 1, PRNG);
+  inputs.toBin("newtonFcTestInput");
+  bias.getHandle<float>().randomize(-1, 1, PRNG);
+
+  std::array<dim_t, 2> S{{1, 1000}};
+  llvm::ArrayRef<dim_t> shape(S);
+  Tensor out1(ElemKind::FloatTy, shape);
+  Tensor out2(ElemKind::FloatTy, shape);
+  inferFCNet(&inputs, &filter, &bias, &out1, "Interpreter");
+  inferFCNet(&inputs, &filter, &bias, &out2, "Newton");
+  //out1.toBin("golden");
+  EXPECT_TRUE(out1.isEqual(out2, 2));
+}
+
+
 TEST(NewtonOpTest, fcTest3) {
   PseudoRNG PRNG;
   Tensor inputs(ElemKind::FloatTy, {2048, 2048});

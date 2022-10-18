@@ -176,6 +176,70 @@ TEST(NewtonSaverTest, fcTest2) {
   EXPECT_TRUE(out1.isEqual(out2, 2));
 }
 
+
+TEST(NewtonSaverTest, fcTest2_3) {
+  PseudoRNG PRNG;
+  Tensor inputs(ElemKind::FloatTy, {1, 512});
+  Tensor filter(ElemKind::FloatTy, {512, 1000});
+  Tensor bias(ElemKind::FloatTy, {1000});
+
+  inputs.getHandle<float>().randomize(-1, 1, PRNG);
+  filter.getHandle<float>().randomize(-1, 1, PRNG);
+  inputs.toBin("newtonFCTest2_3Input");
+  bias.getHandle<float>().randomize(-1, 1, PRNG);
+
+  std::array<dim_t, 2> S{{1, 1000}};
+  llvm::ArrayRef<dim_t> shape(S);
+  Tensor out1(ElemKind::FloatTy, shape);
+  Tensor out2(ElemKind::FloatTy, shape);
+
+
+  PlaceholderBindings bindings;
+  Module M;
+  Function *F = M.createFunction("main");
+  Placeholder *inputP;
+  Constant *filterP;
+  Constant *biasP;
+  Placeholder *outP;
+  TypeRef OT1;
+
+  auto &outType1 = out1.getType();
+  auto &inType = inputs.getType();
+  auto &filterType = filter.getType();
+  auto &biasType = bias.getType();
+
+  inputP = createPlaceholder(
+      M, bindings, &inputs, "inputP");
+
+  filterP = createConstant(M, bindings, &filter, "filterP");
+  biasP = createConstant(M, bindings, &bias, "biasP");
+  outP = createPlaceholder(M, bindings, &out2, "outP");
+  OT1 = F->getParent()->uniqueType(out1.getElementType(), out1.dims());
+//  auto *conv = F->createConv("conv", inputP, filterP, biasP, OT1, 3, 1, 1, 1);
+  auto *fc = F->createFullyConnected("fc", inputP, filterP, biasP, OT1);
+
+  F->createSave("ret", fc, outP);
+
+  //Optimize & Lowering
+  std::unique_ptr<Backend> backend(createBackend("Newton"));
+  CompilationContext cctx;
+  auto error = ::glow::optimizeFunction(F, *backend, cctx);
+
+  EXIT_ON_ERR(std::move(error));
+  // Save bundle.
+  llvm::StringRef outputDir = ".";
+  llvm::StringRef bundleName = "newtonFCTest2_3Bundle"; //file name
+  llvm::StringRef mainEntryName = "newtonFCTest2_3MainEntry"; //main function name
+
+  backend->save(F, outputDir, bundleName, mainEntryName);
+  inferFCNet(&inputs, &filter, &bias, &out1, "Interpreter");
+  inferFCNet(&inputs, &filter, &bias, &out2, "Newton");
+  out2.toBin("newtonFCTest2_3Golden");
+  EXPECT_TRUE(out1.isEqual(out2, 2));
+}
+
+
+
 TEST(NewtonSaverTest, fcTest4) {
   PseudoRNG PRNG;
   Tensor inputs(ElemKind::FloatTy, {1, 1024});
