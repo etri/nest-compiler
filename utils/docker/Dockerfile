@@ -46,5 +46,7 @@ RUN git clone https://github.com/fmtlib/fmt && \
     cmake .. && make -j32 && \
     make install
 
-# Clean up
 RUN rm -rf fmt
+
+
+RUN apt-get update && apt-get install -y libomp-dev
