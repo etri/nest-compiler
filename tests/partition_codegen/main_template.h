@@ -65,6 +65,7 @@ class main_template {
   static uint8_t *copyMutableWeightVars(const BundleConfig &config, const char *name, float* inputT);
   static uint8_t *copyMutableWeightVarsWithAlloc(const BundleConfig &config, const char *name, float* inputT);
   static uint8_t *copyMutableWeightVarsWithoutAlloc(const BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float* inputT);
+  static uint8_t *copyMutableWeightVarsWithoutAllocNewton(const BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float* inputT);
   void transpose(float* &in, float* &out);
 
   #define NHWC 1
@@ -487,6 +488,37 @@ static uint8_t *copyMutableWeightVarsWithoutAlloc(const BundleConfig &config, ui
          inputDataVar.size*4);
 
   return mutableWeightVarsAddr;
+}
+
+static uint8_t *copyMutableWeightVarsWithoutAllocNewton(const BundleConfig &config, uint8_t *mutableWeightVarsAddr, const char *name, float* inputT) {
+
+  const SymbolTableEntry &inputDataVar = getMutableWeightVar(config, name);
+  printf("[copyMutableWeightVars] Copying data into mutable weight vars: %lu bytes\n",
+         inputDataVar.size);
+  printf( "inputDataVar.offset = %d\n", inputDataVar.offset);
+  memcpy(mutableWeightVarsAddr + inputDataVar.offset, inputT,
+         inputDataVar.size);
+
+  return mutableWeightVarsAddr;
+}
+
+void transpose(float* &in, float* &out) {
+
+  float (*inPtr)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH];
+  float (*outPtr)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3];
+
+  inPtr = (float (*)[1][3][DEFAULT_HEIGHT][DEFAULT_WIDTH])in;
+  outPtr = (float (*)[1][DEFAULT_HEIGHT][DEFAULT_WIDTH][3])out;
+
+
+  for (int j=0; j<3; j++){
+    for (int k=0; k<DEFAULT_HEIGHT; k++){
+      for (int l=0; l<DEFAULT_WIDTH; l++){
+        (*outPtr)[0][k][l][j] = (*inPtr)[0][j][k][l];
+      }
+    }
+  }
+
 }
 
 void transpose(float* &in, float* &out) {

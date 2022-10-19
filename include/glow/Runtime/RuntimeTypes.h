@@ -81,9 +81,8 @@ struct DeviceInfo {
   bool partitionDefaultDevice;
 
   // for the NEST compiloer
-  std::vector<std::string> fusionNodes;
+  std::string fuseOperators;
   size_t deviceID;
-  size_t pysicalUnitCount;
 };
 
 /// Data structure that tracks how many outstanding work items remain for a

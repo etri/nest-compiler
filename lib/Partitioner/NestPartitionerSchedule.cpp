@@ -398,16 +398,7 @@ void NestPartitionerSchedule::setPartitionInputOutputList(
 }
 void NestPartitionerSchedule::generateNonThreadCall(
     std::string &wfilec, int pi, bool profileMode,
-    std::vector<std::string> *inputList) {
-
-  //    std::map<std::string, std::string> nodeToVarMap;
-  //    std::map<std::string, std::string> nodeToPiMap;
-
-  //    if(profileMode == 1) {
-  //        wfilec.append("\ttimeval start_" + std::to_string(pi) + ";\n");
-  //        wfilec.append("\tgettimeofday(&start_"+std::to_string(pi)+",
-  //        NULL);\n\n");
-  //    }
+    std::vector<std::string> *inputList, std::string backendName) {
 
   for (int cnt = 0; cnt < inputList->size(); cnt++) {
     std::string varStr = "";
@@ -444,21 +435,17 @@ void NestPartitionerSchedule::generateNonThreadCall(
     }
 
     if (pi > 0) {
-
-      //            std::cout << "inputList->at(cnt) => " << inputList->at(cnt)
-      //            << std::endl;
-      //
-      //            std::cout << "\tcopyMutableWeightVarsWithoutAlloc(p" +
-      //            std::to_string(pi) +
-      //                         "_config, mutableWeightVarsAddr" +
-      //                         std::to_string(pi) + ", \"" +
-      //                         inputList->at(cnt) + "\", " + varStr + ");\n"
-      //                         << nodeName << std::endl;
-
-      wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" +
-                    std::to_string(pi) + "_config, mutableWeightVarsAddr" +
-                    std::to_string(pi) + ", \"" + inputList->at(cnt) + "\", " +
-                    varStr + ");\n");
+      if(!backendName.compare("Newton")){
+        wfilec.append("\tcopyMutableWeightVarsWithoutAllocNewton(p" +
+                      std::to_string(pi) + "_config, mutableWeightVarsAddr" +
+                      std::to_string(pi) + ", \"" + inputList->at(cnt) + "\", " +
+                      varStr + ");\n");
+      } else {
+        wfilec.append("\tcopyMutableWeightVarsWithoutAlloc(p" +
+                      std::to_string(pi) + "_config, mutableWeightVarsAddr" +
+                      std::to_string(pi) + ", \"" + inputList->at(cnt) + "\", " +
+                      varStr + ");\n");
+      }
 
       if (profileMode == 1) {
         wfilec.append("\tgettimeofday(&comm_time_end, NULL);\n");
@@ -482,10 +469,17 @@ void NestPartitionerSchedule::generateNonThreadCall(
     wfilec.append("\tgettimeofday(&p_time_start, NULL);\n");
   }
 
-  wfilec.append("\tp" + std::to_string(pi) + "(constantWeightVarsAddr" +
-                std::to_string(pi) + ", mutableWeightVarsAddr" +
-                std::to_string(pi) + ", activationsAddr" + std::to_string(pi) +
-                ");\n");
+  if(!backendName.compare("Newton")){
+    wfilec.append("\tp" + std::to_string(pi) + "((float*)constantWeightVarsAddr" +
+                  std::to_string(pi) + ", (float*)mutableWeightVarsAddr" +
+                  std::to_string(pi) + ", (float*)activationsAddr" + std::to_string(pi) +
+                  ");\n");
+  } else {
+    wfilec.append("\tp" + std::to_string(pi) + "(constantWeightVarsAddr" +
+                  std::to_string(pi) + ", mutableWeightVarsAddr" +
+                  std::to_string(pi) + ", activationsAddr" + std::to_string(pi) +
+                  ");\n");
+  }
 
   if (profileMode == 1) {
     wfilec.append("\tgettimeofday(&p_time_end, NULL);\n");
@@ -498,7 +492,7 @@ void NestPartitionerSchedule::generateNonThreadCall(
 
 void NestPartitionerSchedule::generateThreadCall(
     std::string &wfilec, int pi, std::set<std::string> *pGroup,
-    bool profileMode, std::vector<std::string> *inputList) {
+    bool profileMode, std::vector<std::string> *inputList, std::string backendName) {
 
   for (int cnt = 0; cnt < inputList->size(); cnt++) {
     std::string varStr = "";
@@ -630,6 +624,10 @@ void generateVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs,
       wfilec.append("\tp" + std::to_string(i) +
                     "_load_module(constantWeightVarsAddr" + std::to_string(i) +
                     ");\n");
+    } else if (!partitionConfig.backendNames[i].compare("Newton")) {
+      wfilec.append("\tp" + std::to_string(i) +
+                    "_load_module((float *)constantWeightVarsAddr" + std::to_string(i) +
+                    ");\n");
     }
   }
   wfilec.append("\n");
@@ -684,10 +682,10 @@ void NestPartitionerSchedule::generatePartitionCall(
 
     // partition call
     if (pGroup.size() == 0) {
-      generateNonThreadCall(wfilec, pi, profileMode_, &inputList);
+      generateNonThreadCall(wfilec, pi, profileMode_, &inputList, partitionConfig.backendNames[pi]);
     } else {
       // same input
-      generateThreadCall(wfilec, pi, &pGroup, profileMode_, &inputList);
+      generateThreadCall(wfilec, pi, &pGroup, profileMode_, &inputList, partitionConfig.backendNames[pi]);
       processedPP.insert(processedPP.end(), pGroup.begin(), pGroup.end());
     }
 

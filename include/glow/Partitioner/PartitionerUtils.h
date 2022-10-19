@@ -61,6 +61,7 @@ GraphMemInfo getFunctionMemory(Function *func);
 /// Parse a node name string (e.g. "Div,Add") \p names, \returns a set of
 /// NodeKinds corresponding to the names in the string.
 std::set<Kinded::Kind> generateNodeKindsSet(llvm::StringRef names);
+std::set<std::string> generateStrSet(llvm::StringRef names);
 
 /// Log the info of current partition \p partitions.
 void logPartitionInfo(const NodeToFunctionMap &partitions);

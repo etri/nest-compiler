@@ -124,11 +124,10 @@ class NestPartitioner final : public PartitionerBase {
       backendCommProfileMap_;
   NestPartitionerSchedule appGen_;
 
-  std::set<std::string> fuseOperatorSet_;
   std::set<std::string> profileKeySet_;
   std::string outputDir_;
   std::map<std::string, int> *puIdxMap_;
-  std::string defaultBackend_;
+  std::string defaultBackend_ = "CPU";
 
   /// Initialization. Called in class constructor.
   void init();
@@ -202,12 +201,12 @@ public:
                               CostNode *prevCNode = nullptr);
   void getMinCostOfFusedNode(CostNode *secondPrevCNode, CostNode *prevCNode,
                              CostNode *curCNode);
-  int getFusedPartitionCount(std::vector<NodeGroup *> *branchList);
+  int getFusedPartitionCount(std::vector<NodeGroup *> *branchList, DeviceInfo deviceInfo);
 
   void outPartitionPlanForFusion(std::string funcName,
                                  std::vector<NodeGroup *> *branchList,
-                                 DeviceInfo deviceInfo, std::string filename);
-  bool isUserDefinedFusable(Node *node);
+                                 DeviceInfo deviceInfo, std::string filename, bool mergePartition);
+  bool isUserDefinedFusable(Node *node, DeviceInfo deviceInfo);
   void outPartitionPlanForSingleNode(Function *function,
                                      std::vector<NodeGroup *> *branchList,
                                      DeviceInfo deviceInfo,
@@ -216,7 +215,7 @@ public:
                                      std::string filename, DeviceInfo device);
   void allocMinBranchCost(std::vector<NodeGroup *> *branchList);
 
-  void loadFuseOperatorsConfig(std::string fname);
+//  void loadFuseOperatorsConfig(std::string fname);
   void allocateOptimalPUSingleNode(std::vector<NodeGroup *> *branchList);
   void generateApplicationCode(std::string profilePath,
                                std::string partitionPlanFile, int profileMode,
@@ -228,20 +227,18 @@ public:
   void allocateRelayOps(std::vector<NodeGroup *> *branchList);
   bool isVTAConv(ConvolutionNode *convNode);
 
-  void generatePlanForVTAOps(Function *function, std::string profilePath,
-                             std::string partitionPlanFile, int profileMode,
+  void generatePlansForDevices(Function *function, std::string profilePath,
+                                                  int profileMode, int VTANum);
+  void generatePlanForVTAOps(Function *function, std::string profilePath, int profileMode,
                              int VTANum = 1);
   void generatePlanForRelay(Function *function, std::string profilePath,
                             std::string partitionPlanFile, int profileMode);
-  void generatePlanForProfiling(Function *function, std::string profilePath,
-                                std::string partitionPlanFile, int profileMode);
+  void generatePlanForProfiling(Function *function, std::string profilePath, int profileMode);
   //  void generateOptimalPlanForSingleNodes(Function *function, std::string
   //  profilePath, std::string partitionPlanFile, int profileMode);
-  void generateMinCostPlan(Function *function, std::string profilePath,
-                           std::string partitionPlanFile, int profileMode,
+  void generateMinCostPlan(Function *function, std::string profilePath, int profileMode,
                            int cpuNum = 0, int VTANum = 1);
-  void generateMinCostPlanCPUVTA(Function *function, std::string profilePath,
-                                 std::string partitionPlanFile, int profileMode,
+  void generateMinCostPlanCPUVTA(Function *function, std::string profilePath, int profileMode,
                                  int cpuNum = 0, int VTANum = 1);
   void findParallelDeployBranchesForCPUVTA(std::vector<NodeGroup *> *branchList,
                                            int cpuNum, int vtaNum);

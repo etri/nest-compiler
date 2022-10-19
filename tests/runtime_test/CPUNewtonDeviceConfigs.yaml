@@ -1,0 +1,15 @@
+---
+- name:    PU1
+  backendName: CPU
+  parameters: |
+    "nonSupportedNodes":""
+    "deviceID" : "0"
+    "partitionDefaultDevice" : "true"
+  dramMemory: 200000000
+- name:    PU3
+  backendName: Newton
+  parameters: |
+    "supportedNodes":"Gemm"
+    "deviceID" : "3"
+  dramMemory: 200000000
+...

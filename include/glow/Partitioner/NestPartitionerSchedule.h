@@ -46,7 +46,6 @@ class NestPartitionerSchedule {
 
   std::string profilePath_;
   std::string planFileName_;
-  std::set<std::string> *fuseOperatorSet_;
   std::set<std::string> *profileKeySet_;
 
   std::map<std::string, int> partitionOutList_;
@@ -57,9 +56,8 @@ public:
   std::string getProfilePath() { return profilePath_; };
   void setPartitionPlanFile(std::string file) { planFileName_ = file; };
   std::string getPartitionPlanFile() { return planFileName_; };
-  void setProfileSet(std::set<std::string> *fuseOperatorSet,
-                     std::set<std::string> *profileKeySet) {
-    fuseOperatorSet_ = fuseOperatorSet;
+  void setProfileSet(std::set<std::string> *profileKeySet) {
+//    fuseOperatorSet_ = fuseOperatorSet;
     profileKeySet_ = profileKeySet;
   };
 
@@ -115,10 +113,10 @@ public:
                                    std::vector<std::string> *outputList,
                                    int pi);
   void generateNonThreadCall(std::string &wfilec, int pi, bool profileMode,
-                             std::vector<std::string> *inputList);
+                             std::vector<std::string> *inputList, std::string backendName);
   void generateThreadCall(std::string &wfilec, int pi,
                           std::set<std::string> *pGroup, bool profileMode,
-                          std::vector<std::string> *inputList);
+                          std::vector<std::string> *inputList, std::string backendName);
 };
 
 } // namespace glow

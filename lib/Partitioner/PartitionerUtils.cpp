@@ -546,6 +546,20 @@ std::set<Kinded::Kind> generateNodeKindsSet(llvm::StringRef names) {
   return nodeKindsSet;
 }
 
+std::set<std::string> generateStrSet(llvm::StringRef names) {
+    std::set<std::string> strSet;
+    llvm::StringRef::size_type pos = names.find(',');
+    while (pos != llvm::StringRef::npos) {
+        strSet.insert(names.substr(0, pos));
+        names = names.substr(pos + 1);
+        pos = names.find(',');
+    }
+    if (!names.empty()) {
+        strSet.insert(names);
+    }
+    return strSet;
+}
+
 void logPartitionInfo(const NodeToFunctionMap &partitions) {
   int i = 0;
   for (Function *subF : partitions.getPartitions()) {

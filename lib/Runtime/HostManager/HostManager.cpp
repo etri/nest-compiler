@@ -864,11 +864,11 @@ Error HostManager::addNetworkForNestPartition(
       }
       info.deviceID =
           std::atol(devices_[device]->getParamByName("deviceID").data());
-      info.pysicalUnitCount = std::atol(
-          devices_[device]->getParamByName("pysicalUnitCount").data());
       std::istringstream isDefaultDevice(
           devices_[device]->getParamByName("partitionDefaultDevice").data());
       isDefaultDevice >> std::boolalpha >> info.partitionDefaultDevice;
+      info.fuseOperators = devices_[device]->getParamByName("fuseOperators");
+
       deviceInfo.push_back(info);
     }
   }
