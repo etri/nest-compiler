@@ -50,16 +50,18 @@ class NestPartitionerSchedule {
 
   std::map<std::string, int> partitionOutList_;
   std::map<std::string, std::string> partitionOutVarList_;
-  std::map<std::string, Function *>* funcMap_;
 
 public:
   void setProfilePath(std::string path) { profilePath_ = path; };
   std::string getProfilePath() { return profilePath_; };
   void setPartitionPlanFile(std::string file) { planFileName_ = file; };
   std::string getPartitionPlanFile() { return planFileName_; };
-  void setProfileSet(std::set<std::string> *profileKeySet) {profileKeySet_ = profileKeySet;};
-  void setFuncMap(std::map<std::string, Function *>* funcMap) { funcMap_ = funcMap; };
+  void setProfileSet(std::set<std::string> *profileKeySet) {
+//    fuseOperatorSet_ = fuseOperatorSet;
+    profileKeySet_ = profileKeySet;
+  };
 
+  void setFunction(Function *function);
   void setKeyName(std::string key, int i);
   void setProfileMode(int mode);
   void setPartitionExeMode(int mode);
@@ -73,22 +75,37 @@ public:
   std::string addProfileKey(Function *function, std::set<std::string> *keySet,
                             bool isFusion);
 
-  void generateVarInit(std::string &wfilec, const PartitionConfig &partitionConfig);
-  void generateDeclaration(std::string &writeFileC,
+  void generateDeclaration(std::string &writeFileC, int partitionNum,
                            const PartitionConfig &partitionConfig);
-  void generateMainforEachPartition(const PartitionConfig &partitionConfig);
-  void generatePartitionCall(std::string &wfilec, const PartitionConfig &partitionConfig);
-  void generateMain(std::string &wfilec, const PartitionConfig &partitionConfig);
-  void generateFree(std::string &wfilec, const PartitionConfig &partitionConfig);
+  void generateMainforEachPartition(int partitionNum,
+                                    std::vector<Function *> funcList,
+                                    const PartitionConfig &partitionConfig);
+  void generatePartitionCall(std::string &wfilec, int partitionNum,
+                             std::vector<Function *> funcList,
+                             const PartitionConfig &partitionConfig);
+  void generateMain(std::string &wfilec, int partitionNum,
+                    std::vector<Function *> funcList,
+                    const PartitionConfig &partitionConfig);
+  void generateFree(std::string &wfilec, int partitionNum,
+                    std::vector<Function *> funcList,
+                    const PartitionConfig &partitionConfig);
 
-  void generateCodeFromModels(const PartitionConfig &partitionConfig,
+  void generateCodeFromModels(std::size_t partitionNum,
+                              std::vector<Function *> funcList,
+                              const PartitionConfig &partitionConfig,
                               std::string inputPartitionName);
-  void generateMainFile(const PartitionConfig &partitionConfig,
+  void generateMainFile(std::size_t partitionNum,
+                        std::vector<Function *> funcList,
+                        const PartitionConfig &partitionConfig,
                         std::string inputPartitionName);
-  void generateRelayFile(const PartitionConfig &partitionConfig);
-  void generateCMakeListsFile(const PartitionConfig &partitionConfig);
+  void generateRelayFile(std::size_t partitionNum,
+                         const PartitionConfig &partitionConfig);
+  void generateCMakeListsFile(std::size_t partitionNum,
+                              const PartitionConfig &partitionConfig);
 
-  void generateYamlFile(std::string &wfilec, const PartitionConfig &partitionConfig,
+  void generateYamlFile(std::string &wfilec, std::size_t partitionNum,
+                        std::vector<Function *> funcList,
+                        const PartitionConfig &partitionConfig,
                         std::string inputPartitionName);
   std::string getPartitionProfileKey(Function *function);
   void setPartitionInputOutputList(Function *function,
@@ -97,7 +114,7 @@ public:
                                    int pi);
   void generateNonThreadCall(std::string &wfilec, int pi, bool profileMode,
                              std::vector<std::string> *inputList, std::string backendName);
-  bool generateThreadCall(std::string &wfilec, int pi,
+  void generateThreadCall(std::string &wfilec, int pi,
                           std::set<std::string> *pGroup, bool profileMode,
                           std::vector<std::string> *inputList, std::string backendName);
 };
