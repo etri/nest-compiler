@@ -10,6 +10,7 @@
   parameters: |
     "supportedNodes":"Convolution"
     "deviceID" : "1"
+    "fuseOperators" : "Convolution-Relu"
   dramMemory: 200000000
 - name:    PU3
   backendName: Relay

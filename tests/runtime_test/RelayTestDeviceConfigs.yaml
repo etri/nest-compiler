@@ -3,6 +3,7 @@
   backendName: CPU
   parameters: |
     "deviceID" : "0"
+    "partitionDefaultDevice" : "true"
   dramMemory: 200000000
 - name:    PU2
   backendName: Relay

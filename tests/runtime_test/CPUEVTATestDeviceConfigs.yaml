@@ -2,13 +2,16 @@
 - name:    PU1
   backendName: CPU
   parameters: |
-    "nonSupportedNodes":""
+    "nonSupportedNodes": ""
     "deviceID" : "0"
+    "partitionDefaultDevice" : "true"
+    "fuseOperators" : "Convolution-Relu"
   dramMemory: 200000000
 - name:    PU2
   backendName: VTA
   parameters: |
     "supportedNodes":"Convolution"
     "deviceID" : "1"
+    "fuseOperators" : "Convolution-Relu"
   dramMemory: 200000000
 ...
