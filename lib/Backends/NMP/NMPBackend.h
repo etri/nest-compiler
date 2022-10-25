@@ -76,7 +76,7 @@ public:
 
   bool shouldLower(const Node *N) const override;
 
-  bool shouldShareBuffers() const override { return false; }
+  bool shouldShareBuffers() const override { return true; }
   
   // returns whether the backend supports fusing activation into parent.
   bool supportsFusedActivation(Node *parent, Node *activation) const override;
