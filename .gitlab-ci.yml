@@ -161,6 +161,7 @@ build-publish:
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet18RelayAarch64BundleCPPGen"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaMxnetResnet18PartitionBundleNet"
     - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaMxnetResnet18RelayEVTAPartitionBundleCPPGen"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaVGG16Cifar10Bundle"
     - mkdir -p build_ci2
     - rm -rf build_ci2/*
     - docker exec build sh -c "ls;cd build_ci2; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON -DNESTC_EVTA_PROFILE_AUTOTUNE=ON"
