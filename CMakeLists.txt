@@ -20,6 +20,7 @@ option(NESTC_OPENCL_TEST "Enable OpenCL TEST" OFF)
 option(NESTC_CUDA_TEST "Enable CUDA TEST" OFF)
 option(NESTC_BNN "Enable BNN mode" OFF)
 option(NESTC_WITH_TVM "Build TVM backend" ON)
+option(NESTC_DEMO "location of Demo project" OFF )
 
 include(CTest)
 include(NESTCTestSupport)
@@ -165,3 +166,8 @@ add_custom_target(check_newton COMMAND ${CMAKE_CTEST_COMMAND} -L NEWTON
         DEPENDS ${NEWTON_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_multievta COMMAND ${CMAKE_CTEST_COMMAND} -L MULTIEVTA
         DEPENDS ${MULTIEVTA_TEST_DEPENDS} USES_TERMINAL)
+
+
+if(NESTC_DEMO)
+    add_subdirectory(${NESTC_DEMO})
+endif()
