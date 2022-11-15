@@ -1,0 +1,22 @@
+---
+- name:    PU1
+  backendName: CPU
+  parameters: |
+    "supportedNodes":""
+    "deviceID" : "0"
+  dramMemory: 200000000
+- name:    PU3
+  backendName: Relay
+  parameters: |
+    "nonSupportedNodes":"SoftMax,Splat"
+    "deviceID" : "2"
+    "fuseOperators" : "Convolution-Relu"
+    "partitionDefaultDevice" : "true"
+  dramMemory: 200000000
+- name:    PU3
+  backendName: NMP
+  parameters: |
+    "nonSupportedNodes":"LeakyRelu"
+    "deviceID" : "4"
+  dramMemory: 200000000
+...
