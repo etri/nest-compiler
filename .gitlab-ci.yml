@@ -130,6 +130,7 @@ build_from_aws:
     - du -h -d 1
   tags:
     - etri
+  allow_failure: true
 
 build-publish:
   stage: build
