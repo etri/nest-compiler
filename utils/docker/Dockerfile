@@ -31,7 +31,7 @@ RUN update-alternatives --install /usr/bin/clang clang \
     update-alternatives --install /usr/bin/clang++ clang++ \
         /usr/lib/llvm-8/bin/clang++ 50
 
-RUN pip3 install numpy decorator attrs pytest onnx scipy
+RUN pip3 install numpy decorator attrs pytest onnx scipy onnxruntime==1.12.1 PyYAML==6.0
 
 # Point default C/C++ compiler to clang
 RUN update-alternatives --set cc /usr/bin/clang && \
