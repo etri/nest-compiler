@@ -11,6 +11,7 @@ project(NESTC C CXX)
 
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
 option(NESTC_WITH_NEWTON "Build the Newton backend" OFF)
+option(NESTC_WITH_OPENEDGE "Build the openedge backend" OFF)
 option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_EVTA_RUN_ON_ZCU102 "Run on ZCU102 board" OFF)
 option(NESTC_EVTA_MULTI "use Multi-EVTA" OFF)
@@ -149,6 +150,10 @@ endif()
 
 if(NESTC_WITH_NEWTON)
     add_subdirectory(examples/newton_bundles)
+endif()
+
+if(NESTC_WITH_OPENEDGE)
+    add_subdirectory(examples/openedge_bundles)
 endif()
 
 message(STATUS "START CMAKE GLOW")
