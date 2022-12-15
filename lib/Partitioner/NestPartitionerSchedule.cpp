@@ -48,7 +48,7 @@ int NestPartitionerSchedule::getProfileMode() { return profileMode_; }
 // void NestPartitionerSchedule::generateDeclaration(string& wfilec, int
 // partitionNum, const PartitionConfig &partitionConfig, int profileMode) {
 void NestPartitionerSchedule::generateDeclaration(
-    string &wfilec, int partitionNum, const PartitionConfig &partitionConfig) {
+    string &wfilec, const PartitionConfig &partitionConfig) {
   //  cout << "generateDeclaration: " <<  wfilec << endl;
 
   if (profileMode_ == 1) {
@@ -56,7 +56,7 @@ void NestPartitionerSchedule::generateDeclaration(
   }
 
   bool vtaFlag = false, relayFlag = false;
-  for (int i = 0; i < partitionNum - 1; i++) {
+  for (int i = 0; i < partitionConfig.partitionNames.size() - 1; i++) {
     if (!partitionConfig.backendNames[i].compare("VTA"))
       vtaFlag = true;
 
@@ -70,8 +70,8 @@ void NestPartitionerSchedule::generateDeclaration(
     wfilec.append("#include \"VTARuntime.h\"\n");
   }
 
-  for (int i = 0; i < partitionNum - 1; i++) {
-    wfilec.append("#include \"p" + std::to_string(i) + ".h\"\n");
+  for (int i = 0; i < partitionConfig.partitionNames.size() - 1; i++) {
+    wfilec.append("#include \"" + partitionConfig.partitionNames[i] + ".h\"\n");
     //    cout << "#include \"p" + std::to_string(i) + ".h\"" << endl;
   }
   wfilec.append("\n");
@@ -86,7 +86,7 @@ void NestPartitionerSchedule::generateDeclaration(
   }
 
   if (profileMode_ == 1) {
-    wfilec.append("#define ARRAY_LENGTH " + std::to_string(partitionNum) +
+    wfilec.append("#define ARRAY_LENGTH " + std::to_string(partitionConfig.partitionNames.size()) +
                   "\n");
     wfilec.append("unsigned long p_time_ary[ARRAY_LENGTH], "
                   "comm_time_ary[ARRAY_LENGTH];\n\n");
@@ -123,20 +123,17 @@ std::string NestPartitionerSchedule::addProfileKey(
     return "";
 }
 
-void NestPartitionerSchedule::generateYamlFile(
-    string &wfilec, std::size_t partitionNum, std::vector<Function *> funcList,
-    const PartitionConfig &partitionConfig, std::string inputPartitionName) {
+void NestPartitionerSchedule::generateYamlFile(string &wfilec, const PartitionConfig &partitionConfig, std::string inputPartitionName) {
   //  std::cout << "== [Start] generateYamlFile == " << std::endl;
 
-  std::string backendName = partitionConfig.backendNames[0];
+   std::string backendName = partitionConfig.backendNames[0];
   std::string pTimeFilename, commTimeFilename;
-  std::string keyList[partitionNum];
   std::string keys;
 
   pTimeFilename = "./" + inputPartitionName + "Profile.yaml";
   commTimeFilename = "./" + inputPartitionName + "CommProfile.yaml";
 
-  std::cout << "partition # : " << partitionNum << std::endl;
+  std::cout << "partition # : " << partitionConfig.partitionNames.size() << std::endl;
   std::cout << "inputPartitionName: " << inputPartitionName << std::endl;
 
   bool isFused = false;
@@ -144,11 +141,10 @@ void NestPartitionerSchedule::generateYamlFile(
     isFused = true;
   }
 
-  for (int nodeN = 0; nodeN < partitionNum - 1; nodeN++) {
-    auto func = funcList[nodeN];
+  for (int idx = 0; idx < partitionConfig.partitionNames.size() - 1; idx++) {
+    auto func = (*funcMap_)[partitionConfig.partitionNames[idx]];
 
     std::string key = addProfileKey(func, profileKeySet_, isFused);
-    //        std::cout << "key: " << key << std::endl;
 
     if (key.length() == 0) {
       keys = keys + "\"blank\", ";
@@ -162,7 +158,7 @@ void NestPartitionerSchedule::generateYamlFile(
 
   wfilec.append("void createYamlFile(){\n");
   wfilec.append("\tprintf(\"== create Yaml files ==\\n\");\n");
-  wfilec.append("\tstd::string keyList[" + std::to_string(partitionNum) +
+  wfilec.append("\tstd::string keyList[" + std::to_string(partitionConfig.partitionNames.size()) +
                 "] = {" + keys + "};\n");
 
   wfilec.append("\tstd::string pTimeFName = \"" + pTimeFilename + "\";\n");
@@ -187,7 +183,7 @@ void NestPartitionerSchedule::generateYamlFile(
                 "\" << std::endl;\n");
   wfilec.append("\t\tcommTimeProfile << \"backendName: " + backendName +
                 "\" << std::endl;\n");
-  wfilec.append("\t\tfor(int i = 0; i < " + std::to_string(partitionNum - 1) +
+  wfilec.append("\t\tfor(int i = 0; i < " + std::to_string(partitionConfig.partitionNames.size() - 1) +
                 "; i++){\n");
   wfilec.append("\t\t\tif(keyList[i].compare(\"blank\")) {\n");
   wfilec.append("\t\t\t\tsprintf(p_str, \"%lu\", p_time_ary[i]);\n");
@@ -208,25 +204,24 @@ void NestPartitionerSchedule::generateYamlFile(
 }
 
 void NestPartitionerSchedule::generateFree(
-    string &wfilec, int partitionNum, std::vector<Function *> funcList,
-    const PartitionConfig &partitionConfig) {
+  string &wfilec, const PartitionConfig &partitionConfig) {
 
-  for (int i = 0; i < partitionNum - 1; i++) {
-    if (!partitionConfig.backendNames[i].compare("VTA") ||
-        !partitionConfig.backendNames[i].compare("Relay")) {
-      wfilec.append("\tp" + std::to_string(i) + "_destroy_module();\n");
+  for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+    auto pname = partitionConfig.partitionNames.at(idx);
+    if (!partitionConfig.backendNames[idx].compare("VTA") ||
+        !partitionConfig.backendNames[idx].compare("Relay")) {
+      wfilec.append("\t" + pname + "_destroy_module();\n");
     }
   }
   wfilec.append("\n");
 
   bool vtaFlag = false;
-  for (int i = 0; i < partitionNum - 1; i++) {
+  for (int i = 0; i < partitionConfig.partitionNames.size() - 1; i++) {
     if (!partitionConfig.backendNames[i].compare("VTA"))
       vtaFlag = true;
   }
 
   if (vtaFlag) {
-    //        wfilec.append("#ifdef VTAMAIN\n");
     wfilec.append("\tdestroyVTARuntime();\n");
     wfilec.append("\tdestroyVTARuntime1();\n");
     wfilec.append("\tdestroyVTARuntime2();\n");
@@ -237,14 +232,16 @@ void NestPartitionerSchedule::generateFree(
 
   wfilec.append("\t// Free all resources.\n");
 
-  for (int i = 0; i < partitionNum - 1; i++) {
+  for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+    auto pname = partitionConfig.partitionNames.at(idx);
+    std::string partitionID = pname.substr(1, pname.length());
 
-    if (!partitionConfig.backendNames[i].compare("VTA") ||
-        !partitionConfig.backendNames[i].compare("CPU")) {
-      wfilec.append("\tfree(activationsAddr" + std::to_string(i) + ");\n");
+    if (!partitionConfig.backendNames[idx].compare("VTA") ||
+        !partitionConfig.backendNames[idx].compare("CPU")) {
+      wfilec.append("\tfree(activationsAddr" + partitionID + ");\n");
     }
-    wfilec.append("\tfree(constantWeightVarsAddr" + std::to_string(i) + ");\n");
-    wfilec.append("\tfree(mutableWeightVarsAddr" + std::to_string(i) +
+    wfilec.append("\tfree(constantWeightVarsAddr" + partitionID + ");\n");
+    wfilec.append("\tfree(mutableWeightVarsAddr" + partitionID +
                   ");\n\n");
   }
 
@@ -257,9 +254,7 @@ void NestPartitionerSchedule::generateFree(
 }
 
 #include <boost/algorithm/string/replace.hpp>
-void NestPartitionerSchedule::generateMainforEachPartition(
-    int partitionNum, std::vector<Function *> funcList,
-    const PartitionConfig &partitionConfig) {
+void NestPartitionerSchedule::generateMainforEachPartition(const PartitionConfig &partitionConfig) {
   std::string partitionMainTemplate =
       std::string("#include <stdlib.h>\n") + "#include \"main_template.h\"\n" +
       "#include \"p%.h\"\n" + "$0" + //#include "VTARuntime.h"
@@ -281,13 +276,14 @@ void NestPartitionerSchedule::generateMainforEachPartition(
       "$2" + // destroyVTARuntime();
       "\n}";
 
-  for (int i = 0; i < partitionNum - 1; i++) {
-    auto func = funcList[i];
+  for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+    auto pname = partitionConfig.partitionNames.at(idx);
+    auto func = (*funcMap_)[pname];
+    std::string partitionID = pname.substr(1, pname.length());
+
     std::string key = getPartitionProfileKey(func);
-    // std::cout << "partition key = " << key << std::endl;
     std::string partitionMainStr(partitionMainTemplate.c_str());
-    std::string pid = std::to_string(i);
-    std::string mainSubFileName = outputDir_ + "/p" + pid + "_main.cpp";
+    std::string mainSubFileName = outputDir_ + "/" + pname + "_main.cpp";
     if (!llvm::sys::fs::is_directory(outputDir_)) {
       llvm::sys::fs::create_directory(outputDir_);
     }
@@ -295,16 +291,16 @@ void NestPartitionerSchedule::generateMainforEachPartition(
     ofstream writeFileC;
     writeFileC.open(mainSubFileName.data());
     if (writeFileC.is_open()) {
-      if (!partitionConfig.backendNames[i].compare("VTA")) {
+      if (!partitionConfig.backendNames[idx].compare("VTA")) {
         boost::replace_all(partitionMainStr, "$0",
                            "#include \"VTARuntime.h\"\n");
         boost::replace_all(partitionMainStr, "$1", "\tinitVTARuntime();\n");
         boost::replace_all(partitionMainStr, "$2", "\tdestroyVTARuntime();\n");
         boost::replace_all(partitionMainStr, "$4",
-                           "\tp" + pid + "_load_module(constantWeightVarsAddr" +
-                               pid + ");\n");
+                           "\t" + pname + "_load_module(constantWeightVarsAddr" +
+                                   partitionID + ");\n");
         boost::replace_all(partitionMainStr, "$5",
-                           "\tp" + pid + "_destroy_module();\n");
+                           "\t" + pname + "_destroy_module();\n");
       } else {
         boost::replace_all(partitionMainStr, "$0", "");
         boost::replace_all(partitionMainStr, "$1", "");
@@ -314,8 +310,7 @@ void NestPartitionerSchedule::generateMainforEachPartition(
       }
 
       boost::replace_all(partitionMainStr, "$3", key);
-      boost::replace_all(partitionMainStr, "%", pid.c_str());
-      //   std::cout << partitionMainStr << std::endl;
+      boost::replace_all(partitionMainStr, "%", partitionID);
       writeFileC << partitionMainStr;
       writeFileC.close();
     }
@@ -343,22 +338,17 @@ void NestPartitionerSchedule::setPartitionInputOutputList(
   for (int bi = 0; bi < level; bi++) {
     for (int bii = 0; bii < bfs[bi].size(); bii++) {
       Node *node = bfs[bi][bii];
-      //            cout << "name = " << node->getName().str() << endl;
-
       if (!string(node->getKindName()).compare("Save")) {
-        //                outputList[*outputCount] = node->getName().substr(0,
-        //                node->getName().size() - 5);
         std::string name =
             node->getName().substr(0, node->getName().size() - 5);
         outputList->push_back(name);
         partitionOutList_[name] = pi;
-        //                cout << "output = " << node->getName().str() << endl;
-        //                cout << "outputList[inputCount] = " <<
-        //                outputList[*outputCount] << std::endl; cout <<
-        //                "outputCount = " << *outputCount << std::endl;
-        //                (*outputCount)++;
+//                        cout << "pi = " << pi << ", " << "name = " << name << ", output = " << node->getName().str() << endl;
+//                        cout << "outputList[inputCount] = " <<
+//                        outputList[*outputCount] << std::endl; cout <<
+//                        "outputCount = " << *outputCount << std::endl;
+//                        (*outputCount)++;
       } else {
-
         for (int count = 0; count < node->getNumInputs(); count++) {
           Node *inNode = node->getNthInput(count).getNode();
           string kindName = inNode->getKindName();
@@ -369,14 +359,11 @@ void NestPartitionerSchedule::setPartitionInputOutputList(
               continue;
             }
 
-            //                        inputList[*inputCount] =
-            //                        inNode->getName();
             inputList->push_back(inNode->getName());
 
-            //                        cout << "input = " <<
-            //                        inNode->getKindName() << endl; cout <<
-            //                        "input = " << inNode->getName().str() <<
-            //                        endl; cout << "inputList[inputCount] = "
+//                                    cout << "input = " << inNode->getKindName() << endl;
+//                                    cout "input = " << inNode->getName().str() << endl;
+//                                    cout << "inputList[inputCount] = "
             //                        << inputList[*inputCount] << std::endl;
             //                        cout << "inputCount = " << *inputCount <<
             //                        std::endl;
@@ -399,8 +386,10 @@ void NestPartitionerSchedule::setPartitionInputOutputList(
 void NestPartitionerSchedule::generateNonThreadCall(
     std::string &wfilec, int pi, bool profileMode,
     std::vector<std::string> *inputList, std::string backendName) {
+//    std::cout << "[generateNonThreadCall]" << std::endl;
 
-  for (int cnt = 0; cnt < inputList->size(); cnt++) {
+
+    for (int cnt = 0; cnt < inputList->size(); cnt++) {
     std::string varStr = "";
     std::string varPi = "";
     std::string nodeName = inputList->at(cnt);
@@ -431,7 +420,7 @@ void NestPartitionerSchedule::generateNonThreadCall(
         }
       }
     } else {
-      std::cout << "No output: " << nodeName << std::endl;
+//      std::cout << "No output: " << nodeName << std::endl;
     }
 
     if (pi > 0) {
@@ -490,9 +479,11 @@ void NestPartitionerSchedule::generateNonThreadCall(
   }
 }
 
-void NestPartitionerSchedule::generateThreadCall(
-    std::string &wfilec, int pi, std::set<std::string> *pGroup,
+bool NestPartitionerSchedule::generateThreadCall(
+        std::string &wfilec, int pi, std::set<std::string> *pGroup,
     bool profileMode, std::vector<std::string> *inputList, std::string backendName) {
+
+//    std::cout << "[generateThreadCall]" << std::endl;
 
   for (int cnt = 0; cnt < inputList->size(); cnt++) {
     std::string varStr = "";
@@ -518,7 +509,8 @@ void NestPartitionerSchedule::generateThreadCall(
                           ", \"" + inputList->at(cnt) + "\");\n");
       }
     } else {
-      std::cout << "No output: " << nodeName << std::endl;
+//      std::cout << "(No output) " << "pi = " << pi << ", node name = " << nodeName << std::endl;
+      return false;
     }
 
     for (auto gpname : *pGroup) {
@@ -566,15 +558,15 @@ void NestPartitionerSchedule::generateThreadCall(
                   " time] %lu microsec.\\n\", delay_time[" +
                   std::to_string(pi) + "]);\n\n");
   }
+  return true;
 }
 
-void generateVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs,
-                     const PartitionConfig &partitionConfig) {
+void NestPartitionerSchedule::generateVarInit(std::string &wfilec, const PartitionConfig &partitionConfig) {
   wfilec.append("\n\t//======== Declaration & initialization of weight "
                 "variables =======//\n\n");
   //  cout << "//======== initialize variables start =======//" << endl;
   std::string inputName;
-  //    BFSLevel bfs = getBFSLevel(funcList[0]);
+  BFSLevel bfs = getBFSLevel((*funcMap_)[partitionConfig.partitionNames[0]]);
   size_t level = bfs.size();
   std::string kindName_check;
   for (int i2 = level - 1; i2 >= 0; i2--) {
@@ -586,47 +578,56 @@ void generateVarInit(std::string &wfilec, int partitionNum, BFSLevel bfs,
     }
   }
 
-  for (int i = 0; i < partitionNum - 1; i++) {
-    if (!partitionConfig.backendNames[i].compare("Relay")) {
-      wfilec.append("\tuint8_t *constantWeightVarsAddr" + std::to_string(i) +
+  for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+    auto pname = partitionConfig.partitionNames.at(idx);
+    std::string partitionID = pname.substr(1, pname.length());
+    if (!partitionConfig.backendNames[idx].compare("Relay")) {
+      wfilec.append("\tuint8_t *constantWeightVarsAddr" + partitionID +
                     " = NULL;\n");
     } else {
-      wfilec.append("\tuint8_t *constantWeightVarsAddr" + std::to_string(i) +
-                    " = \n\t\tinitConstantWeights(\"p" + std::to_string(i) +
-                    ".weights.bin\", p" + std::to_string(i) + "_config);\n");
+      wfilec.append("\tuint8_t *constantWeightVarsAddr" + partitionID +
+                    " = \n\t\tinitConstantWeights(\"" + pname +
+                    ".weights.bin\", "+ pname + "_config);\n");
     }
-    if (i == 0) {
-      wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) +
-                    " = initMutableWeightVars(p" + std::to_string(i) +
+    if (idx == 0) {
+      wfilec.append("\tuint8_t *mutableWeightVarsAddr" + partitionID +
+                    " = initMutableWeightVars(" + pname +
                     "_config, \"" + inputName + "\");\n");
     }
 
-    wfilec.append("\tuint8_t *activationsAddr" + std::to_string(i) +
-                  " = initActivations(p" + std::to_string(i) + "_config);\n\n");
+    wfilec.append("\tuint8_t *activationsAddr" + partitionID +
+                  " = initActivations(" + pname + "_config);\n\n");
   }
 
   //  cout << "//======== initialize mutableWeightVarsAddr start =======//" <<
   //  endl;
   wfilec.append("\t//======== Declaration and initialization of mutable "
                 "variables =======//\n\n");
-  for (int i = 1; i < partitionNum - 1; i++) {
-    wfilec.append("\tuint8_t *mutableWeightVarsAddr" + std::to_string(i) +
-                  " =  allocateMutableWeightVars(p" + std::to_string(i) +
-                  "_config);\n");
+
+  for(int idx = 1; idx < partitionConfig.partitionNames.size()-1; idx++) {
+    auto pname = partitionConfig.partitionNames.at(idx);
+    if(idx > 0) {
+        std::string partitionID = pname.substr(1, pname.length());
+        wfilec.append("\tuint8_t *mutableWeightVarsAddr" + partitionID +
+                      " =  allocateMutableWeightVars(" + pname +
+                      "_config);\n");
+    }
   }
   wfilec.append("\n");
 
   //  cout << "//======== call xx_load_module() =======//" << endl;
-  for (int i = 0; i < partitionNum - 1; i++) {
-    if (!partitionConfig.backendNames[i].compare("Relay")) {
-      wfilec.append("\tp" + std::to_string(i) + "_load_module(0);\n");
-    } else if (!partitionConfig.backendNames[i].compare("VTA")) {
-      wfilec.append("\tp" + std::to_string(i) +
-                    "_load_module(constantWeightVarsAddr" + std::to_string(i) +
+  for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+    auto pname = partitionConfig.partitionNames.at(idx);
+      std::string partitionID = pname.substr(1, pname.length());
+    if (!partitionConfig.backendNames[idx].compare("Relay")) {
+      wfilec.append("\t" + pname + "_load_module(0);\n");
+    } else if (!partitionConfig.backendNames[idx].compare("VTA")) {
+      wfilec.append("\t" + pname +
+                    "_load_module(constantWeightVarsAddr" + partitionID +
                     ");\n");
-    } else if (!partitionConfig.backendNames[i].compare("Newton")) {
-      wfilec.append("\tp" + std::to_string(i) +
-                    "_load_module((float *)constantWeightVarsAddr" + std::to_string(i) +
+    } else if (!partitionConfig.backendNames[idx].compare("Newton")) {
+      wfilec.append("\t" + pname +
+                    "_load_module((float *)constantWeightVarsAddr" + partitionID +
                     ");\n");
     }
   }
@@ -645,12 +646,12 @@ void getParallelGroup(std::vector<std::set<std::string>> parallelPartitions,
   }
 }
 
+
+
 void NestPartitionerSchedule::generatePartitionCall(
-    std::string &wfilec, int partitionNum, std::vector<Function *> funcList,
-    const PartitionConfig &partitionConfig) {
-
-  // first partition
-
+  std::string &wfilec, const PartitionConfig &partitionConfig) {
+    std::cout << "[generatePartitionCall]" << std::endl;
+    // first partition
   wfilec.append("\ttimeval t1, t2;\n");
   if (profileMode_ == 1) {
     wfilec.append("\ttimeval p_time_start, p_time_end;\n");
@@ -662,59 +663,68 @@ void NestPartitionerSchedule::generatePartitionCall(
 
   std::vector<std::string> processedPP;
   std::string finalOutStr;
-  for (int pi = 0; pi < partitionNum - 1; pi++) {
 
-    auto func = funcList[pi];
+  for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+    std::string pname = partitionConfig.partitionNames.at(idx);
+    size_t pid = std::stoi(pname.substr(1, pname.length()));
+
+    auto func = (*funcMap_)[pname];
+    pid = std::stoi(pname.substr(1, pname.length()));
 
     std::vector<std::string> inputList;
     std::vector<std::string> outputList;
 
-    setPartitionInputOutputList(func, &inputList, &outputList, pi);
-
-    //        std::cout << "in = " << inputList.size() << std::endl;
-    //        std::cout << "out = " << outputList.size() << std::endl;
+    setPartitionInputOutputList(func, &inputList, &outputList, pid);
 
     std::set<std::string> pGroup;
-    getParallelGroup(partitionConfig.parallelPartitions, pi, &pGroup);
+    getParallelGroup(partitionConfig.parallelPartitions, pid, &pGroup);
     if (std::find(processedPP.begin(), processedPP.end(),
-                  "p" + std::to_string(pi)) != processedPP.end())
-      continue;
+                  pname) != processedPP.end()) {
+        continue;
+    }
 
     // partition call
     if (pGroup.size() == 0) {
-      generateNonThreadCall(wfilec, pi, profileMode_, &inputList, partitionConfig.backendNames[pi]);
+      generateNonThreadCall(wfilec, pid, profileMode_, &inputList, partitionConfig.backendNames[idx]);
     } else {
       // same input
-      generateThreadCall(wfilec, pi, &pGroup, profileMode_, &inputList, partitionConfig.backendNames[pi]);
-      processedPP.insert(processedPP.end(), pGroup.begin(), pGroup.end());
+      bool processed = generateThreadCall(wfilec, pid, &pGroup, profileMode_, &inputList, partitionConfig.backendNames[idx]);
+      if(processed) {
+          processedPP.insert(processedPP.end(), pGroup.begin(), pGroup.end());
+      }else {
+//          std::cout << "Error generating thread code!" << pname << std::endl;
+      }
     }
 
     // last partition
-    if (pi == partitionNum - 2) { // last partition
+    if(idx == partitionConfig.partitionNames.size() - 2) {
       finalOutStr = outputList.at(0);
       break;
     }
   }
+
+    auto plastPName = partitionConfig.partitionNames.at(partitionConfig.partitionNames.size() - 1);
+    std::string plastPartitionID = plastPName.substr(1, plastPName.length());
+
+    auto lastPName = partitionConfig.partitionNames.at(partitionConfig.partitionNames.size() - 2);
+    std::string lastPartitionID = lastPName.substr(1, lastPName.length());
 
   if (profileMode_ == 1) {
     wfilec.append("\tgettimeofday(&comm_time_end, NULL);\n");
     wfilec.append("\tcomm_time = (comm_time_end.tv_sec - "
                   "comm_time_start.tv_sec)*1000000.0 + (comm_time_end.tv_usec "
                   "- comm_time_start.tv_usec);\n");
-    wfilec.append("\tcomm_time_ary[" + std::to_string(partitionNum - 1) +
+    wfilec.append("\tcomm_time_ary[" + std::to_string(partitionConfig.partitionNames.size() - 1) +
                   "] = comm_time;\n");
     wfilec.append("\tprintf(\"\\n====> [Inference_" +
-                  std::to_string(partitionNum - 2) +
+                  lastPartitionID +
                   " p time] %lu microsec.\\n\", p_time_ary[" +
-                  std::to_string(partitionNum - 2) + "]);\n");
-    //        wfilec.append("\tprintf(\"\\n====> [Inference_" +
-    //        std::to_string(partitionNum - 2) + " comm time] %lu
-    //        microsec.\\n\", comm_time_ary[" + std::to_string(partitionNum - 2)
-    //        + "]);\n\n");
+                  std::to_string(partitionConfig.partitionNames.size() - 2) + "]);\n");
+
     wfilec.append("\tprintf(\"\\n====> [Inference_" +
-                  std::to_string(partitionNum - 1) +
+                          plastPartitionID +
                   " comm time] %lu microsec.\\n\", comm_time_ary[" +
-                  std::to_string(partitionNum - 1) + "]);\n\n");
+                  std::to_string(partitionConfig.partitionNames.size() - 1) + "]);\n\n");
   }
 
   wfilec.append("\tgettimeofday(&t2, NULL);\n");
@@ -726,15 +736,14 @@ void NestPartitionerSchedule::generatePartitionCall(
   wfilec.append("\t// Report the results.\n");
   wfilec.append(
       "\tprintf(\"====== final result of this neural net ========\\n\");\n");
-  wfilec.append("\tdumpInferenceResults(p" + std::to_string(partitionNum - 2) +
+  wfilec.append("\tdumpInferenceResults(" + lastPName +
                 "_config, mutableWeightVarsAddr" +
-                std::to_string(partitionNum - 2) + ", \"" + finalOutStr +
+                        lastPartitionID + ", \"" + finalOutStr +
                 "\");\n\n");
 }
 
 void NestPartitionerSchedule::generateMain(
-    std::string &wfilec, int partitionNum, std::vector<Function *> funcList,
-    const PartitionConfig &partitionConfig) {
+    std::string &wfilec, const PartitionConfig &partitionConfig) {
   //  cout << "generateMain: " << wfilec << endl;
 
   std::cout << "Partition plan fileName : " << getPartitionPlanFile()
@@ -755,42 +764,36 @@ void NestPartitionerSchedule::generateMain(
   wfilec.append("\tparseCommandLineOptions(argc, argv);\n\n");
 
   bool vtaFlag = false;
-  for (int i = 0; i < partitionNum - 1; i++) {
+  for (int i = 0; i < partitionConfig.partitionNames.size() - 1; i++) {
     if (!partitionConfig.backendNames[i].compare("VTA"))
       vtaFlag = true;
   }
 
   if (vtaFlag) {
-    //        wfilec.append("#ifdef VTAMAIN\n");
     wfilec.append("\tinitVTARuntime();\n");
     wfilec.append("\tinitVTARuntime1();\n");
     wfilec.append("\tinitVTARuntime2();\n");
     wfilec.append("\tinitVTARuntime3();\n");
-    //        wfilec.append("#endif\n");
   }
 
-  generateVarInit(wfilec, partitionNum, getBFSLevel(funcList[0]),
-                  partitionConfig);
-  generatePartitionCall(wfilec, partitionNum, funcList, partitionConfig);
+  generateVarInit(wfilec, partitionConfig);
+  generatePartitionCall(wfilec, partitionConfig);
 }
 
-void NestPartitionerSchedule::generateCodeFromModels(
-    std::size_t partitionNum, std::vector<Function *> funcList,
-    const PartitionConfig &partitionConfig, std::string inputPartitionName) {
+void NestPartitionerSchedule::generateCodeFromModels(const PartitionConfig &partitionConfig, std::string inputPartitionName) {
   std::cout << "generateCodeFromModels Start" << std::endl;
 
-  generateMainFile(partitionNum, funcList, partitionConfig, inputPartitionName);
-  generateCMakeListsFile(partitionNum, partitionConfig);
-  generateRelayFile(partitionNum, partitionConfig);
+  generateMainFile(partitionConfig, inputPartitionName);
+  generateCMakeListsFile(partitionConfig);
+  generateRelayFile(partitionConfig);
 }
 
 #include <stdlib.h>
-void NestPartitionerSchedule::generateRelayFile(
-    std::size_t partitionNum, const PartitionConfig &partitionConfig) {
+void NestPartitionerSchedule::generateRelayFile(const PartitionConfig &partitionConfig) {
   string genRelayFileName = outputDir_ + "/genRelay.sh";
   bool isRelay = false;
 
-  for (int i = 0; i < partitionNum - 1; i++) {
+  for (int i = 0; i < partitionConfig.partitionNames.size() - 1; i++) {
     if (!partitionConfig.backendNames[i].compare("Relay")) {
       isRelay = true;
       break;
@@ -805,9 +808,10 @@ void NestPartitionerSchedule::generateRelayFile(
   if (writeRelaySHFile.is_open()) {
     string relaySH;
 
-    for (int i = 0; i < partitionNum - 1; i++) {
-      if (!partitionConfig.backendNames[i].compare("Relay")) {
-        relaySH.append("python3 relay__p" + std::to_string(i) +
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
+      if (!partitionConfig.backendNames[idx].compare("Relay")) {
+        relaySH.append("python3 relay__" + pname +
                        "/genCode.py\n");
       }
     }
@@ -824,9 +828,10 @@ void NestPartitionerSchedule::generateRelayFile(
   if (writeBundleSHFile.is_open()) {
     string bundleSH;
 
-    for (int i = 0; i < partitionNum - 1; i++) {
-      if (!partitionConfig.backendNames[i].compare("Relay")) {
-        bundleSH.append("cd module__p" + std::to_string(i) + ";make;cd ..\n");
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
+      if (!partitionConfig.backendNames[idx].compare("Relay")) {
+        bundleSH.append("cd module__" + pname + ";make;cd ..\n");
       }
     }
 
@@ -841,9 +846,7 @@ void NestPartitionerSchedule::generateRelayFile(
   system(cmd.data());
 }
 
-void NestPartitionerSchedule::generateMainFile(
-    std::size_t partitionNum, std::vector<Function *> funcList,
-    const PartitionConfig &partitionConfig, std::string inputPartitionName) {
+void NestPartitionerSchedule::generateMainFile(const PartitionConfig &partitionConfig, std::string inputPartitionName) {
 
   string mainFileName = outputDir_ + "/main.cpp";
 
@@ -861,9 +864,9 @@ void NestPartitionerSchedule::generateMainFile(
     string yamlFile;
     std::vector<std::string> resultVarList;
 
-    generateDeclaration(declare, partitionNum, partitionConfig);
-    generateMain(inference_main, partitionNum, funcList, partitionConfig);
-    generateFree(memfree, partitionNum, funcList, partitionConfig);
+    generateDeclaration(declare, partitionConfig);
+    generateMain(inference_main, partitionConfig);
+    generateFree(memfree, partitionConfig);
 
     writeMainFile << declare;
     writeMainFile << initialize;
@@ -872,7 +875,7 @@ void NestPartitionerSchedule::generateMainFile(
     writeMainFile << memfree;
 
     if (profileMode_ == 1) {
-      generateYamlFile(yamlFile, partitionNum, funcList, partitionConfig,
+      generateYamlFile(yamlFile, partitionConfig,
                        inputPartitionName);
       writeMainFile << yamlFile;
     }
@@ -880,15 +883,14 @@ void NestPartitionerSchedule::generateMainFile(
   }
 
   if (partitionExeMode_ == 1) {
-    generateMainforEachPartition(partitionNum, funcList, partitionConfig);
+    generateMainforEachPartition(partitionConfig);
   }
 
   std::cout << "main outfile position : " << mainFileName << std::endl;
 }
 
 #include <random>
-void NestPartitionerSchedule::generateCMakeListsFile(
-    std::size_t partitionNum, const PartitionConfig &partitionConfig) {
+void NestPartitionerSchedule::generateCMakeListsFile(const PartitionConfig &partitionConfig) {
   //  std::cout << "== [Start] generateCMakeListsFile == " << std::endl;
 
   string makeFileName = outputDir_ + "/CMakeLists.txt";
@@ -901,63 +903,65 @@ void NestPartitionerSchedule::generateCMakeListsFile(
     cmakeFile.append("\tOUTPUT\n");
 
     cmakeFile.append("\t");
-    for (int i = 0; i < partitionNum - 1; i++) {
-      if (!partitionConfig.backendNames[i].compare("CPU")) {
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
+      if (!partitionConfig.backendNames[idx].compare("CPU")) {
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".o ");
-      } else if (!partitionConfig.backendNames[i].compare("VTA")) {
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+      } else if (!partitionConfig.backendNames[idx].compare("VTA")) {
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".cpp ");
-      } else if (!partitionConfig.backendNames[i].compare("Relay")) {
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+      } else if (!partitionConfig.backendNames[idx].compare("Relay")) {
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".o ");
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          "_tvm.so ");
       }
     }
     cmakeFile.append("\n\n");
 
-    for (int i = 0; i < partitionNum - 1; i++) {
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
       cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
 
-      if (!partitionConfig.backendNames[i].compare("CPU")) {
-        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) +
+      if (!partitionConfig.backendNames[idx].compare("CPU")) {
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/" + pname +
                          ".o\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".o\n");
-      } else if (!partitionConfig.backendNames[i].compare("VTA")) {
-        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) +
+      } else if (!partitionConfig.backendNames[idx].compare("VTA")) {
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/" + pname +
                          ".cpp\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".cpp\n");
-      } else if (!partitionConfig.backendNames[i].compare("Relay")) {
-        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__p" +
-                         std::to_string(i) + "/p" + std::to_string(i) + ".o\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+      } else if (!partitionConfig.backendNames[idx].compare("Relay")) {
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__" + pname
+        + "/" + pname + ".o\n");
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".o\n");
 
         cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__p" +
-                         std::to_string(i) + "/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__" + pname + "/" + pname +
                          "_tvm.so\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          "_tvm.so\n");
       }
     }
     cmakeFile.append("\n");
 
-    for (int i = 0; i < partitionNum - 1; i++) {
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
       cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
 
-      if (!partitionConfig.backendNames[i].compare("Relay")) {
-        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__p" +
-                         std::to_string(i) + "/p" + std::to_string(i) + ".h\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+      if (!partitionConfig.backendNames[idx].compare("Relay")) {
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/module__" + pname
+        + "/" + pname + ".h\n");
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".h\n");
       } else {
-        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/" + pname +
                          ".h\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".h\n");
       }
     }
@@ -972,7 +976,7 @@ void NestPartitionerSchedule::generateCMakeListsFile(
     cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/main_template.h\n\n");
 
     bool vtaFlag = false, relayFlag = false;
-    for (int i = 0; i < partitionNum - 1; i++) {
+    for (int i = 0; i < partitionConfig.partitionNames.size() - 1; i++) {
       if (!partitionConfig.backendNames[i].compare("VTA"))
         vtaFlag = true;
 
@@ -986,12 +990,13 @@ void NestPartitionerSchedule::generateCMakeListsFile(
       cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/VTARuntime.h\n\n");
     }
 
-    for (int i = 0; i < partitionNum - 1; i++) {
-      if (partitionConfig.backendNames[i].compare("Relay")) {
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
+      if (partitionConfig.backendNames[idx].compare("Relay")) {
         cmakeFile.append("\tCOMMAND ${CMAKE_COMMAND} -E copy\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_SOURCE_DIR}/" + pname +
                          ".weights.bin\n");
-        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("\t${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".weights.bin\n");
       }
     }
@@ -1001,21 +1006,18 @@ void NestPartitionerSchedule::generateCMakeListsFile(
     std::string demoExeFileName =
         "demoExeFileName" + std::to_string(rand() % 100000);
 
-    // std::cout << demoExeFileName << std::endl;
-
     cmakeFile.append("add_custom_target(" + demoExeFileName + "Net DEPENDS\n");
     cmakeFile.append("\t");
 
-    bool isExistVTA = false;
-    for (int i = 0; i < partitionNum - 1; i++) {
-      if (!partitionConfig.backendNames[i].compare("CPU") ||
-          !partitionConfig.backendNames[i].compare("Relay")) {
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
+      if (!partitionConfig.backendNames[idx].compare("CPU") ||
+          !partitionConfig.backendNames[idx].compare("Relay")) {
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".o ");
-      } else if (!partitionConfig.backendNames[i].compare("VTA")) {
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+      } else if (!partitionConfig.backendNames[idx].compare("VTA")) {
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".cpp ");
-        isExistVTA = true;
       }
     }
     cmakeFile.append("\n)\n\n");
@@ -1023,12 +1025,14 @@ void NestPartitionerSchedule::generateCMakeListsFile(
     cmakeFile.append("INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})\n");
     cmakeFile.append("add_executable(" + demoExeFileName + " main.cpp\n");
     cmakeFile.append("\t");
-    for (int i = 0; i < partitionNum - 1; i++) {
-      if (!partitionConfig.backendNames[i].compare("VTA")) {
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+
+    for(int idx = 0; idx < partitionConfig.partitionNames.size()-1; idx++) {
+      auto pname = partitionConfig.partitionNames.at(idx);
+      if (!partitionConfig.backendNames[idx].compare("VTA")) {
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".cpp ");
       } else {
-        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/p" + std::to_string(i) +
+        cmakeFile.append("${CMAKE_CURRENT_BINARY_DIR}/" + pname +
                          ".o ");
       }
     }
@@ -1076,7 +1080,7 @@ void NestPartitionerSchedule::generateCMakeListsFile(
           "\tRUNTIME_OUTPUT_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}\")\n";
 
       std::string pid;
-      for (int i = 0; i < partitionNum - 1; i++) {
+      for (int i = 0; i < partitionConfig.partitionNames.size() - 1; i++) {
         std::string pExeStr = "";
         if (!partitionConfig.backendNames[i].compare("CPU")) {
           pExeStr = pExeStrCPUTemplate;
@@ -1095,6 +1099,7 @@ void NestPartitionerSchedule::generateCMakeListsFile(
     cmakeFile.append("INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})\n");
     cmakeFile.append("add_dependencies(" + demoExeFileName + " " +
                      demoExeFileName + "Net)\n");
+
 
     if (relayFlag) {
       cmakeFile.append(

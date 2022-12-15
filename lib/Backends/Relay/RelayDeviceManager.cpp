@@ -103,13 +103,13 @@ void RelayDeviceManager::addNetworkImpl(const Module *module,
       }
     }
   }
-
-  if (usedMemoryBytes_ + allFunctionsMemoryBytes > maxMemoryBytes_) {
-    readyCB(module,
-            MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_OUT_OF_DEVICE_MEMORY,
-                     "Failed to add network: not enough memory"));
-    return;
-  }
+//
+//  if (usedMemoryBytes_ + allFunctionsMemoryBytes > maxMemoryBytes_) {
+//    readyCB(module,
+//            MAKE_ERR(ErrorValue::ErrorCode::RUNTIME_OUT_OF_DEVICE_MEMORY,
+//                     "Failed to add network: not enough memory"));
+//    return;
+//  }
 
   // Add to the function name lookup map.
   for (const auto &func : functions) {
@@ -120,7 +120,7 @@ void RelayDeviceManager::addNetworkImpl(const Module *module,
   }
 
   usedMemoryBytes_ += allFunctionsMemoryBytes;
-  assert(usedMemoryBytes_ <= maxMemoryBytes_);
+//  assert(usedMemoryBytes_ <= maxMemoryBytes_);
 
   // Export changes to memory use.
   exportMemoryCounters();

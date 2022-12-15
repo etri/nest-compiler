@@ -126,6 +126,7 @@ DAGListTy NestPartitioner::doPartitioning(
     // Clone nodes into target partition. Update nodeInfo as necessary.
     for (size_t i = 0, e = funcs.size(); i < e; i++) {
       for (auto &N : funcs[i]->getNodes()) {
+
         auto *clone = N.clone();
         currToNew[&N] = clone;
         mapping[&N]->addNode(clone);
@@ -336,183 +337,193 @@ NestPartitioner::getDeviceInfoForBackend(llvm::StringRef backendName) {
   llvm_unreachable("Each backend should have at least one device");
 }
 
+bool comparePartitionOrder(std::pair<std::string, Function *> e1, std::pair<std::string, Function *> e2) {
+    size_t pid1 = std::stoi(e1.first.substr(1, e1.first.length()));
+    size_t pid2 = std::stoi(e2.first.substr(1, e2.first.length()));
+
+    return (pid1 < pid2);
+}
+
+
 Expected<DAGListTy>
 NestPartitioner::partitionFromConfig(const PartitionConfig &partitionConfig,
                                      CompilationContext &cctx) {
-  std::cout << std::endl << "Partitioning Graph-IR.." << std::endl;
+    std::cout << std::endl << "Partitioning Graph-IR.." << std::endl;
 
-  //  std::cout << "== [Start] partitionFromConfigForNest == " << std::endl;
+    //  std::cout << "== [Start] partitionFromConfigForNest == " << std::endl;
 
-  DAGListTy partitions;
-  // Prepare the mapping between BackendName and BackendInfo.
-  std::vector<Backend *> backends;
-  genBackendMap(backendMap_, backendHolder_, backends);
-  Function *F = module_->getFunction(partitionConfig.funcName);
+    DAGListTy partitions;
+    // Prepare the mapping between BackendName and BackendInfo.
+    std::vector<Backend *> backends;
+    genBackendMap(backendMap_, backendHolder_, backends);
+    Function *F = module_->getFunction(partitionConfig.funcName);
 
-  std::string fname = module_->getFunctions().front()->getName();
-  //  std::cout << "function name = " << fname << std::endl;
+    std::string fname = module_->getFunctions().front()->getName();
+    //  std::cout << "function name = " << fname << std::endl;
 
-  if (!F) {
-    return MAKE_ERR(ErrorValue::ErrorCode::PARTITIONER_ERROR,
-                    strFormat("Can't find function %s in current module.",
-                              F->getName().str().data()));
-  }
-  //  std::cout << "backendNames = " << partitionConfig.backendNames.size() <<
-  //  std::endl; std::cout << "logicalIDs = " <<
-  //  partitionConfig.logicalIDs.size() << std::endl;
-  DCHECK(
-      partitionConfig.numOfPartitions == partitionConfig.backendNames.size() &&
-      partitionConfig.numOfPartitions == partitionConfig.partitionNames.size())
-      << "Invalid user-defined partition config.";
+    if (!F) {
+        return MAKE_ERR(ErrorValue::ErrorCode::PARTITIONER_ERROR,
+                        strFormat("Can't find function %s in current module.",
+                                  F->getName().str().data()));
+    }
 
-  if (partitionConfig.backendHints.size()) {
-    DCHECK(partitionConfig.numOfPartitions ==
-           partitionConfig.backendHints.size())
-        << "Invalid user-defined partition config (backendHints).";
-  }
+    DCHECK(
+            partitionConfig.numOfPartitions == partitionConfig.backendNames.size() &&
+            partitionConfig.numOfPartitions == partitionConfig.partitionNames.size())
+                    << "Invalid user-defined partition config.";
 
-  NodeToFunctionMap partitionMap;
-  std::vector<Function *> funcList;
-  std::unordered_set<size_t> unused;
-  std::vector<NodesSet> nodesSets(partitionConfig.numOfPartitions);
-  // Create partitions based on the given number and names.
-  for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
-    Function *newF = module_->createFunction(partitionConfig.partitionNames[i]);
-    funcList.push_back(newF);
-    partitionMap.createPartition(newF, partitionConfig.backendNames[i]);
-    unused.insert(i);
+    if (partitionConfig.backendHints.size()) {
+        DCHECK(partitionConfig.numOfPartitions ==
+               partitionConfig.backendHints.size())
+                        << "Invalid user-defined partition config (backendHints).";
+    }
 
-    // std::cout << "f name = " << newF->getName().str() << std::endl;
-    // std::cout << "f filename = " << newF->getFilename().c_str() << std::endl;
-  }
+    NodeToFunctionMap partitionMap;
+    std::map<std::string, Function *> funcMap;
+    std::unordered_set<size_t> unused;
+    std::map<size_t, NodesSet> nodesSetMap;
 
-  // Map the nodes the the partitions.
-  std::vector<Node *> unMapped;
-  for (auto &node : F->getNodes()) {
-    auto iter = partitionConfig.nodeToPartition.find(node.getName());
-    if (iter == partitionConfig.nodeToPartition.end()) {
-      // If a node in F is not in the node to partition mapping, put it into
-      // unMaped list.
-      unMapped.push_back(&node);
-      // std::cout << "Unmapped = " << node.getName().str() << std::endl;
+    // Create partitions based on the given number and names.
+    for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
+        std::string pname = std::string(partitionConfig.partitionNames[i].c_str());
+        size_t partitionID = std::stoi(pname.substr(1, pname.length()));
+
+        Function *newF = module_->createFunction(partitionConfig.partitionNames[i]);
+        funcMap.insert(std::make_pair(partitionConfig.partitionNames[i], newF));
+        partitionMap.createPartition(newF, partitionConfig.backendNames[i]);
+        unused.insert(partitionID);
+
+        nodesSetMap.insert(std::make_pair(partitionID, NodesSet()));
+    }
+
+    // Map the nodes the partitions.
+    std::vector<Node *> unMapped;
+    for (auto &node : F->getNodes()) {
+        auto iter = partitionConfig.nodeToPartition.find(node.getName());
+        if (iter == partitionConfig.nodeToPartition.end()) {
+            // If a node in F is not in the node to partition mapping, put it into
+            // unMaped list.
+            unMapped.push_back(&node);
+        } else {
+            size_t partitionID = iter->second;
+//            DCHECK(partitionID < partitionConfig.numOfPartitions)
+//                            << "Invalid partition id :" << partitionID;
+            partitionMap.add(&node, funcMap["p"+std::to_string(partitionID)]);
+            unused.erase(partitionID);
+            nodesSetMap[partitionID].insert(&node);
+        }
+    }
+
+    // If there is unused partition and unmapped nodes, map those nodes to the
+    // unused partition.
+    if (unMapped.size()) {
+        DCHECK(unused.size() == 1) << "There must be exactly 1 unused partition.";
+        auto partitionID = *(unused.begin());
+        for (auto &node : unMapped) {
+            partitionMap.add(node, funcMap["p" + std::to_string(partitionID)]);
+            nodesSetMap[partitionID].insert(node);
+        }
+    }
+
+    // Set backend hints if they exist
+    if (partitionConfig.backendHints.size()) {
+        for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
+            std::string pname = std::string(partitionConfig.partitionNames[i].c_str());
+            auto func = funcMap[pname];
+
+            partitionMap.setBackendHints(func, partitionConfig.backendHints[i]);
+        }
+    }
+
+    // If logical device assignments are provided use them otherwise assign them.
+    if (partitionConfig.logicalIDs.size()) {
+        DCHECK(partitionConfig.numOfPartitions ==
+               partitionConfig.logicalIDs.size());
+        for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
+            std::string pname = std::string(partitionConfig.partitionNames[i].c_str());
+            auto func = funcMap[pname];
+
+            for (auto logicalDevice : partitionConfig.logicalIDs[i]) {
+                partitionMap.appendLogicalDeviceID(func, logicalDevice);
+            }
+        }
     } else {
-      size_t partitionID = iter->second;
-      DCHECK(partitionID < partitionConfig.numOfPartitions)
-          << "Invalid partition id :" << partitionID;
-      partitionMap.add(&node, funcList[partitionID]);
-      unused.erase(partitionID);
-      nodesSets[partitionID].insert(&node);
-      // std::cout << "Mapped = " << node.getName().str() << std::endl;
+        // Logical device ID validation.
+        logicalDeviceID_ = assignLogicalDeviceID(partitionMap, backendMap_);
     }
-  }
-
-  // If there is unused partition and unmapped nodes, map those nodes to the
-  // unused partition.
-  if (unMapped.size()) {
-    DCHECK(unused.size() == 1) << "There must be exactly 1 unused partition.";
-    auto partitionID = *(unused.begin());
-    for (auto &node : unMapped) {
-      partitionMap.add(node, funcList[partitionID]);
-      nodesSets[partitionID].insert(node);
+    // Add replication count to config if provided.
+    for (auto &replicationAssignment : partitionConfig.replicationCount) {
+        auto func = funcMap[partitionConfig.partitionNames[replicationAssignment.first]];
+        partitionMap.addReplicationCount(func, replicationAssignment.second);
     }
-  }
 
-  // Set backend hints if they exist
-  if (partitionConfig.backendHints.size()) {
-    for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
-      auto func = funcList[i];
-      partitionMap.setBackendHints(func, partitionConfig.backendHints[i]);
+    RETURN_IF_ERR(logicalDevicesValidation(partitionMap, backendMap_));
+
+    // Do partition.
+    partitions = doPartitioning(F->getName(), {F}, module_, partitionMap,
+            /* saveDAG */ true,
+                                cctx.backendOpts.backendSpecificNodeInfo);
+    module_->eraseFunction(F);
+
+    std::cout << "Graph-IR partitioning is done." << std::endl << std::endl;
+
+    // DAG validation.
+    RETURN_IF_ERR(dagValidation(partitions[0]));
+
+    // profileMode : 0 -> no time, 1 -> time add
+
+    if (appGen_.getProfileMode() == 0) {
+        std::cout << "Generating linking code (main.cpp).." << std::endl;
+    } else if (appGen_.getProfileMode() == 1) {
+        std::cout << "Generating profiling code (main.cpp).." << std::endl;
     }
-  }
 
-  // If logical device assignments are provided use them otherwise assign them.
-  if (partitionConfig.logicalIDs.size()) {
-    DCHECK(partitionConfig.numOfPartitions ==
-           partitionConfig.logicalIDs.size());
-    for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
-      auto func = funcList[i];
-
-      for (auto logicalDevice : partitionConfig.logicalIDs[i]) {
-        partitionMap.appendLogicalDeviceID(func, logicalDevice);
-      }
-    }
-  } else {
-    // Logical device ID validation.
-    logicalDeviceID_ = assignLogicalDeviceID(partitionMap, backendMap_);
-  }
-  // Add replication count to config if provided.
-  for (auto &replicationAssignment : partitionConfig.replicationCount) {
-    auto func = funcList.at(replicationAssignment.first);
-    partitionMap.addReplicationCount(func, replicationAssignment.second);
-  }
-
-  RETURN_IF_ERR(logicalDevicesValidation(partitionMap, backendMap_));
-
-  // Do partition.
-  partitions = doPartitioning(F->getName(), {F}, module_, partitionMap,
-                              /* saveDAG */ true,
-                              cctx.backendOpts.backendSpecificNodeInfo);
-  module_->eraseFunction(F);
-
-  std::cout << "Graph-IR partitioning is done." << std::endl << std::endl;
-
-  // DAG validation.
-  RETURN_IF_ERR(dagValidation(partitions[0]));
-
-  // profileMode : 0 -> no time, 1 -> time add
-  // main.cpp : yaml create logic add
-
-  if (appGen_.getProfileMode() == 0) {
-    std::cout << "Generating linking code (main.cpp).." << std::endl;
-  } else if (appGen_.getProfileMode() == 1) {
-    std::cout << "Generating profiling code (main.cpp).." << std::endl;
-  }
-
-  appGen_.generateCodeFromModels(funcList.size(), funcList, partitionConfig,
+    appGen_.setFuncMap(&funcMap);
+    appGen_.generateCodeFromModels(partitionConfig,
                                  appGen_.getInputPartitionName());
 
-  if (appGen_.getProfileMode() == 0) {
-    std::cout << "Linking-code generation is done." << std::endl << std::endl;
-  } else if (appGen_.getProfileMode() == 1) {
-    std::cout << "Profiling-code generation is done." << std::endl << std::endl;
-  }
-
-  // Verify the function.
-  std::cout << "Optimizing Graph-IR for CPU and VTA.." << std::endl;
-
-  for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
-    auto func = funcList[i];
-
-    Backend *B = backendMap_[partitionConfig.backendNames[i]].backend;
-
-    if (!optimized_) {
-      if (B->getBackendName().compare("CPU") &&
-          B->getBackendName().compare("Relay")) {
-        // Specific configurations.
-        cctx.precisionConfig.quantMode = QuantizationMode::Quantize;
-        cctx.precisionConfig.quantConfig.schema =
-            quantization::Schema::SymmetricWithPower2Scale;
-        llvm::StringRef filename = quantFileName_;
-        // std::cout << "quant filename = " << filename.str() << std::endl;
-        deserializeProfilingInfosFromYaml(
-            filename, cctx.precisionConfig.quantConfig.graphPreLowerHash,
-            cctx.precisionConfig.quantConfig.infos);
-        cctx.precisionConfig.quantConfig.checkGraphPreLowerHash = false;
-      } else {
-        cctx.precisionConfig.quantMode = QuantizationMode::None;
-      }
-      RETURN_IF_ERR(::glow::optimizeFunction(func, *B, cctx));
+    if (appGen_.getProfileMode() == 0) {
+        std::cout << "Linking-code generation is done." << std::endl << std::endl;
+    } else if (appGen_.getProfileMode() == 1) {
+        std::cout << "Profiling-code generation is done." << std::endl << std::endl;
     }
 
-    DCHECK(func->verify()) << "Conversion led to invalid function";
-  }
+    // Verify the function.
+    std::cout << "Optimizing Graph-IR for CPU and VTA.." << std::endl;
 
-  std::cout << "Graph-IR optimization is done.." << std::endl;
+    for (size_t i = 0; i < partitionConfig.numOfPartitions; i++) {
+        std::string pname = std::string(partitionConfig.partitionNames[i].c_str());
+        auto func = funcMap[pname];
+        Backend *B = backendMap_[partitionConfig.backendNames[i]].backend;
 
-  RETURN_IF_ERR(finalize(partitions, partitionMap));
+        if (!optimized_) {
+            if (B->getBackendName().compare("CPU") &&
+                B->getBackendName().compare("Relay")) {
+                // Specific configurations.
+                cctx.precisionConfig.quantMode = QuantizationMode::Quantize;
+                cctx.precisionConfig.quantConfig.schema =
+                        quantization::Schema::SymmetricWithPower2Scale;
+                llvm::StringRef filename = quantFileName_;
+                // std::cout << "quant filename = " << filename.str() << std::endl;
+                deserializeProfilingInfosFromYaml(
+                        filename, cctx.precisionConfig.quantConfig.graphPreLowerHash,
+                        cctx.precisionConfig.quantConfig.infos);
+                cctx.precisionConfig.quantConfig.checkGraphPreLowerHash = false;
+            } else {
+                cctx.precisionConfig.quantMode = QuantizationMode::None;
+            }
+            RETURN_IF_ERR(::glow::optimizeFunction(func, *B, cctx));
+        }
 
-  //  std::cout << "== [End] partitionFromConfigForNest == " << std::endl;
-  return std::move(partitions);
+        DCHECK(func->verify()) << "Conversion led to invalid function";
+    }
+
+    std::cout << "Graph-IR optimization is done.." << std::endl;
+
+    RETURN_IF_ERR(finalize(partitions, partitionMap));
+
+    //  std::cout << "== [End] partitionFromConfigForNest == " << std::endl;
+    return std::move(partitions);
 }
 
 Expected<DAGListTy>
@@ -546,7 +557,7 @@ NestPartitioner::setupPrepartitionedModule(CompilationContext &cctx) {
     partitionMap.createPartition(funcs[i], deviceInfo_[0].backendName);
   }
 
-  // Map the nodes the the partitions.
+  // Map the nodes the partitions.
   for (Function *F : funcs) {
     for (auto &node : F->getNodes()) {
       partitionMap.add(&node, F);
@@ -619,7 +630,6 @@ void NestPartitioner::loadPartitionPlan(
     runtime::PartitionConfig *partitionConfig, std::string filename) {
   //  std::cout << "----------- loadPartitionPlan ---------------" << std::endl;
   std::string partitionPlanFile(filename);
-  // string partitionPlanFile("/Users/msyu/Development/partitionPlanTest.yaml");
 
   std::map<std::string, std::string> pmap =
       deserializeStrStrMapFromYaml(partitionPlanFile);
@@ -628,6 +638,7 @@ void NestPartitioner::loadPartitionPlan(
       atol(pmap.find("numOfPartitions")->second.c_str());
   boost::split(partitionConfig->backendNames, pmap.find("backendNames")->second,
                [](char c) { return c == ':'; });
+
   boost::split(partitionConfig->partitionNames,
                pmap.find("partitionNames")->second,
                [](char c) { return c == ':'; });
@@ -643,7 +654,10 @@ void NestPartitioner::loadPartitionPlan(
       partitionConfig->backendNames[i] =
           partitionConfig->backendNames[i].substr(0, tmpidx);
     }
+
     puIdxMap_->insert({partitionConfig->partitionNames[i], puIdx});
+//    std::cout << "partition name = " << partitionConfig->partitionNames[i].c_str() << std::endl;
+//    std::cout << "puIdx = " << puIdx << std::endl;
   }
 
   std::vector<std::string> results;
@@ -654,8 +668,8 @@ void NestPartitioner::loadPartitionPlan(
     boost::split(nodesStr, s, [](char c) { return c == '-'; });
 
     partitionConfig->nodeToPartition[nodesStr[0]] = atoi(nodesStr[1].c_str());
-    // std::cout << "node str = " <<  nodesStr[0] << std::endl;
-    // std::cout << "node partition = " << nodesStr[1].c_str() << std::endl;
+//     std::cout << "node str = " <<  nodesStr[0] << std::endl;
+//     std::cout << "node partition = " << nodesStr[1].c_str() << std::endl;
   }
 
   results.clear();
@@ -808,8 +822,7 @@ void NestPartitioner::outPerformProfileForFusedNode(
         std::string doubleFusedKindName =
             std::string(firstPrevNode->getKindName()) + "-" +
             node->getKindName();
-        // std::cout << "doubleFusedKindName = " << doubleFusedKindName <<
-        // std::endl;
+
         if (backendMap_[device.backendName].fuseOperators.find(doubleFusedKindName) !=
                 backendMap_[device.backendName].fuseOperators.end()) {
           std::string profileStr = appGen_.getProfileKey(firstPrevNode) + "+" +
@@ -848,6 +861,19 @@ void NestPartitioner::outPerformProfileForFusedNode(
   }
 }
 
+bool sortNodePartitionNames(std::string p1, std::string p2) {
+//    std::cout << "------- sortNodePartitionNames ------ " << std::endl;
+
+    std::vector<std::string> p1Str, p2Str;
+    boost::split(p1Str, p1, boost::is_any_of("-"));
+    boost::split(p2Str, p2, boost::is_any_of("-"));
+
+    std::cout << "p1 = " << p1 << std::endl;
+    std::cout << "p2 = " << p2 << std::endl;
+
+    return (std::stoi(p1Str[1]) <= std::stoi(p2Str[1]));
+}
+
 void NestPartitioner::outPartitionPlanForFusion(
     std::string funcName, std::vector<NodeGroup *> *branchList,
     DeviceInfo deviceInfo, std::string filename, bool mergePartition) {
@@ -869,10 +895,9 @@ void NestPartitioner::outPartitionPlanForFusion(
     std::string logicalIDStr;
     int mergedPartitionCount = 0;
     std::string curBackendName = defaultBackend_, prevBackendName = "";
-
+//    std::vector<std::string> nodeStrList;
     std::string curPartitionName = "", curLogicalID = "";
     // std::cout << "partitionSize = " << partitionSize << std::endl;
-
     size_t idx = 0;
     for (auto partition : *branchList) {
       for (auto cnode : partition->nodeList_) {
@@ -890,8 +915,12 @@ void NestPartitioner::outPartitionPlanForFusion(
           curBackendName = (deviceInfo.backendName);
           curLogicalID = std::to_string(deviceInfo.deviceID);
         } else { // default
-          curBackendName = defaultBackend_;
-          curLogicalID = std::to_string(getDeviceInfoForBackend(defaultBackend_).deviceID);
+          if(isSupportedOpType(cnode->node_->getKind(), defaultBackend_, cnode)) {
+            curBackendName = defaultBackend_;
+          } else {
+            curBackendName = "CPU";
+          }
+          curLogicalID = std::to_string(getDeviceInfoForBackend(curBackendName).deviceID);
         }
 
         bool isFused = isUserDefinedFusable(node, deviceInfo);
@@ -902,26 +931,27 @@ void NestPartitioner::outPartitionPlanForFusion(
         if(mergePartition) {
           if(curBackendName.compare(prevBackendName)) {
             mergedPartitionCount++;
-            partitionNameStr += ("p" + std::to_string(mergedPartitionCount - 1) + ":");
             backendNameStr += (curBackendName + + ":");
             logicalIDStr += (curLogicalID+ ":");
+            partitionNameStr += ("p" + std::to_string(mergedPartitionCount-1) + ":");
+
           }
           nodeToPartitionStr += ((node->getName().str() + "-" + std::to_string(mergedPartitionCount-1) + "-" + curBackendName));
-          prevBackendName = curBackendName;
 
         } else {
           if(!isFused) {
             idx++;
-            partitionNameStr += ("p" + std::to_string(idx) + ":");
             backendNameStr += (curBackendName + ":");
             logicalIDStr +=
                     std::to_string(getDeviceInfoForBackend(curBackendName).deviceID) +
                     ":";
+            partitionNameStr += ("p" + std::to_string(idx-1) + ":");
           }
           nodeToPartitionStr +=
-                  (node->getName().str() + "-" + std::to_string(idx - 1));
+                  (node->getName().str() + "-" + std::to_string(idx - 1) + "-" + curBackendName);
         }
         nodeToPartitionStr += "\n  :";
+        prevBackendName = curBackendName;
       }
     }
     nodeToPartitionStr.pop_back();
@@ -983,17 +1013,24 @@ void NestPartitioner::outPartitionPlanForSingleNode(
           isOffloading = true;
         }
 
+        std::string backend;
         if (!isOffloading) {
-          backendNameStr += deviceInfo.backendName;
+          backend = deviceInfo.backendName;
+          backendNameStr += backend;
           logicalIDStr += std::to_string(deviceInfo.deviceID);
         } else { // default
-            backendNameStr += defaultBackend_;
+            if(isSupportedOpType(cnode->node_->getKind(), defaultBackend_, cnode)) {
+                backend = defaultBackend_;
+            } else {
+                backend = "CPU";
+            }
+            backendNameStr += backend;
             logicalIDStr +=
-                  std::to_string(getDeviceInfoForBackend(defaultBackend_).deviceID);
+                  std::to_string(getDeviceInfoForBackend(backend).deviceID);
         }
 
         nodeToPartitionStr +=
-            (node->getName().str() + "-" + std::to_string(idx));
+            (node->getName().str() + "-" + std::to_string(idx) + "-" + backend);
 
         partitionNameStr += ":";
         backendNameStr += ":";
@@ -1058,28 +1095,33 @@ int getBranchesWithSameLevel(std::vector<NodeGroup *> *branchList,
   return result->size();
 }
 
-int getParallelVTAPartitions(std::vector<NodeGroup *> *partitionList,
-                             std::vector<NodeGroup *> *parallelPartitions,
-                             std::vector<NodeGroup *> *nonParallelPartitions,
-                             int level) {
-  //    std::cout << "----------- getBranchesWithSameLevel level (" << level <<
-  //    ")---------------" << std::endl;
-  std::vector<std::string> addedVTAs;
+
+int getParallelVTAPartitions(NodeGroup *partition,
+                             std::vector<NodeGroup *> *partitionList,
+                             std::vector<NodeGroup *> *parallelPartitions) {
+//      std::cout << "----------- getParallelVTAPartitions()---------------" << std::endl;
+//  std::cout << "partition id: " << partition->ID_ << std::endl;
+//  std::cout << "partition level: " << partition->level_ << std::endl;
+//  std::cout << "partition branchID: " << partition->branchID_ << std::endl;
+//  std::cout << "partition backend: " << partition->backendName_ << std::endl;
+
+  std::vector<int> processedBranches;
   for (auto i = partitionList->begin(); i != partitionList->end(); i++) {
-    //        std::cout << "partition id: " << (*i)->ID_ << std::endl;
-    //        std::cout << "partition level: " << (*i)->level_ << std::endl;
-    //        std::cout << "partOfBranch_: " << (*i)->partOfBranch_ <<
-    //        std::endl; if((*i)->level_ == level && !(*i)->partOfBranch_) {
-    if ((*i)->level_ == level && ((*i)->backendName_.rfind("VTA", 0) == 0) &&
-        std::find(addedVTAs.begin(), addedVTAs.end(), (*i)->backendName_) ==
-            addedVTAs.end()) {
+
+    if(((*i)->level_ == partition->level_ && (*i)->branchID_ != partition->branchID_) && !(*i)->backendName_.compare("VTA") &&
+            (std::find(processedBranches.begin(), processedBranches.end(), (*i)->branchID_) == processedBranches.end())){
+      processedBranches.push_back((*i)->branchID_);
       parallelPartitions->push_back(*i);
-      addedVTAs.push_back((*i)->backendName_);
-    } else {
-      nonParallelPartitions->push_back(*i);
     }
   }
   return parallelPartitions->size();
+}
+
+void scheduleParallelVTAPartitions(std::vector<NodeGroup *> *parallelVTAPartitions, std::map<std::string, std::vector<NodeGroup *>> *scheduledParallelVTAPartitions, int VTANum) {
+//    std::cout << "-- scheduleParallelVTAPartitions --" << std::endl;
+    for (auto partition: *parallelVTAPartitions) {
+        (*scheduledParallelVTAPartitions)[partition->backendName_].push_back(partition);
+    }
 }
 
 int getParallelDeployBranches(std::vector<NodeGroup *> *branchList,
@@ -1126,7 +1168,7 @@ int getNonParallelDeployBranches(std::vector<NodeGroup *> *branchList,
 void NestPartitioner::outPartitionPlanCPUVTA(std::string funcName,
                                              std::string filename,
                                              bool isParallel) {
-  //    std::cout << "----------- outPartitionPlan ---------------" <<
+  //    std::cout << "----------- outPartitionPlanCPUVTA ---------------" <<
   //    std::endl;
   std::ofstream planFile(filename);
   if (planFile.is_open()) {
@@ -1142,10 +1184,9 @@ void NestPartitioner::outPartitionPlanCPUVTA(std::string funcName,
     std::string parallelPartitions = "";
     std::set<int> addedPartitions;
 
-    uint convNum = 0;
-    uint vtaConvNum = 0;
-    uint vtaReluNum = 0;
-    uint parallelPartitionGroups = 0;
+//    uint convNum = 0;
+//    uint vtaConvNum = 0;
+//    uint vtaReluNum = 0;
 
     for (auto partition : partitionList_) {
       //            std::cout << "partition ID: " << partition->ID_ <<
@@ -1162,9 +1203,6 @@ void NestPartitioner::outPartitionPlanCPUVTA(std::string funcName,
       logicalIDStr += (std::to_string(dinfo.deviceID) + ":");
       partitionNameStr += ("p" + std::to_string(partition->ID_) + ":");
 
-      // std::cout << "partition ID: " << partition->ID_ << "
-      // isParallelPartition_ "<< partition->isParallelPartition_<<std::endl;
-
       std::vector<NodeGroup *> parallelBranches;
       if (isParallel && !partition->partOfBranch_) {
         if (addedPartitions.find(partition->ID_) == addedPartitions.end()) {
@@ -1172,7 +1210,6 @@ void NestPartitioner::outPartitionPlanCPUVTA(std::string funcName,
                                             partition->level_);
           if (pn > 1 && parallelBranches.at(0)->parallelDeploy_) {
 
-            parallelPartitionGroups++;
             parallelPartitions = parallelPartitions + ("(");
             addedPartitions.insert(partition->ID_);
             for (auto sameLevelPartition : parallelBranches) {
@@ -1238,6 +1275,8 @@ void NestPartitioner::outPartitionPlanCPUVTA(std::string funcName,
 
     info.append(
         "numOfPartitions: " + std::to_string(partitionList_.size() + 1) + "\n");
+    std::cout << "--------- # partition: " << partitionList_.size() + 1
+              << "-----------" << std::endl;
 
     planFile << info;
     planFile << "backendNames: " << backendNameStr << std::endl;
@@ -1253,17 +1292,70 @@ void NestPartitioner::outPartitionPlanCPUVTA(std::string funcName,
 
     planFile.close();
 
-    std::cout << "convNum: " << convNum << " vtaConvNum: " << vtaConvNum
-              << " vtaReluNum: " << vtaReluNum
-              << " parallelPartitionNum: " << parallelPartitionGroups
-              << std::endl;
+//    std::cout << "convNum: " << convNum << " vtaConvNum: " << vtaConvNum
+//              << " vtaReluNum: " << vtaReluNum
+//              << " parallelPartitionNum: " << parallelPartitionGroups
+//              << std::endl;
   }
+}
+
+bool compareID(NodeGroup* p1, NodeGroup* p2) {
+    return (p1->ID_ <= p2->ID_);
+}
+
+bool compareMemUsage(NodeGroup* p1, NodeGroup* p2) {
+  return (p1->memoryUsage_ >= p2->memoryUsage_);
+}
+
+int getMinMemVTAIndex(long vtaMem[], int vtaNum) {
+  int minMem = vtaMem[0], idx = 0;
+
+  for(int i = 1; i < vtaNum; i++) {
+    if(minMem > vtaMem[i]) {
+      minMem = vtaMem[i];
+      idx = i;
+    }
+  }
+  return idx;
+}
+
+void NestPartitioner::matchPartitionToVTA(std::vector<NodeGroup*>* parallelVTAPartitions, int vtaNum) {
+//  std::cout << "----------- matchPartitionToVTA ---------------" << std::endl;
+  for(auto partition : *parallelVTAPartitions) {
+    for(auto node: partition->nodeList_) { //memory usage of each partition
+      auto mem = getNodeMemUsage(node->node_);
+      partition->memoryUsage_ += mem;
+    }
+  }
+  sort(parallelVTAPartitions->begin(), parallelVTAPartitions->end(), compareMemUsage);
+
+  long vtaMem[vtaNum];
+  for(int i = 0; i < vtaNum; i++) {
+    vtaMem[i] = 0;
+  }
+
+  if((*parallelVTAPartitions).size() > 1 && vtaNum > 1) { //multiple parallel partitions, multivta
+    for(auto partition : *parallelVTAPartitions) {
+      int vIdx = getMinMemVTAIndex(vtaMem, vtaNum);
+      vtaMem[vIdx] += partition->memoryUsage_;
+      partition->backendName_ = partition->backendName_ + "-" + std::to_string(vIdx);
+    }
+  }
+}
+
+void NestPartitioner::mergePartitions(std::vector<NodeGroup *>* mergePartitionList) {
+
+    sort(mergePartitionList->begin(), mergePartitionList->end(), compareID);
+
+    for (int i = 1; i < mergePartitionList->size(); i++) {
+        mergePartitionList->at(i)->ID_ = mergePartitionList->at(0)->ID_;
+    }
 }
 
 void NestPartitioner::outPartitionPlanMultiVTA(std::string funcName,
                                                std::string filename,
-                                               bool isParallel) {
-  //    std::cout << "----------- outPartitionPlan ---------------" <<
+                                               int VTANum, bool isParallel) {
+  //    std::cout << "----------- outPartitionPlanMultiVTA ---------------" <<
   //    std::endl;
   std::ofstream planFile(filename);
   if (planFile.is_open()) {
@@ -1277,53 +1369,75 @@ void NestPartitioner::outPartitionPlanMultiVTA(std::string funcName,
     std::string nodeToPartitionStr;
     std::string logicalIDStr;
     std::string parallelPartitionStr = "";
-    std::set<int> addedPartitions;
+    std::set<NodeGroup*> addedPartitions;
+    std::map<int, int> mergedPartitionMap;
 
-    uint convNum = 0;
-    uint vtaConvNum = 0;
-    uint vtaReluNum = 0;
-    uint parallelPartitionGroups = 0;
+//    uint convNum = 0;
+//    uint vtaConvNum = 0;
+//    uint vtaReluNum = 0;
 
+    std::vector<std::string>nodeStrList;
     for (auto partition : partitionList_) {
-      //            std::cout << "partition ID: " << partition->ID_ <<
-      //            std::endl; std::cout << "partition backend: " <<
-      //            partition->backendName_ << std::endl;
+//      std::cout << "partition ID: " << partition->ID_ <<
+//      std::endl; std::cout << "partition backend: " <<
+//      partition->backendName_ << std::endl;
 
       std::string deviceName = partition->backendName_;
       if (partition->backendName_.rfind("VTA", 0) == 0) {
         deviceName = "VTA";
       }
 
-      DeviceInfo dinfo = getDeviceInfoForBackend(deviceName);
-      backendNameStr += (partition->backendName_ + ":");
-      logicalIDStr += (std::to_string(dinfo.deviceID) + ":");
-      partitionNameStr += ("p" + std::to_string(partition->ID_) + ":");
+      std::vector<NodeGroup *> parallelVTAPartitions;
+      std::map<std::string, std::vector<NodeGroup *>> scheduledParallelVTAPartitions;
+      std::vector<NodeGroup*> sameVTAPartitions[VTANum];
+      for(int i = 0; i < VTANum; i++) {
+        scheduledParallelVTAPartitions.insert(std::make_pair("VTA-" + std::to_string(i), sameVTAPartitions[i]));
+      }
 
-      // std::cout << "partition ID: " << partition->ID_ << "
-      // isParallelPartition_ "<< partition->isParallelPartition_<<std::endl;
-      std::vector<NodeGroup *> parallelPartitions, nonParallelPartitions;
-      if (isParallel && deviceName.compare("VTA")) {
-        if (addedPartitions.find(partition->ID_) == addedPartitions.end()) {
-          getParallelVTAPartitions(&partitionList_, &parallelPartitions,
-                                   &nonParallelPartitions, partition->level_);
-          if (parallelPartitions.size() > 1) {
-            parallelPartitionGroups++;
-            parallelPartitionStr = parallelPartitionStr + ("(");
-            addedPartitions.insert(partition->ID_);
-            for (auto parallelVtaPartition : parallelPartitions) {
-              //                            std::cout <<
-              //                            sameLevelPartition->backendName_ <<
-              //                            std::endl;
-              parallelPartitionStr =
-                  parallelPartitionStr +
-                  ("p" + std::to_string(parallelVtaPartition->ID_) + "||");
-              addedPartitions.insert(parallelVtaPartition->ID_);
+      if (isParallel) {
+        if(!deviceName.compare("VTA")) {
+          if (addedPartitions.find(partition) == addedPartitions.end()) {
+
+            parallelVTAPartitions.push_back(partition);
+            getParallelVTAPartitions(partition, &partitionList_, &parallelVTAPartitions);
+            matchPartitionToVTA(&parallelVTAPartitions, VTANum);
+
+            if (parallelVTAPartitions.size() > 1 && VTANum > 1) {
+              scheduleParallelVTAPartitions(&parallelVTAPartitions, &scheduledParallelVTAPartitions, VTANum);
+
+              parallelPartitionStr = parallelPartitionStr + ("(");
+              for (auto pp: scheduledParallelVTAPartitions) {
+
+                for (int pcnt = 0; pcnt < pp.second.size(); pcnt++) {
+                  auto sp = pp.second.at(pcnt);
+                  if(pcnt == 0) {
+                    parallelPartitionStr = parallelPartitionStr + ("p" + std::to_string(sp->ID_));
+                  } else {
+                      mergedPartitionMap.insert(std::make_pair(sp->ID_, pp.second.at(0)->ID_));
+                  }
+                }
+
+                parallelPartitionStr = parallelPartitionStr + ("||");
+                addedPartitions.insert(pp.second.begin(), pp.second.end());
+              }
+
+              parallelPartitionStr.pop_back();
+              parallelPartitionStr.pop_back();
+
+              parallelPartitionStr = parallelPartitionStr + "):";
             }
-            parallelPartitionStr.pop_back();
-            parallelPartitionStr.pop_back();
-            parallelPartitionStr = parallelPartitionStr + "):";
           }
         }
+      }
+
+      int partitionID = partition->ID_;
+      if(mergedPartitionMap.find(partition->ID_) == mergedPartitionMap.end()) {
+        DeviceInfo dinfo = getDeviceInfoForBackend(deviceName);
+        logicalIDStr += (std::to_string(dinfo.deviceID) + ":");
+        partitionNameStr += ("p" + std::to_string(partition->ID_) + ":");
+        backendNameStr += (partition->backendName_ + ":");
+      } else {
+          partitionID = mergedPartitionMap[partition->ID_];
       }
 
       for (auto cnode : partition->nodeList_) {
@@ -1345,14 +1459,19 @@ void NestPartitioner::outPartitionPlanMultiVTA(std::string funcName,
         //                    }
         //                }
 
-        nodeToPartitionStr +=
-            (cnode->name_ + "-" + std::to_string(partition->ID_)) + "-" +
-            partition->backendName_;
-        nodeToPartitionStr += "\n  :";
+        nodeStrList.push_back((cnode->name_ + "-" + std::to_string(partitionID)) + "-" + partition->backendName_);
       }
     }
+    if(mergedPartitionMap.size() > 0) {
+        std::sort(nodeStrList.begin(), nodeStrList.end(), sortNodePartitionNames);
+    }
+
+    for(auto str: nodeStrList) {
+      nodeToPartitionStr += (str + "\n  :");
+    }
+
     nodeToPartitionStr =
-        nodeToPartitionStr.substr(0, nodeToPartitionStr.length() - 4);
+            nodeToPartitionStr.substr(0, nodeToPartitionStr.length() - 4);
 
     partitionNameStr += ("p" + std::to_string(partitionList_.back()->ID_ + 1));
 
@@ -1365,7 +1484,9 @@ void NestPartitioner::outPartitionPlanMultiVTA(std::string funcName,
     }
 
     info.append(
-        "numOfPartitions: " + std::to_string(partitionList_.size() + 1) + "\n");
+            "numOfPartitions: " + std::to_string(partitionList_.size() + 1 - mergedPartitionMap.size()) + "\n");
+
+//      std::cout << "--------- # partition: " << partitionList_.size() + 1 - mergedPartitionMap.size() << "-----------" << std::endl;
 
     planFile << info;
     planFile << "backendNames: " << backendNameStr << std::endl;
@@ -1381,12 +1502,13 @@ void NestPartitioner::outPartitionPlanMultiVTA(std::string funcName,
 
     planFile.close();
 
-    std::cout << "convNum: " << convNum << " vtaConvNum: " << vtaConvNum
-              << " vtaReluNum: " << vtaReluNum
-              << " parallelPartitionNum: " << parallelPartitionGroups
-              << std::endl;
+//    std::cout << "convNum: " << convNum << " vtaConvNum: " << vtaConvNum
+//              << " vtaReluNum: " << vtaReluNum
+//              << " parallelPartitionNum: " << parallelPartitionGroups
+//              << std::endl;
   }
 }
+
 void NestPartitioner::outPartitionPlan(std::string funcName,
                                        std::string filename, bool isParallel) {
   //    std::cout << "----------- outPartitionPlan ---------------" <<
@@ -1424,9 +1546,6 @@ void NestPartitioner::outPartitionPlan(std::string funcName,
       backendNameStr += (partition->backendName_ + ":");
       logicalIDStr += (std::to_string(dinfo.deviceID) + ":");
       partitionNameStr += ("p" + std::to_string(partition->ID_) + ":");
-
-      // std::cout << "partition ID: " << partition->ID_ << "
-      // isParallelPartition_ "<< partition->isParallelPartition_<<std::endl;
 
       std::vector<NodeGroup *> parallelBranches;
       if (isParallel && !partition->partOfBranch_) {
@@ -1498,6 +1617,8 @@ void NestPartitioner::outPartitionPlan(std::string funcName,
     info.append(
         "numOfPartitions: " + std::to_string(partitionList_.size() + 1) + "\n");
 
+    std::cout << "--------- # partition: " << partitionList_.size() + 1 << "-----------" << std::endl;
+
     planFile << info;
     planFile << "backendNames: " << backendNameStr << std::endl;
     planFile << "partitionNames: " << partitionNameStr << std::endl;
@@ -1540,7 +1661,6 @@ NodeGroup *partitionSingleBranch(std::vector<NodeGroup *> *partitionList,
     partition->branchID_ = branch->ID_;
   }
 
-  //  std::cout << "branch nodes: " << branch->nodeList_.size() << std::endl;
   for (auto ni = branch->nodeList_.begin(); ni != branch->nodeList_.end();
        ni++) {
     CostNode *cn = *ni;
@@ -1550,7 +1670,6 @@ NodeGroup *partitionSingleBranch(std::vector<NodeGroup *> *partitionList,
       partition->backendName_ = prevNode->backendName_;
       partition->partOfBranch_ = true;
 
-      //     std::cout << "2 backend: " << partition->backendName_ << std::endl;
       partition = new NodeGroup;
       partition->ID_ = (*partitionID)++;
       partitionList->push_back(partition);
@@ -1562,6 +1681,7 @@ NodeGroup *partitionSingleBranch(std::vector<NodeGroup *> *partitionList,
     if (branch->parallelDeploy_) {
       partition->backendName_ = branch->backendName_;
       partition->parallelDeploy_ = true;
+      partition->branchID_ = branch->ID_;
     } else {
       partition->backendName_ = cn->backendName_;
     }
@@ -1570,9 +1690,6 @@ NodeGroup *partitionSingleBranch(std::vector<NodeGroup *> *partitionList,
     prevNode = cn;
   }
 
-  //  std::cout << "partition nodes: " << partition->nodeList_.size() <<
-  //  std::endl; std::cout << "partition backend: " << partition->backendName_
-  //  << ", ID: " << partition->ID_ << std::endl;
   return partition;
 }
 
@@ -1590,27 +1707,6 @@ void makeSingleList(std::vector<NodeGroup *> *branchList,
       singleBranch->nodeList_.push_back((*ii));
     }
   }
-}
-
-void NestPartitioner::partitionBranches(std::vector<NodeGroup *> *branchList) {
-  //  std::cout << "--------- partitionBranches -----------" << std::endl;
-
-  unsigned int partitionID = 0;
-  NodeGroup *lastPartition = nullptr;
-
-  std::set<int> processedLevels;
-  for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    NodeGroup *branch = *i;
-    lastPartition = partitionSingleBranch(&partitionList_, branch, &partitionID,
-                                          lastPartition);
-  }
-
-  //    for (auto partition : partitionList_) {
-  //        std::cout << "partition backend: " << partition->backendName_ <<
-  //        std::endl;
-  //    }
-  std::cout << "--------- # partition: " << partitionList_.size()
-            << "-----------" << std::endl;
 }
 
 float NestPartitioner::getInCommCost(CostNode *cnode) {
@@ -1641,30 +1737,23 @@ void NestPartitioner::partitionBranches(std::vector<NodeGroup *> *branchList,
     int bn = getBranchesWithSameLevel(branchList, &sameLevelBranches,
                                       branch->level_);
     processedLevels.insert(branch->level_);
-    //        std::cout << "bn: " << bn << " level = " << branch->level_ <<
-    //        std::endl;
     if (isParallelDeploy && bn > 1) {
       // get parallel branches
       int npn = getNonParallelDeployBranches(&sameLevelBranches,
                                              &nonParallelBranches);
       int pn = getParallelDeployBranches(&sameLevelBranches, "VTA",
                                          &parallelBranches);
-      //            std::cout << "pn: " << pn << " npn = " << npn << std::endl;
 
       if (pn > 1) {
 
         // calculate communication overhead for spliting multiple branches
         for (auto pb : parallelBranches) {
-          //                    std::cout << "* partitionID " << partitionID  <<
-          //                    std::endl;
           lastPartition =
               partitionSingleBranch(&partitionList_, pb, &partitionID, nullptr);
           lastPartition = nullptr;
         }
       }
       if (npn > 0) {
-        //                std::cout << "partitionID " << partitionID  <<
-        //                std::endl;
         NodeGroup *nb = new NodeGroup;
         nb->level_ = branch->level_;
         nb->backendName_ = branch->backendName_;
@@ -1676,9 +1765,6 @@ void NestPartitioner::partitionBranches(std::vector<NodeGroup *> *branchList,
       }
 
     } else if (bn == 1) {
-      //            std::cout << "--> " <<
-      //            branch->nodeList_.at(0)->node_->getName().str()  <<
-      //            std::endl;
       lastPartition = partitionSingleBranch(&partitionList_, branch,
                                             &partitionID, lastPartition);
     } else {
@@ -1690,8 +1776,6 @@ void NestPartitioner::partitionBranches(std::vector<NodeGroup *> *branchList,
 //  for (auto partition : partitionList_) {
 //    std::cout << "partition backend: " << partition->backendName_ << std::endl;
 //  }
-  std::cout << "--------- # partition: " << partitionList_.size()
-            << "-----------" << std::endl;
 }
 
 void NestPartitioner::partitionBranchesCPUVTA(
@@ -1705,12 +1789,6 @@ void NestPartitioner::partitionBranchesCPUVTA(
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
     NodeGroup *branch = *i;
 
-    //        if(!branch->nodeList_.at(0)->node_->getName().compare("resnetv10_stage2_conv0_fwd__2"))
-    //        {
-    //            std::cout << "--> " <<
-    //            branch->nodeList_.at(0)->node_->getName().str()  << std::endl;
-    //        }
-
     if (processedLevels.find(branch->level_) != processedLevels.end())
       continue;
 
@@ -1720,30 +1798,22 @@ void NestPartitioner::partitionBranchesCPUVTA(
     int bn = getBranchesWithSameLevel(branchList, &sameLevelBranches,
                                       branch->level_);
     processedLevels.insert(branch->level_);
-    //        std::cout << "bn: " << bn << " level = " << branch->level_ <<
-    //        std::endl;
     if (isParallelDeploy && bn > 1) {
       // get parallel branches
       int npn = getNonParallelDeployBranches(&sameLevelBranches,
                                              &nonParallelBranches);
       int pn = getParallelDeployBranches(&sameLevelBranches, &parallelBranches);
-      //            std::cout << "pn: " << pn << " npn = " << npn << std::endl;
 
       if (pn > 1) {
 
         // calculate communication overhead for spliting multiple branches
-
         for (auto pb : parallelBranches) {
-          //                    std::cout << "* partitionID " << partitionID  <<
-          //                    std::endl;
           lastPartition =
               partitionSingleBranch(&partitionList_, pb, &partitionID, nullptr);
           lastPartition = nullptr;
         }
       }
       if (npn > 0) {
-        //                std::cout << "partitionID " << partitionID  <<
-        //                std::endl;
         NodeGroup *nb = new NodeGroup;
         nb->level_ = branch->level_;
         nb->backendName_ = branch->backendName_;
@@ -1755,9 +1825,6 @@ void NestPartitioner::partitionBranchesCPUVTA(
       }
 
     } else if (bn == 1) {
-      //            std::cout << "--> " <<
-      //            branch->nodeList_.at(0)->node_->getName().str()  <<
-      //            std::endl;
       lastPartition = partitionSingleBranch(&partitionList_, branch,
                                             &partitionID, lastPartition);
     } else {
@@ -1819,10 +1886,6 @@ void NestPartitioner::loadPerformProfileInfo(std::string pdir) {
 
         std::string costValueStr = profileMap[it->first].c_str();
 
-        //                std::cout <<"name = " << it->first.c_str() <<
-        //                std::endl; std::cout <<"value = " <<
-        //                costValueStr.c_str() << std::endl;
-
         if (!costValueStr.compare("INFINITY")) {
           puValues.insert(std::make_pair(it->first.c_str(), INFINITY));
         } else {
@@ -1837,50 +1900,6 @@ void NestPartitioner::loadPerformProfileInfo(std::string pdir) {
   closedir(dir);
 
   //    std::cout << "=== loadPerformProfileInfo end === " << std::endl;
-}
-
-void NestPartitioner::getMinCostOfSingleNode(CostNode *cnode,
-                                             std::vector<Backend *> backends,
-                                             CostNode *prevCNode) {
-  // std::cout << "--------- getMinCostOfSingleNode -----------" << std::endl;
-  // std::cout << "node type: " << cnode->node_->getKindName() << std::endl;
-
-  std::string key = appGen_.getProfileKey(cnode->node_);
-  //    std::cout << "key: " << key << std::endl;
-
-  //    cnode->cost_ = INFINITY;
-  cnode->initCost();
-
-  for (int i = 0; i < backends.size(); i++) {
-    std::string backendName = backends[i]->getBackendName();
-    //        std::cout << "backendName = " << backendName << std::endl;
-    // non supported type
-    if (!isSupportedOpType(cnode->node_->getKind(), backendName, cnode)) {
-      continue;
-    }
-
-    float exeCost = backendExeProfileMap_[backendName][key];
-    float commCost = 0.0;
-
-    if (prevCNode != nullptr) {
-      if (prevCNode->backendName_.compare(backendName)) { // different backend
-        commCost = getInCommCost(cnode);
-      }
-    }
-
-    //        std::cout << "exeCost = " << exeCost << std::endl;
-    //        std::cout << "commCost = " << commCost << std::endl;
-
-    float cost = exeCost + commCost;
-    if (cost <= cnode->getCost()) {
-      cnode->commCost_ = commCost;
-      cnode->exeCost_ = exeCost;
-      cnode->backendName_ = backendName;
-    }
-  }
-  //    std::cout << "node = " << cnode->name_ << ", type = " <<
-  //    cnode->node_->getKindName() <<", selected backendName = " <<
-  //    cnode->backendName_ << std::endl;
 }
 
 void setChecked(std::vector<std::vector<CostNode>> *cnodeBfs, Node *node) {
@@ -1904,19 +1923,6 @@ bool isChecked(std::vector<std::vector<CostNode>> *cnodeBfs, Node *node) {
     }
   }
   return false;
-}
-
-CostNode *getCostNode(std::vector<std::vector<CostNode>> *cnodeBfs,
-                      Node *node) {
-  for (int i = 0; i < (*cnodeBfs).size(); i++) {
-    for (size_t j = 0; j < (*cnodeBfs)[i].size(); j++) {
-      CostNode *cnode = &(*cnodeBfs)[i][j];
-      if (cnode->node_ == node) {
-        return cnode;
-      }
-    }
-  }
-  return nullptr;
 }
 
 void NestPartitioner::makeCostNode(
@@ -1944,35 +1950,6 @@ void NestPartitioner::makeCostNode(
   }
 }
 
-float getCost(std::vector<NodeGroup *> *branchList) {
-  // std::cout << "----------- getCost ---------------" << std::endl;
-  // std::cout << "branch size: " << branchList->size() << std::endl;
-
-  float totalCost = 0.0;
-  for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    NodeGroup *branch = *i;
-
-    // std::cout << "branch id: " << branch->ID_ << std::endl;
-    for (auto ii = branch->nodeList_.begin(); ii != branch->nodeList_.end();
-         ii++) {
-      totalCost += (*ii)->getCost();
-      // std::cout << "totalCost: " << totalCost << std::endl;
-    }
-  }
-  return totalCost;
-}
-
-float getCost(NodeGroup *branch) {
-  float totalCost = 0.0;
-  for (auto ii = branch->nodeList_.rbegin(); ii != branch->nodeList_.rend();
-       ++ii) {
-    // std::cout << "name: " << (*ii)->name_<< ", backend = " <<
-    // (*ii)->backendName_ << ", cost = " << (*ii)->cost_ << std::endl;
-    totalCost += (*ii)->getCost();
-  }
-  return totalCost;
-}
-
 bool NestPartitioner::isSupportedOpType(Kinded::Kind opType,
                                         std::string backendName,
                                         CostNode *cnode) {
@@ -1997,7 +1974,6 @@ bool NestPartitioner::isSupportedOpType(Kinded::Kind opType,
 
 void NestPartitioner::setCost(std::vector<Backend *> *backends, CostNode *pnode,
                               CostNode *cnode) {
-  //    std::cout << "----------- getCost() start ---------------" << std::endl;
   std::string curKey = appGen_.getProfileKey(cnode->node_);
 
   bool noBackend = true;
@@ -2023,16 +1999,12 @@ void NestPartitioner::setCost(std::vector<Backend *> *backends, CostNode *pnode,
       if (noBackend && !backend->getBackendName().compare(defaultBackend_)) {
         exeCost = 0.0;
       }
-
-      //            std::cout << "backend = " << backend->getBackendName() << ",
-      //            exeCost = " << exeCost << std::endl;
       cnode->minCostMap_[backend->getBackendName()] = exeCost;
     }
 
   } else {
 
     std::string compKey = appGen_.getProfileKey(pnode->node_) + "+" + curKey;
-    //        std::cout << "curKey = " << curKey << std::endl;
 
     // check supported backends
     for (Backend *curBackend : *backends) {
@@ -2050,10 +2022,7 @@ void NestPartitioner::setCost(std::vector<Backend *> *backends, CostNode *pnode,
       if (noBackend && !curBackend->getBackendName().compare(defaultBackend_)) {
         exeCost = 0.0;
       }
-      //            std::cout << "<curBackend> => " <<
-      //            curBackend->getBackendName() << ", exeCost = " << exeCost <<
-      //            std::endl;
-      //
+
       float commCost = getInCommCost(cnode);
       for (Backend *prevBackend : *backends) {
         bool fused = false;
@@ -2085,11 +2054,9 @@ void NestPartitioner::setCost(std::vector<Backend *> *backends, CostNode *pnode,
         } else {
           totalCost =
               pnode->minCostMap_[prevBackend->getBackendName()] + commCost * 2 +
-              exeCost +
-              2000; // 2000: penalty: function call overhead, cache conflict, ..
-          //  totalCost = pnode->minCostMap_[prevBackend->getBackendName()] +
-          //  commCost*2 + exeCost; //2000: penalty: function call overhead,
-          //  cache conflict, ..
+              exeCost + 2000;
+          // 2000: penalty: function call overhead, cache conflict, ..
+
         }
         //                std::cout << "prevBackend = " <<
         //                prevBackend->getBackendName() << std::endl; std::cout
@@ -2123,7 +2090,7 @@ void NestPartitioner::setCost(std::vector<Backend *> *backends, CostNode *pnode,
 }
 
 void NestPartitioner::allocMinBranchCost(std::vector<NodeGroup *> *branchList) {
-  std::cout << "--------- allocMinBranchCost -----------" << std::endl;
+//  std::cout << "--------- allocMinBranchCost -----------" << std::endl;
 
   std::vector<Backend *> backends;
   genBackendMap(backendMap_, backendHolder_, backends);
@@ -2131,8 +2098,6 @@ void NestPartitioner::allocMinBranchCost(std::vector<NodeGroup *> *branchList) {
   // calculate costs for nodes
   float totalCost = 0.0;
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    //        std::cout << " ================== new branch =================="<<
-    //        std::endl;
     NodeGroup *branch = (*i);
 
     int size = branch->nodeList_.size();
@@ -2143,26 +2108,16 @@ void NestPartitioner::allocMinBranchCost(std::vector<NodeGroup *> *branchList) {
       if (bi > 0) {
         pnode = branch->nodeList_.at(bi - 1);
       }
-      //            if(pnode != nullptr)
-      //                std::cout << "pnode = " << pnode->node_->getName().str()
-      //                << std::endl;
-      //            std::cout << "cnode = " << cnode->node_->getName().str() <<
-      //            std::endl;
       setCost(&backends, pnode, cnode);
       pnode = cnode;
     }
     // allocate backends requiring the minimum total cost
     CostNode *lastNode = branch->nodeList_.at(size - 1);
-    //        std::cout << "lastNode = " << lastNode->node_->getName().str() <<
-    //        std::endl;
     float minCost = INFINITY;
     std::string minBackend = "";
     for (Backend *backend : backends) {
       std::string backendName = backend->getBackendName();
       float cost = lastNode->minCostMap_[backendName];
-
-      //            std::cout << "backend = " << backendName << std::endl;
-      //            std::cout << "cost = " << cost << std::endl;
 
       if (cost <= minCost) {
         minCost = cost;
@@ -2172,24 +2127,15 @@ void NestPartitioner::allocMinBranchCost(std::vector<NodeGroup *> *branchList) {
     lastNode->backendName_ = minBackend;
     totalCost += lastNode->minCostMap_[minBackend];
 
-    //        std::cout << "Last node = " << lastNode->node_->getName().str() <<
-    //        std::endl; std::cout << "Backend = " << minBackend << std::endl;
-
     for (int bi = size - 2; bi >= 0; bi--) {
       CostNode *cnode = branch->nodeList_.at(bi);
       cnode->backendName_ = lastNode->prevMinBackendMap_[minBackend];
       minBackend = cnode->backendName_;
       lastNode = cnode;
-
-      //            std::cout << "node = " << cnode->node_->getName().str() <<
-      //            std::endl; std::cout << "Backend = " << cnode->backendName_
-      //            << std::endl;
     }
-
-    //      exit(0);
   }
 
-  std::cout << "Total Cost = " << totalCost << std::endl;
+//  std::cout << "Total Cost = " << totalCost << std::endl;
 }
 
 bool NestPartitioner::isVTAConv(ConvolutionNode *convNode) {
@@ -2203,147 +2149,6 @@ bool NestPartitioner::isVTAConv(ConvolutionNode *convNode) {
 
   return false;
 }
-
-void NestPartitioner::allocateVTAOps(std::vector<NodeGroup *> *branchList) {
-  std::cout << "--------- allocateVTAOps -----------" << std::endl;
-  // std::cout << "\n[allocateVTAOps] Allocate VTA to VTA-computable
-  // operations*." << std::endl;
-  std::vector<Backend *> backends;
-  genBackendMap(backendMap_, backendHolder_, backends);
-
-  bool isRelayExist = false;
-  if (backendMap_.find("Relay") != backendMap_.end()) {
-    isRelayExist = true;
-  }
-
-  CostNode *prevCnode = nullptr;
-  std::string key, compKey;
-  for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    NodeGroup *branch = (*i);
-    int size = branch->nodeList_.size();
-    for (int bi = 0; bi < size; bi++) {
-      CostNode *cnode = branch->nodeList_.at(bi);
-      bool isAlloc = false;
-
-      key = appGen_.getProfileKey(cnode->node_);
-      cnode->commCost_ = 0.0;
-
-      if (isSupportedOpType(cnode->node_->getKind(), "VTA", cnode)) {
-        cnode->backendName_ = "VTA";
-        isAlloc = true;
-
-        cnode->exeCost_ = backendExeProfileMap_[cnode->backendName_][key];
-
-      } else {
-        if (prevCnode != nullptr &&
-            cnode->node_->getKind() == Kinded::Kind::ReluNodeKind) {
-          if (prevCnode->node_->getKind() ==
-              Kinded::Kind::ConvolutionNodeKind) {
-            cnode->backendName_ = prevCnode->backendName_;
-            isAlloc = true;
-
-            compKey = appGen_.getProfileKey(prevCnode->node_) + "+" + key;
-            prevCnode->exeCost_ =
-                backendExeProfileMap_[prevCnode->backendName_][compKey];
-            cnode->exeCost_ = 0.0;
-          }
-        }
-      }
-      if (!isAlloc) {
-        if (isRelayExist &&
-            isSupportedOpType(cnode->node_->getKind(), "Relay", cnode)) {
-          cnode->backendName_ = "Relay";
-        } else {
-          cnode->backendName_ = "CPU";
-          //                std::cout << "node = " <<
-          //                cnode->node_->getName().str() << std::endl;
-          //                std::cout << "Backend = " << cnode->backendName_ <<
-          //                std::endl;
-        }
-
-        cnode->exeCost_ = backendExeProfileMap_[cnode->backendName_][key];
-      }
-
-      if (prevCnode != nullptr &&
-          cnode->backendName_.compare(prevCnode->backendName_)) {
-        cnode->commCost_ = backendCommProfileMap_[cnode->backendName_][key];
-        ;
-      }
-
-      prevCnode = cnode;
-    }
-  }
-}
-
-void NestPartitioner::allocateRelayOps(std::vector<NodeGroup *> *branchList) {
-  std::cout << "--------- allocateRelayOps -----------" << std::endl;
-  // std::cout << "\n[allocateVTAOps] Allocate VTA to VTA-computable
-  // operations*." << std::endl;
-  std::vector<Backend *> backends;
-  genBackendMap(backendMap_, backendHolder_, backends);
-
-  if (backendMap_.find("Relay") == backendMap_.end()) {
-    std::cout << "No Relay backend!!" << std::endl;
-    return;
-  }
-
-  CostNode *prevCnode = nullptr;
-  std::string key, compKey;
-  for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    for (auto bi = (*i)->nodeList_.begin(); bi != (*i)->nodeList_.end(); bi++) {
-      CostNode *cnode = *bi;
-
-      key = appGen_.getProfileKey(cnode->node_);
-      cnode->commCost_ = 0.0;
-
-      if (isSupportedOpType(cnode->node_->getKind(), "Relay", cnode)) {
-        cnode->backendName_ = "Relay";
-      } else {
-        cnode->backendName_ = "CPU";
-        //                std::cout << "node = " <<
-        //                cnode->node_->getName().str() << std::endl; std::cout
-        //                << "Backend = " << cnode->backendName_ << std::endl;
-      }
-
-      cnode->exeCost_ = backendExeProfileMap_[cnode->backendName_][key];
-
-      if (prevCnode != nullptr &&
-          cnode->backendName_.compare(prevCnode->backendName_)) {
-        cnode->commCost_ = backendCommProfileMap_[cnode->backendName_][key];
-        ;
-      }
-
-      prevCnode = cnode;
-    }
-  }
-}
-
-void NestPartitioner::allocateOptimalPUSingleNode(
-    std::vector<NodeGroup *> *branchList) {
-  // std::cout << "--------- findOptimalPartitionsSingleNode -----------" <<
-  // std::endl;
-  // std::cout << "\n[allocateOptimalPUSingleNode] Allocate PUs to operations
-  // considering the cost of a *Single Operation*." << std::endl;
-  std::vector<Backend *> backends;
-  genBackendMap(backendMap_, backendHolder_, backends);
-
-  CostNode *prevCNode = nullptr;
-  for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    for (auto bi = (*i)->nodeList_.begin(); bi != (*i)->nodeList_.end(); bi++) {
-      CostNode *cnode = *bi;
-      getMinCostOfSingleNode(cnode, backends, prevCNode);
-      prevCNode = cnode;
-    }
-  }
-}
-
-void getBackendSet(std::set<std::string> *bset, NodeGroup *branch) {
-  for (auto bii = branch->nodeList_.begin(); bii != branch->nodeList_.end();
-       bii++) {
-    bset->insert((*bii)->backendName_);
-  }
-}
-
 bool NestPartitioner::setBranchPU(NodeGroup *branch) {
 
   std::string backend = "";
@@ -2351,7 +2156,8 @@ bool NestPartitioner::setBranchPU(NodeGroup *branch) {
   for (int i = 0; i < branch->nodeList_.size(); i++) {
     CostNode *node = branch->nodeList_.at(i);
     if (!node->backendName_.compare("VTA")) {
-      branch->vtaCount_++;
+//      branch->vtaCount_++;
+        branch->containVTA_ = true;
     }
     if (i == 0) {
       backend = node->backendName_;
@@ -2362,100 +2168,45 @@ bool NestPartitioner::setBranchPU(NodeGroup *branch) {
       }
     }
   }
-  // std::cout << "[useSinglePU] backend = " << backend << std::endl;
-  //    branch->branchBackend_ = backend;
+
   if (singlePU) {
     branch->backendName_ = backend;
   }
-  branch->isSinglePU = singlePU;
+  branch->isSinglePU_ = singlePU;
 
   return singlePU;
 }
 
+
 void NestPartitioner::findParallelDeployBranchesForMultiVTA(
-    std::vector<NodeGroup *> *branchList, int cpuNum, int vtaNum) {
-  std::cout << "--------- [findParallelBranches] -----------" << std::endl;
-  // std::cout << "Original total cost =  " << originalTotalCost << std::endl;
+        std::vector<NodeGroup *> *branchList, int vtaNum) {
+//  std::cout << "--------- [findParallelBranches] -----------" << std::endl;
 
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
     NodeGroup *branch = (*i);
     setBranchPU(branch);
-    //        std::cout << "branch backend =  " << branch->backendName_ <<
-    //        std::endl;
   }
 
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
-    // bool existParallelBranch = true;
     if ((*i)->inBranchList_.size() > 1) { // parallel branches
-      int vtaCnt = 0;
-      std::vector<NodeGroup *> pBranchList;
+      std::vector<NodeGroup *> pVTABranchList;
       for (auto bi = (*i)->inBranchList_.begin();
            bi != (*i)->inBranchList_.end(); bi++) {
         NodeGroup *branch = (*bi);
 
-        std::cout << branch->nodeList_.at(0)->name_
-                  << " backend = " << branch->backendName_
-                  << " vtaCount = " << branch->vtaCount_ << std::endl;
-
-        if ((branch->isSinglePU && !branch->backendName_.compare("VTA")) ||
-            branch->vtaCount_ > 0) {
-          // if (!branch->backendName_.compare("VTA")) {
-          vtaCnt++;
-          pBranchList.push_back(branch);
+        if (!branch->backendName_.compare("VTA")) {
+          pVTABranchList.push_back(branch);
         }
       }
 
-      // parallel vta brancvtaNumh
-      if (pBranchList.size() >= 2) {
-        if (vtaCnt > vtaNum) {
-          std::cout << "Too many parallel branches for NPU!!" << std::endl;
-          continue;
-        }
-
-        for (auto bi = pBranchList.begin(); bi != pBranchList.end(); bi++) {
+      if (pVTABranchList.size() >= 2) {
+        for (auto bi = pVTABranchList.begin(); bi != pVTABranchList.end(); bi++) {
           NodeGroup *branch = (*bi);
-          // std::cout << "branch backend = " << branch->backendName_ <<
-          // std::endl;
-
-          std::cout << "1) VTA branch = " << branch->nodeList_.at(0)->name_
-                    << "backend = " << branch->backendName_
-                    << "parallelDeploy_ = " << branch->parallelDeploy_
-                    << std::endl;
-          if (vtaNum > 0 && vtaCnt > 0) {
-            // if (!branch->backendName_.compare("VTA") && vtaCnt > 0) {
-            //                        std::cout << "branch vtacnt = " <<
-            //                        branch->vtaCount_ << std::endl;
-            if (((branch->isSinglePU &&
-                  !branch->backendName_.compare("VTA")))) {
+            if(branch->containVTA_ > 0) {
               branch->parallelDeploy_ = true;
-              if (vtaNum == 1) {
-                branch->backendName_ = "VTA";
-              } else {
-                branch->backendName_ = "VTA-" + std::to_string(vtaCnt - 1);
-              }
-              vtaCnt--;
-            } else if (!branch->isSinglePU && branch->vtaCount_ > 0) {
-              // replace vta#
-              branch->parallelDeploy_ = true;
-              if (vtaNum > 1) {
-                for (CostNode *node : branch->nodeList_) {
-                  if (!node->backendName_.compare("VTA")) {
-                    node->backendName_ = "VTA-" + std::to_string(vtaCnt - 1);
-                  }
-                }
-                branch->backendName_ = "VTA-" + std::to_string(vtaCnt - 1);
-              }
-              vtaCnt--;
             }
-            // std::cout << "branch backend = " << branch->backendName_ << ", "
-            // << branch->parallelDeploy_ << std::endl;
-          }
-          std::cout << "2) VTA branch = " << branch->nodeList_.at(0)->name_
-                    << "backend = " << branch->backendName_
-                    << "parallelDeploy_ = " << branch->parallelDeploy_
-                    << std::endl;
         }
-        pBranchList.clear();
+        pVTABranchList.clear();
       }
     }
   }
@@ -2469,13 +2220,10 @@ void NestPartitioner::findParallelDeployBranchesForCPUVTA(
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
     NodeGroup *branch = (*i);
     setBranchPU(branch);
-    //        std::cout << "branch backend =  " << branch->backendName_ <<
-    //        std::endl;
   }
 
   for (auto i = branchList->begin(); i != branchList->end(); i++) {
     if ((*i)->inBranchList_.size() > 1) { // parallel branches
-      //            std::cout << "--" << std::endl;
 
       int vtaCnt = 0, cpuCnt = 0;
       std::vector<NodeGroup *> pBranchList;
@@ -2486,16 +2234,10 @@ void NestPartitioner::findParallelDeployBranchesForCPUVTA(
         if (!branch->backendName_.compare("VTA")) {
           vtaCnt++;
           pBranchList.push_back(branch);
-        } else if (!branch->backendName_.compare("CPU")) {
+        } else if (!branch->backendName_.compare("CPU") || !branch->backendName_.compare("Relay")) {
           cpuCnt++;
           pBranchList.push_back(branch);
         } else {
-          //                    std::cout << "branch backend = " <<
-          //                    branch->backendName_ << std::endl; for(auto n:
-          //                    branch->nodeList_) {
-          //                        std::cout << " " << n->backendName_;
-          //                    }
-          //                    std::cout << std::endl;
         }
       }
 
@@ -2513,14 +2255,8 @@ void NestPartitioner::findParallelDeployBranchesForCPUVTA(
 
         for (auto bi = pBranchList.begin(); bi != pBranchList.end(); bi++) {
           NodeGroup *branch = (*bi);
-          //                    std::cout << "branch backend = " <<
-          //                    branch->backendName_ << std::endl;
-
           if (vtaNum > 0) {
             if (!branch->backendName_.compare("VTA") && vtaCnt > 0) {
-              //                            std::cout << "VTA branch = " <<
-              //                            branch->nodeList_.at(0)->name_ <<
-              //                            std::endl;
               branch->parallelDeploy_ = true;
               if (vtaNum == 1) {
                 branch->backendName_ = "VTA";
@@ -2528,35 +2264,20 @@ void NestPartitioner::findParallelDeployBranchesForCPUVTA(
                 branch->backendName_ = "VTA-" + std::to_string(vtaCnt - 1);
               }
               vtaCnt--;
-              //                            std::cout << "branch backend = " <<
-              //                            branch->backendName_ << ", " <<
-              //                            branch->isParallelBranch_ <<
-              //                            std::endl;
             }
           }
 
           if (cpuNum > 0) {
             if (!branch->backendName_.compare("CPU") && cpuCnt > 0) {
-              //                            std::cout << "CPU branch = " <<
-              //                            branch->nodeList_.at(0)->name_ <<
-              //                            std::endl;
               branch->parallelDeploy_ = true;
               branch->backendName_ = "CPU";
               cpuCnt--;
-              //                          std::cout << "branch backend = " <<
-              //                          branch->backendName_ << ", " <<
-              //                          branch->isParallelBranch_ <<
-              //                          std::endl;
             }
           }
         }
         pBranchList.clear();
       }
     } else {
-      //            std::cout << "> branch backend = " << (*i)->backendName_ <<
-      //            ", " << (*i)->isParallelBranch_ << std::endl; std::cout <<
-      //            "> branch backend = " <<
-      //            (*i)->nodeList_.at(0)->node_->getName().str()<< std::endl;
     }
   }
 }
@@ -2564,7 +2285,7 @@ void NestPartitioner::findParallelDeployBranchesForCPUVTA(
 Expected<DAGListTy> NestPartitioner::partition(CompilationContext &cctx) {
   std::string dir = "/home/msyu/Dropbox/Project/development/configs/"
                     "partition_perform_profile";
-  return partition(cctx, 3, "", dir + "/NESTOptimalPlan.yaml", 0, 0, nullptr);
+  return partition(cctx, 3, "", dir + "/NESTOptimalPlan.yaml", 0, 0, nullptr, 1);
 }
 
 std::vector<Node *> getParallelNodes(BFSLevel dag, Node *node) {
@@ -2621,6 +2342,7 @@ void addToBranchList(std::vector<NodeGroup *> *branchList, NodeGroup *branch) {
   branchList->push_back(branch);
 }
 
+unsigned int branchID_ = 0;
 void NestPartitioner::getBranch(std::vector<std::vector<CostNode>> *cnodebfs,
                                 BFSLevel dag, std::vector<Node *> parallelNodes,
                                 Node *lastNode, NodeGroup *prevBranch,
@@ -2640,8 +2362,7 @@ void NestPartitioner::getBranch(std::vector<std::vector<CostNode>> *cnodebfs,
 
     NodeGroup *branch = new NodeGroup;
     branch->level_ = level;
-    branch->ID_ = branchID;
-    // branchList->push_back(branch);
+    branch->ID_ = ++branchID_;
     addToBranchList(branchList, branch);
     if (prevBranch != nullptr) {
       prevBranch->inBranchList_.push_back(branch);
@@ -2650,17 +2371,11 @@ void NestPartitioner::getBranch(std::vector<std::vector<CostNode>> *cnodebfs,
     Node *curNode = parallelNodes.at(i);
     std::vector<Node *> pNodes = getParallelNodes(dag, curNode);
 
-    //    std::cout <<  "node = " << curNode->getKindName() << " name = "<<
-    //    lastNode->getName().str() << " level = " << level << std::endl;
-    //    std::cout << "pNodes size = " << pNodes.size() << std::endl;
-
     if (pNodes.size() > 1) {
-      // std::cout << "[getBranch 1]" << std::endl;
-      getBranch(cnodebfs, dag, pNodes, curNode, branch, level + 1, ++branchID,
+      getBranch(cnodebfs, dag, pNodes, curNode, branch, level + 1, ++branchID_,
                 branchList);
 
     } else if (pNodes.size() == 1) {
-      // std::cout << "[getBranch 11]" << std::endl;
       if (!isChecked(cnodebfs, lastNode)) {
         //        std::cout << "[getBranch]"
         //                  << "add node = " << curNode->getKindName()
@@ -2672,7 +2387,7 @@ void NestPartitioner::getBranch(std::vector<std::vector<CostNode>> *cnodebfs,
         setChecked(cnodebfs, lastNode);
       }
 
-      backtrack(cnodebfs, dag, curNode, branch, level, branchID, branchList);
+      backtrack(cnodebfs, dag, curNode, branch, level, branchID_, branchList);
       // std::cout << "[getBranch 2] branch size = " << branch->nodeList_.size()
       // << " level = " << level << std::endl;
     } else {
@@ -2687,7 +2402,7 @@ void NestPartitioner::getBranch(std::vector<std::vector<CostNode>> *cnodebfs,
         setChecked(cnodebfs, curNode);
 
         pNodes = getParentNodes(dag, curNode);
-        getBranch(cnodebfs, dag, pNodes, curNode, branch, level + 1, ++branchID,
+        getBranch(cnodebfs, dag, pNodes, curNode, branch, level + 1, ++branchID_,
                   branchList);
         //      } else {
         //        std::cout << "HERE 1." << std::endl;
@@ -2746,15 +2461,8 @@ void NestPartitioner::backtrack(std::vector<std::vector<CostNode>> *cnodebfs,
     backtrack(cnodebfs, dag, pNodes.at(0), branch, level, branchID, branchList);
   } else if (pNodes.size() == 0) {
     pNodes = getParentNodes(dag, lastNode);
-    // if(pNodes.size() == 1) {
-    //      std::cout << "[backtrack] parent nodes size() == " << pNodes.size()
-    //      << std::endl;
     getBranch(cnodebfs, dag, pNodes, lastNode, branch, level + 1, branchID + 1,
               branchList);
-    //} else {
-    //  std::cout << "[backtrack] parent nodes size() == 0" << std::endl;
-    // return;
-    //}
   }
   // std::cout << "[finish backtrack]" << " branch = " << branch->ID_<<
   // std::endl;
@@ -2786,28 +2494,6 @@ void NestPartitioner::analyzeDAG(std::vector<std::vector<CostNode>> *cnodebfs,
       std::reverse((*i)->nodeList_.begin(), (*i)->nodeList_.end());
     }
   }
-  //
-  //  for (auto i = branchList->begin(); i != branchList->end(); i++) {
-  //      NodeGroup* branch = (*i);
-  //
-  //      std::vector<NodeGroup*> parallelBranches;
-  //      int pn = getBranchesWithSameLevel(&partitionList_, &parallelBranches,
-  //      branch->level_); if(pn > 1) {
-  //          for (auto sameLevelBranch: parallelBranches) {
-  //            sameLevelBranch->parallelBranch_ = true;
-  //          }
-  //      }
-  ////    std::cout << "branchID: " << (*i)->ID_ << ", level: " << (*i)->level_
-  ///<< ", size: " << (*i)->nodeList_.size() << std::endl; /    std::cout <<
-  ///"level : " << (*i)->level_ << std::endl; /    std::cout << "# inBranch: "
-  ///<< (*i)->inBranchList_.size() << std::endl;
-  ////
-  ////    for (auto ii = (*i)->nodeList_.begin(); ii != (*i)->nodeList_.end();
-  /// ii++ ) { /      std::cout << "name: " << (*ii)->name_<< std::endl; /
-  /// std::cout << "type: " << (*ii)->node_->getKindName()<< std::endl;
-  ////
-  ////    }
-  //  }
 }
 
 void NestPartitioner::generateApplicationCode(std::string profilePath,
@@ -2850,7 +2536,6 @@ void NestPartitioner::generateApplicationCode(std::string profilePath,
 void NestPartitioner::generatePlanForProfiling(Function *function,
                                                std::string profilePath,
                                                int profileMode) {
-
   BFSLevel bfs = getBFSLevel(function);
 
   std::vector<std::vector<CostNode>> cnodeBfs;
@@ -2896,36 +2581,10 @@ void NestPartitioner::generatePlanForProfiling(Function *function,
   partitionList_.clear();
 }
 
-//#include <filesystem>
-//
-//void NestPartitioner::generatePlanForRelay(Function *function,
-//                                           std::string profilePath,
-//                                           std::string partitionPlanFile,
-//                                           int profileMode) {
-//
-//  BFSLevel bfs = getBFSLevel(function);
-//  std::vector<std::vector<CostNode>> cnodeBfs;
-//  std::vector<NodeGroup *> branchList;
-//
-//  makeCostNode(function, &cnodeBfs);
-//  analyzeDAG(&cnodeBfs, bfs, &branchList);
-//  allocateRelayOps(&branchList);
-//  partitionBranches(&branchList);
-//  outPartitionPlan(function->getName().str(),
-//                   profilePath + "/RelayOPsPlan.yaml", false);
-//
-//  //    std::cout << "[generatePlanForRelay] Total cost = " <<
-//  //    getCost(&branchList) << std::endl;
-//
-//  for (auto branch : partitionList_)
-//    delete branch;
-//
-//  partitionList_.clear();
-//}
 
-void NestPartitioner::generatePlansForDevices(Function *function,
-                                            std::string profilePath,
-                                            int profileMode, int VTANum) {
+void NestPartitioner::generateTVMPlan(Function *function,
+                                              std::string profilePath,
+                                              int profileMode, DeviceInfo device, int VTANum) {
     BFSLevel bfs = getBFSLevel(function);
 
     std::vector<std::vector<CostNode>> cnodeBfs;
@@ -2937,18 +2596,15 @@ void NestPartitioner::generatePlansForDevices(Function *function,
     std::vector<Backend *> backends;
     genBackendMap(backendMap_, backendHolder_, backends);
 
-    std::cout
-            << "<Partition-plan generation for each PU according to their supported operators.>"
-            << std::endl;
-    for (auto device : deviceInfo_) {
-        std::string planName = profilePath + "/" +
-                               device.backendName +
-                               std::to_string(device.deviceID) + "OPsPlan.yaml";
-      std::cout << "  => Partition-plan generation for " << device.backendName
-                << ": " << planName << std::endl;
+    defaultBackend_ = "Relay";
+    std::string planName = profilePath + "/" +
+                           device.backendName +
+                           std::to_string(device.deviceID) + "OPsPlan-TVM.yaml";
+    std::cout << "  => TVM partition-plan generation for " << device.backendName
+              << ": " << planName << std::endl;
 
-        outPartitionPlanForFusion(function->getName(), &branchList, device, planName, true);
-    }
+    outPartitionPlanForFusion(function->getName(), &branchList, device, planName, true);
+
 
     for (auto branch : partitionList_)
         delete branch;
@@ -2957,42 +2613,38 @@ void NestPartitioner::generatePlansForDevices(Function *function,
 
 }
 
-void NestPartitioner::generatePlanForVTAOps(Function *function,
+void NestPartitioner::generatePlansForDevices(Function *function,
                                             std::string profilePath,
                                             int profileMode, int VTANum) {
-
   BFSLevel bfs = getBFSLevel(function);
+
   std::vector<std::vector<CostNode>> cnodeBfs;
+  makeCostNode(function, &cnodeBfs);
   std::vector<NodeGroup *> branchList;
 
-  makeCostNode(function, &cnodeBfs);
   analyzeDAG(&cnodeBfs, bfs, &branchList);
-  allocateVTAOps(&branchList);
 
-  std::string planName = "";
+  std::vector<Backend *> backends;
+  genBackendMap(backendMap_, backendHolder_, backends);
 
-  if (VTANum > 1) {
-    findParallelDeployBranchesForMultiVTA(&branchList, 0, VTANum);
-    planName = "/VTAOPsPlan-multiVTA.yaml";
-  } else {
-    planName = "/VTAOPsPlan.yaml";
+  std::cout
+          << "<Partition-plan generation for each PU according to their supported operators.>"
+          << std::endl;
+  for (auto device : deviceInfo_) {
+      std::string planName = profilePath + "/" +
+                             device.backendName +
+                             std::to_string(device.deviceID) + "OPsPlan"  + ".yaml";
+    std::cout << "  => Partition-plan generation for " << device.backendName
+              << ": " << planName << std::endl;
+
+    outPartitionPlanForFusion(function->getName(), &branchList, device, planName, true);
   }
-
-  partitionBranches(&branchList, true);
-
-  if (VTANum > 1) {
-    outPartitionPlanMultiVTA(function->getName().str(), profilePath + planName,
-                             true);
-  } else {
-    outPartitionPlan(function->getName().str(), profilePath + planName, false);
-  }
-  //    std::cout << "[generatePlanForVTAOps] Total cost = " <<
-  //    getCost(&branchList) << std::endl;
 
   for (auto branch : partitionList_)
-    delete branch;
+      delete branch;
 
   partitionList_.clear();
+
 }
 
 #include <boost/filesystem.hpp>
@@ -3005,13 +2657,6 @@ void NestPartitioner::generateMinCostPlan(Function *function,
   BFSLevel bfs = getBFSLevel(function);
   std::vector<NodeGroup *> branchList;
 
-//  std::string profileConfigFile = profilePath;
-//  if (profilePath.empty()) {
-//    profileConfigFile = "./profileConfigs.yaml";
-//  } else {
-//    profileConfigFile = profileConfigFile + "/profileConfigs.yaml";
-//  }
-//  loadFuseOperatorsConfig(profileConfigFile);
   makeCostNode(function, &cnodeBfs);
 
   if (profilePath.empty())
@@ -3031,8 +2676,8 @@ void NestPartitioner::generateMinCostPlan(Function *function,
   std::string planName = "";
 
   if (VTANum > 1) {
-    findParallelDeployBranchesForMultiVTA(&branchList, cpuNum, VTANum);
-    planName = "/NESTMinCostOptimalPlan-multiVTA.yaml";
+    findParallelDeployBranchesForMultiVTA(&branchList, VTANum);
+    planName = "/NESTMinCostOptimalPlan-multiVTA"+ std::to_string(VTANum) + ".yaml";
   } else {
     planName = "/NESTMinCostOptimalPlan.yaml";
   }
@@ -3040,13 +2685,10 @@ void NestPartitioner::generateMinCostPlan(Function *function,
   partitionBranches(&branchList, true);
 
   if (VTANum > 1) {
-    outPartitionPlanMultiVTA(function->getName().str(), profilePath + planName,
-                             true);
+    outPartitionPlanMultiVTA(function->getName().str(), profilePath + planName, VTANum, true);
   } else {
     outPartitionPlan(function->getName().str(), profilePath + planName, true);
   }
-  //    std::cout << "[generateMinCostPlan] Total cost = " <<
-  //    getCost(&branchList) << std::endl;
 
   for (auto branch : partitionList_)
     delete branch;
@@ -3063,13 +2705,6 @@ void NestPartitioner::generateMinCostPlanCPUVTA(Function *function,
   BFSLevel bfs = getBFSLevel(function);
   std::vector<NodeGroup *> branchList;
 
-//  std::string profileConfigFile = profilePath;
-//  if (profilePath.empty()) {
-//    profileConfigFile = "./profileConfigs.yaml";
-//  } else {
-//    profileConfigFile = profileConfigFile + "/profileConfigs.yaml";
-//  }
-//  loadFuseOperatorsConfig(profileConfigFile);
   makeCostNode(function, &cnodeBfs);
 
   if (profilePath.empty())
@@ -3097,9 +2732,6 @@ void NestPartitioner::generateMinCostPlanCPUVTA(Function *function,
   partitionBranchesCPUVTA(&branchList, true);
   outPartitionPlanCPUVTA(function->getName().str(), profilePath + planName,
                          true);
-
-  //    std::cout << "[generateMinCostPlan] Total cost = " <<
-  //    getCoprofileDataDirst(&branchList) << std::endl;
 
   for (auto branch : partitionList_)
     delete branch;
@@ -3140,7 +2772,7 @@ Expected<DAGListTy> NestPartitioner::generatePartitionCode(
 Expected<DAGListTy> NestPartitioner::partition(
     CompilationContext &cctx, size_t exeType, std::string profilePath,
     std::string partitionPlanFile, int profileMode, int partitionExe,
-    std::map<std::string, int> *puIdxMap) {
+    std::map<std::string, int> *puIdxMap, int evtaNum) {
   //  std::cout << "--------- partitionForNest exeType: " << exeType <<
   //  "-----------" << std::endl;
   puIdxMap_ = puIdxMap;
@@ -3148,40 +2780,30 @@ Expected<DAGListTy> NestPartitioner::partition(
 
   if(exeType == 1) {
     //generate partition plans without profiling data
-
     //profiling code
     generatePlanForProfiling(function, profilePath, profileMode);
-
     //Partition plans for each PU in a device configuration file
     generatePlansForDevices(function, profilePath, profileMode, 1);
 
+    if (backendMap_.find("Relay") != backendMap_.end() && defaultBackend_.compare("Relay") && backendMap_.find("VTA") != backendMap_.end()) {
+      generateTVMPlan(function, profilePath, profileMode, getDeviceInfoForBackend("VTA"), 1);
+    }
+//    generatePlanForVTAOps(function, profilePath, profileMode, 1);
     exit(0);
-  } else if (exeType == 2){
-    //VTA-style backend allocation (4 EVTAs)
-    generatePlanForVTAOps(function, profilePath, profileMode, 4);
+  } else if (exeType == 2){ //CPU-single-thread + Multi-VTA, parallel execution on 4 VTAs
+    std::cout << "# EVTA: " << evtaNum << std::endl;
+    generateMinCostPlan(function, profilePath, profileMode, 0, evtaNum);
     exit(0);
-
-  }else if (exeType == 3) { //CPU-single-thread + Multi-VTA, parallel execution on 4 VTAs
-
-    generatePlanForVTAOps(function, profilePath, profileMode, 1);
-    exit(0);
-
-  }else if (exeType == 4) { //CPU-single-thread + Multi-VTA, parallel execution on 4 VTAs
-
-    generateMinCostPlan(function, profilePath, profileMode, 0, 4);
-    exit(0);
-
-  }else if (exeType == 5) { //CPU-single-thread + Multi-VTA, parallel execution on 4 VTAs
-
-    generateMinCostPlan(function, profilePath, profileMode, 0, 4);
-    exit(0);
-
+  }else if (exeType == 3) {
+    std::cout << "Not supported exeType." << std::endl;
+  }else if (exeType == 4) {
+    std::cout << "Not supported exeType." << std::endl;
+  }else if (exeType == 5) {
+    std::cout << "Not supported exeType." << std::endl;
   } else if (exeType == 6) { //CPU-single-thread + single-VTA, parallel execution on 1 CPU and 1 VTA (etri journal)
-
     generateMinCostPlanCPUVTA(function, profilePath, profileMode, 1, 1);
     exit(0);
   }
-
 
   if (exeType == 0) { // compile
     return generatePartitionCode(cctx, profilePath, partitionPlanFile,

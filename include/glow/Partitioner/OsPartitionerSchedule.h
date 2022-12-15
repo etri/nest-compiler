@@ -16,8 +16,8 @@
  *
  *****************************************************************************/
 
-#ifndef GLOW_NESTPARTITIONERSCHEDULE_H
-#define GLOW_NESTPARTITIONERSCHEDULE_H
+#ifndef GLOW_NESTOSPARTITIONERSCHEDULE_H
+#define GLOW_NESTOSPARTITIONERSCHEDULE_H
 
 #include "glow/Partitioner/PartitionerUtils.h"
 #include "glow/Runtime/HostManager/HostManager.h"
@@ -129,4 +129,4 @@ public:
 };
 
 } // namespace glow
-#endif // GLOW_NESTPARTITIONERSCHEDULE_H
+#endif // GLOW_NESTOSPARTITIONERSCHEDULE_H

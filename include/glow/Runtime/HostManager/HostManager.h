@@ -216,7 +216,7 @@ public:
                                    std::string partitionPlanFile,
                                    std::string bundleDir,
                                    std::string quantFileName, int profileMode,
-                                   int partitionExe);
+                                   int partitionExe, int evtaNum);
   void setCompileOptions(PartitionerCompileOptions *compileOptions) {
     provisioner_->setCompileOptions(compileOptions);
   }

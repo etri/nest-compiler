@@ -55,14 +55,20 @@ llvm::cl::opt<std::string>
 
 llvm::cl::opt<int> profileMode(
     "profile-mode",
-    llvm::cl::desc("\"0: partition plan loading & code generation, 1: "
-                   "profiling, 2: simple partitioning, 3: NEST partitioning\""),
+    llvm::cl::desc("\"0: partition code generation, 1: "
+                   "profiling/example partition-plan generation, 2: NEST parition-plan generation\""),
     llvm::cl::init(0), llvm::cl::cat(compilerCat));
 
 llvm::cl::opt<int> partitionExe(
     "partition-exe",
     llvm::cl::desc("\"1: generating an execution file for each partition\""),
     llvm::cl::init(0), llvm::cl::cat(compilerCat));
+
+llvm::cl::opt<int> evtaNum(
+        "evta-num",
+        llvm::cl::desc("\"number of EVTA\""),
+        llvm::cl::init(1), llvm::cl::cat(compilerCat));
+
 } // namespace
 
 // int glow::partitionProfileMode() { return profileMode; }
@@ -98,7 +104,7 @@ int main(int argc, char **argv) {
   CompilationContext cctx = loader.getCompilationContext();
   // 0: generate compiled partition
   loader.compileForNestPartition(cctx, executionType, profilePath,
-                                 partitionPlanFile, profileMode, partitionExe);
+                                 partitionPlanFile, profileMode, partitionExe, evtaNum);
 
   return 0;
 }

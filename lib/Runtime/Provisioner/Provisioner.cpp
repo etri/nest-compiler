@@ -768,7 +768,7 @@ Error Provisioner::provisionNetwork(std::unique_ptr<Network> network) {
 #ifdef GLOW_WITH_VTA
           if (!deviceBackendName.compare("VTA")) {
             int vtaIdx = pow(2, (*puIdxMap)[function->getName().str()]);
-            std::cout << "Partition name = " << function->getName().str() << "("
+            std::cout << "Partition name = " << function->getName().str() << " ("
                       << deviceBackendName << ") VTA index: " << vtaIdx
                       << std::endl;
             static_cast<VTA *>(backends_["VTA"].get())

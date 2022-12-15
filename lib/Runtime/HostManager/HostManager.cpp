@@ -781,7 +781,7 @@ Error HostManager::addNetworkForNestPartition(
     std::unique_ptr<Module> module, CompilationContext &cctx, size_t exeType,
     std::string profilePath, std::string partitionPlanFile,
     std::string bundleDir, std::string quantFileName, int profileMode,
-    int partitionExe) {
+    int partitionExe, int evtaNum) {
 #ifdef FACEBOOK_INTERNAL
   LOG(WARNING) << "Adding Glow network built with revision hash: "
                << revisionHash;
@@ -902,14 +902,16 @@ Error HostManager::addNetworkForNestPartition(
   auto contextCount = backend.getContextCount(cctx);
   partitioner.setContextCount(contextCount);
   DAGListTy nodeList;
-  // auto result = partitioner.partition(cctx);
-  std::cout << "bundle dir = " << bundleDir << std::endl;
+
+  if(exeType == 0)
+    std::cout << "bundle dir = " << bundleDir << std::endl;
+
   partitioner.setOutputDir(bundleDir);
 
   std::map<std::string, int> puIdxMap;
   auto result =
       partitioner.partition(cctx, exeType, profilePath, partitionPlanFile,
-                            profileMode, partitionExe, &puIdxMap);
+                            profileMode, partitionExe, &puIdxMap, evtaNum);
   VLOG(1) << "After partitioner";
   if (result) {
     nodeList = std::move(result.get());

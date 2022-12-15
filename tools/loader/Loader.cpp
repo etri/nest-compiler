@@ -828,7 +828,7 @@ void Loader::compile(CompilationContext &cctx) {
 void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType,
                                      std::string profilePath,
                                      std::string partitionPlanFile,
-                                     int profileMode, int partitionExe) {
+                                     int profileMode, int partitionExe, int evtaNum) {
   //  std::cout << "=== compileForNestProfile ===" << std::endl;
 
   // Dump the DAG before compilation if needed.
@@ -866,7 +866,7 @@ void Loader::compileForNestPartition(CompilationContext &cctx, size_t exeType,
 
   auto error = hostManager_->addNetworkForNestPartition(
       std::move(M_), cctx, exeType, profilePath, partitionPlanFile,
-      emitBundle.c_str(), loadProfileFileOpt, profileMode, partitionExe);
+      emitBundle.c_str(), loadProfileFileOpt, profileMode, partitionExe, evtaNum);
 
   EXIT_ON_ERR(std::move(error));
   // After partitioning, the original function may be removed. Need to update

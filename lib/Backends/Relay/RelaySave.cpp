@@ -1008,7 +1008,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
     } else {
 
-      std::cout << (int)T->elementType_ << std::endl;
+//      std::cout << (int)T->elementType_ << std::endl;
     }
 
     // save weight
@@ -1078,11 +1078,11 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
       int type = getInOut(W);
       if (type == 2) {
-        std::cout << "OUT // " << W->getKindName() << " :  " << W->toString()
-                  << std::endl;
+//        std::cout << "OUT // " << W->getKindName() << " :  " << W->toString()
+//                  << std::endl;
       } else if (type == 1) {
-        std::cout << "IN // " << W->getKindName() << " :  " << W->toString()
-                  << std::endl;
+//        std::cout << "IN // " << W->getKindName() << " :  " << W->toString()
+//                  << std::endl;
       }
 
       mutable_count++;
@@ -1097,7 +1097,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
     }
   }
 
-  std::cout << "mutable var checked" << std::endl;
+//  std::cout << "mutable var checked" << std::endl;
 
   pyss << "params = {";
   for (auto s : params_name) {
@@ -1245,16 +1245,16 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       }
       pyss << ")" << std::endl;
 
-      std::cout << (std::string)dest->getName() << " = relay.qnn.op.quantize("
-                << (std::string)src->getName() << ","
-                << prev_alloc_type->getScale() << ","
-                << prev_alloc_type->getOffset() << ", out_dtype=";
+//      std::cout << (std::string)dest->getName() << " = relay.qnn.op.quantize("
+//                << (std::string)src->getName() << ","
+//                << prev_alloc_type->getScale() << ","
+//                << prev_alloc_type->getOffset() << ", out_dtype=";
       if (prev_alloc_type->elementType_ == ElemKind::Int8QTy) {
-        std::cout << "\"int8\"";
+//        std::cout << "\"int8\"";
       } else if (prev_alloc_type->elementType_ == ElemKind::Int32QTy) {
-        std::cout << "\"int32\"";
+//        std::cout << "\"int32\"";
       }
-      std::cout << ")" << std::endl;
+//      std::cout << ")" << std::endl;
 
       //   std::cout<< (std::string) I.getName() << " = relay.add(" <<
       //   std::endl;
@@ -1701,7 +1701,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
     case Kinded::Kind::LocalResponseNormalizationInstKind: {
       //  auto *A = new LocalResponseNormalizationInst(uniqueName(name), Dest,
       //  Src, Scale, HalfWindowSize, Alpha, Beta, K);
-      std::cout << (std::string)I.toString() << std::endl;
+//      std::cout << (std::string)I.toString() << std::endl;
       auto II = static_cast<LocalResponseNormalizationInst *>(&I);
 
       auto dest = II->getDest();
@@ -1713,12 +1713,12 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       auto size = II->getHalfWindowSize() * 2 + 1; // unsigned
 
       // axis = channel. default = 1 for NCHW
-      std::cout << (std::string)scale->toString() << std::endl;
-
-      std::cout << (std::string)dest->getName() << " = relay.nn.lrn("
-                << (std::string)src->getName() << ", size=" << size
-                << ", bias=" << bias << ",alpha=" << alpha << ",beta=" << beta
-                << ")" << std::endl;
+//      std::cout << (std::string)scale->toString() << std::endl;
+//
+//      std::cout << (std::string)dest->getName() << " = relay.nn.lrn("
+//                << (std::string)src->getName() << ", size=" << size
+//                << ", bias=" << bias << ",alpha=" << alpha << ",beta=" << beta
+//                << ")" << std::endl;
       pyss << (std::string)dest->getName() << " = relay.nn.lrn("
            << (std::string)src->getName() << ", size=" << size
            << ", bias=" << bias << ",alpha=" << alpha << ",beta=" << beta << ")"
@@ -1751,36 +1751,36 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       }
 
       if (destT->sizes_[axis] < offsets[axis] + srcT->sizes_[axis]) {
-        std::cout << "[ERROR] invalid size" << std::endl;
+//        std::cout << "[ERROR] invalid size" << std::endl;
       }
 
-      std::cout << "d:" << destT->sizes_[axis] << "off:" << offsets[axis]
-                << "src:" << srcT->sizes_[axis] << std::endl;
+//      std::cout << "d:" << destT->sizes_[axis] << "off:" << offsets[axis]
+//                << "src:" << srcT->sizes_[axis] << std::endl;
 
       if (offsets[axis] == 0) {
-        std::cout << (std::string)dest->getName() << " = "
-                  << (std::string)src->getName() << std::endl;
+//        std::cout << (std::string)dest->getName() << " = "
+//                  << (std::string)src->getName() << std::endl;
         pyss << (std::string)dest->getName() << " = "
              << (std::string)src->getName() << std::endl;
       } else {
 
-        std::cout << (std::string)dest->getName() << " = relay.concatenate( ["
-                  << (std::string)dest->getName() << " , "
-                  << (std::string)src->getName() << "]," << axis << ")"
-                  << std::endl;
+//        std::cout << (std::string)dest->getName() << " = relay.concatenate( ["
+//                  << (std::string)dest->getName() << " , "
+//                  << (std::string)src->getName() << "]," << axis << ")"
+//                  << std::endl;
         pyss << (std::string)dest->getName() << " = relay.concatenate( ["
              << (std::string)dest->getName() << " , "
              << (std::string)src->getName() << "]," << axis << ")" << std::endl;
       }
 
-      std::cout << "\n" << I.toString() << std::endl;
+//      std::cout << "\n" << I.toString() << std::endl;
 
     }
     // do nothing
     break;
 
     case Kinded::Kind::SoftMaxInstKind: {
-      std::cout << (std::string)I.toString() << std::endl;
+//      std::cout << (std::string)I.toString() << std::endl;
       auto II = static_cast<SoftMaxInst *>(&I);
 
       auto dest = II->getDest();
@@ -1842,8 +1842,8 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
   py.append(pyss.str());
 
-  std::cout << "--relay-target = " << target_ << std::endl;
-  std::cout << "--relay-opt-level = " << opt_level_ << std::endl;
+//  std::cout << "--relay-target = " << target_ << std::endl;
+//  std::cout << "--relay-opt-level = " << opt_level_ << std::endl;
 
   finalizeCtx(saveCtx, outputDir, bundleName, mainEntryName, procCtx, target_,
               target_host_, export_option_, opt_level_, required_pass_,

@@ -210,7 +210,7 @@ public:
   void compileForNestPartition(CompilationContext &cctx, size_t exeType,
                                std::string profilePath,
                                std::string partitionPlan, int profileMode,
-                               int partitionExe);
+                               int partitionExe, int evtaNum=1);
 
   /// Runs inference, unless emit bundle mode is enabled. \p bindings
   /// binds specific placeholders to concrete tensors. The concrete

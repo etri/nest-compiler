@@ -22,7 +22,8 @@ add_library(PartitionerNestos
               Partitioner.cpp
               # ${NESTC_ROOT_DIR}/lib/Partitioner/NestPartitionerSchedule.cpp
               ${NESTC_ROOT_DIR}/lib/Partitioner/OsPartitionerSchedule.cpp
-              ${NESTC_ROOT_DIR}/lib/Partitioner/NestPartitioner.cpp)
+#              ${NESTC_ROOT_DIR}/lib/Partitioner/NestPartitioner.cpp
+        )
 
 target_link_libraries(PartitionerNestos
                       PRIVATE
