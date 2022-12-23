@@ -61,7 +61,7 @@ loadStandardLibrary(llvm::LLVMContext *ctx, llvm::StringRef filename,
       llvm::MemoryBufferRef(
           llvm::StringRef(reinterpret_cast<const char *>(libjitBC.data()),
                           libjitBC.size()),
-          "libjit.bc"),
+          "libnmp.bc"),
       error, *ctx);
 
   if (!mod) {

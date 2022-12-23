@@ -357,6 +357,36 @@ llvm::ArrayRef<llvm::MemoryBufferRef> NMPBackend::getObjectRegistry() const {
   return nmpObjectRegistry;
 }
 
+void NMPBackend::emitJitMain(LLVMIRGen &irgen) const {
+  AllocationsInfo &allocationsInfo = irgen.getAllocationsInfo();
+  auto int8PtrTy = llvm::Type::getInt8PtrTy(irgen.getLLVMContext());
+  llvm::Type *retTy =
+      llvm::Type::getIntNTy(irgen.getLLVMContext(), irgen.getLibjitIntWidth());
+  llvm::FunctionType *jitFuncTy = llvm::FunctionType::get(retTy, {}, false);
+  auto *func =
+      llvm::Function::Create(jitFuncTy, llvm::Function::ExternalLinkage,
+                             "main", &irgen.getModule());
+  llvm::BasicBlock *entry_bb =
+      llvm::BasicBlock::Create(irgen.getLLVMContext(), "entry", func);
+  llvm::IRBuilder<> builder(entry_bb);
+  // Add a provisional terminator to make the function well-formed.
+  auto *zero = builder.getIntN(irgen.getLibjitIntWidth(), 0);
+  auto *ret = builder.CreateRet(zero);
+  builder.SetInsertPoint(ret);
+
+  auto *entryF = irgen.getModule().getFunction(irgen.getMainEntryName());
+  entryF->setLinkage(llvm::Function::InternalLinkage);
+  auto *result = irgen.createCall(builder, entryF, {});
+  // Terminate the function.
+  builder.CreateRet(result);
+  // Remove the provisional terminator.
+  ret->eraseFromParent();
+  // Emit JIT file printer.
+  irgen.generateJITFileWriter();
+  // Create the debug info for the entry point function.
+  irgen.generateFunctionDebugInfo(func);
+}
+
 void NMPBackend::save(Function *F, llvm::StringRef outputDir,
                       llvm::StringRef bundleName,
                       llvm::StringRef mainEntryName) const {

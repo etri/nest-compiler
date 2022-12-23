@@ -110,6 +110,8 @@ protected:
                          runtime::RuntimeBundle &&runtimeBundle) const override;
 
   llvm::StringRef getLibjitBitcode() const override;
+
+  void emitJitMain(LLVMIRGen &irgen) const override;
 };
 
 } // namespace glow
