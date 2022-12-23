@@ -490,15 +490,12 @@ int32_t NMPLLVMIRGen::generateIRCodeForInstr(llvm::IRBuilder<> &builder,
     assert(src->getType()->isFPType() &&
            "Quantized Op allowed only for Input data.");
     auto *dest = QI->getDest();
-    auto *destTy = dest->getType();
-
-    auto baseActivations = NMP_BASE_DATA_ADDR +
-                           allocationsInfo_.constantWeightVarsMemSize_ +
-                           allocationsInfo_.mutableWeightVarsMemSize_;
-    auto addr = baseActivations + allocationsInfo_.allocatedAddress_[dest];
-
-    auto scale = destTy->getScale();
-    inputAddrScale = std::make_pair(addr, scale);
+    for (auto &U : dest->getUsers()) {
+      if (U.get()->getKind() == Kinded::Kind::TransposeInstKind) {
+        return 0;
+      }
+    }
+    inputTensorInfo = getTensorInfo(dest);
     return 0;
   }
 
@@ -508,14 +505,12 @@ int32_t NMPLLVMIRGen::generateIRCodeForInstr(llvm::IRBuilder<> &builder,
       // implies that return address was computed in Softmax.
       auto *DI = cast<DequantizeInst>(I);
       auto *src = DI->getSrc();
-
-      auto baseActivations = NMP_BASE_DATA_ADDR +
-                             allocationsInfo_.constantWeightVarsMemSize_ +
-                             allocationsInfo_.mutableWeightVarsMemSize_;
-      auto addr = baseActivations + allocationsInfo_.allocatedAddress_[src];
-
-      auto scale = src->getType()->getScale();
-      outputAddrScale = std::make_pair(addr, scale);
+      for (auto &U : src->getUsers()) {
+        if (U.get()->getKind() == Kinded::Kind::TransposeInstKind) {
+          return 0;
+        }
+      }
+      outputTensorInfo = getTensorInfo(src);
     }
     return 0;
   }
@@ -1004,13 +999,7 @@ int32_t NMPLLVMIRGen::generateIRCodeForInstr(llvm::IRBuilder<> &builder,
       // If the operation will not be computed, then the
       // result is the input of the Softmax, not the input
       // in the dequantize operation.
-      auto baseActivations = NMP_BASE_DATA_ADDR +
-                             allocationsInfo_.constantWeightVarsMemSize_ +
-                             allocationsInfo_.mutableWeightVarsMemSize_;
-      auto addr = baseActivations + allocationsInfo_.allocatedAddress_[src];
-
-      auto scale = src->getType()->getScale();
-      outputAddrScale = std::make_pair(addr, scale);
+      outputTensorInfo = getTensorInfo(src);
       return 0;
     }
 
@@ -1064,7 +1053,66 @@ int32_t NMPLLVMIRGen::generateIRCodeForInstr(llvm::IRBuilder<> &builder,
     return 1;
   }
 
+  case Kinded::Kind::TouchInstKind:
+    // do nothing;
+    return 0;
+
+  case Kinded::Kind::TransposeInstKind: {
+    auto *TI = cast<TransposeInst>(I);
+    auto *src = TI->getSrc();
+    auto *dest = TI->getDest();
+
+    for (auto &U : src->getUsers()) {
+      switch (U.get()->getKind()) {
+      case Kinded::Kind::QuantizeInstKind:
+        inputTensorInfo = getTensorInfo(dest);
+        return 0;
+      case Kinded::Kind::DequantizeInstKind:
+        return 0;
+      default:
+        break;
+      }
+    }
+
+    for (auto &U : dest->getUsers()) {
+      switch (U.get()->getKind()) {
+      case Kinded::Kind::QuantizeInstKind:
+        return 0;
+      case Kinded::Kind::DequantizeInstKind:
+        outputTensorInfo = getTensorInfo(src);
+        return 0;
+      default:
+        break;
+      }
+    }
+
+    // fallthrough
+  }
+
   default:
+    std::string sBuf;
+    llvm::raw_string_ostream s(sBuf);
+    I->dump(s);
+    std::cerr << "Cannot select the instruction: " << s.str() << std::endl;
     return 0;
   }
+}
+
+llvm::SmallVector<unsigned, 6>
+NMPLLVMIRGen::getTensorInfo(const glow::Value *val) {
+  llvm::SmallVector<unsigned, 6> info;
+
+  auto baseActivations = NMP_BASE_DATA_ADDR +
+                         allocationsInfo_.constantWeightVarsMemSize_ +
+                         allocationsInfo_.mutableWeightVarsMemSize_ -
+                         NMP_BASE_ADDR;
+  info.push_back(baseActivations + allocationsInfo_.allocatedAddress_[val]);
+
+  auto scale = val->getType()->getScale();
+  info.push_back(static_cast<uint64_t>(log2(1 / scale)));
+
+  auto dims = val->dims();
+  info.insert(info.end(), dims.begin(), dims.end());
+
+  return info;
 }

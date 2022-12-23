@@ -72,9 +72,9 @@ public:
   // \returns a libnmp API function by name.
   llvm::Function *getFunction(const std::string &name) override;
 
-  // get the input/output offset & scales to dump header
-  std::pair<unsigned, float> getInputData() { return inputAddrScale; }
-  std::pair<unsigned, float> getOutputData() { return outputAddrScale; }
+  // get the input/output info to dump header
+  llvm::SmallVector<unsigned, 6> &getInputData() { return inputTensorInfo; }
+  llvm::SmallVector<unsigned, 6> &getOutputData() { return outputTensorInfo; }
 
 private:
   // Emit LLVM-IR for the instruction I, using the LLVM builder.
@@ -100,10 +100,10 @@ private:
   llvm::Value *emitFusedActivationType(llvm::IRBuilder<> &builder,
                                        const InstructionTy *I);
 
-  // Save the offset and scale of the input and output data
+  // Save the offset, qpoint and shape of the input and output data
   // This info will be used by the bundle to generate header
-  std::pair<uint64_t, float> inputAddrScale;
-  std::pair<uint64_t, float> outputAddrScale;
+  llvm::SmallVector<unsigned, 6> inputTensorInfo, outputTensorInfo;
+  llvm::SmallVector<unsigned, 6> getTensorInfo(const glow::Value *val);
 
 }; // class NMPLLVMIRGen
 

@@ -355,15 +355,26 @@ void NMPBundleSaver::saveHeader(llvm::StringRef headerFileName) {
   auto output = nmpgen->getOutputData();
   // Print address offsets & q-points.
   modelApi += "// Placeholder address offsets within mutable buffer (bytes).\n";
-  modelApi += strFormat("#define %s_%s  %#x\n", bundleNameUpper.data(), "input_offset",
-                        input.first - NMP_BASE_ADDR);
-  modelApi += strFormat("#define %s_%s  %#x\n", bundleNameUpper.data(), "output_offset",
-                        output.first - NMP_BASE_ADDR);
-  modelApi += strFormat("#define %s_%s  %2d\n", bundleNameUpper.data(),
-                        "input_qpoint", (int)log2(1 / input.second));
-  modelApi += strFormat("#define %s_%s  %2d\n", bundleNameUpper.data(),
-                        "output_qpoint", (int)log2(1 / output.second));
-  modelApi += "\n";
+  modelApi += strFormat("#define %s_input_offset   %#x\n",
+                        bundleNameUpper.data(), input[0]);
+  modelApi += strFormat("#define %s_output_offset  %#x\n",
+                        bundleNameUpper.data(), output[0]);
+  modelApi += strFormat("#define %s_input_qpoint   %2d\n",
+                        bundleNameUpper.data(), input[1]);
+  modelApi += strFormat("#define %s_output_qpoint  %2d\n",
+                        bundleNameUpper.data(), output[1]);
+  modelApi += strFormat("#define %s_input_shape    ", bundleNameUpper.data());
+  modelApi += "{" + std::to_string(input[2]);
+  for (size_t i = 3; i < input.size(); i++) {
+    modelApi += ", " + std::to_string(input[i]);
+  }
+  modelApi += "}\n";
+  modelApi += strFormat("#define %s_output_shape   ", bundleNameUpper.data());
+  modelApi += "{" + std::to_string(output[2]);
+  for (size_t i = 3; i < output.size(); i++) {
+    modelApi += ", " + std::to_string(output[i]);
+  }
+  modelApi += "}\n\n";
 
   // Print memory sizes and memory alignment.
   modelApi +=
