@@ -41,11 +41,11 @@ using llvm::isa;
 using namespace glow;
 
 NMPBackend::NMPBackend() {
-  /// If target is not explicitly given we use the riscv32 target attribute.
+  /// We always use the riscv32 target attribute and ignore -march and -mcpu.
   auto &opts = getOptions();
-  if (opts.getTarget().empty()) {
-    opts.setTarget("riscv32-unknown-elf");
-  }
+  opts.setTarget("riscv32-unknown-elf");
+  opts.setArch("");
+  opts.setCPU("");
 }
 
 /// We compile the standard library (libjit) to LLVM bitcode, and then convert

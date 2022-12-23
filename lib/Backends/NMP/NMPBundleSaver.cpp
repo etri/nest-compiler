@@ -54,12 +54,10 @@ static const char *headerFileNMP = R"RAW(%s
 // ---------------------------------------------------------------
 //                       Common definitions
 // ---------------------------------------------------------------
-#ifndef _GLOW_BUNDLE_COMMON_DEFS
-#define _GLOW_BUNDLE_COMMON_DEFS
 
 // Glow bundle error code for correct execution.
+#ifndef GLOW_SUCCESS
 #define GLOW_SUCCESS 0
-
 #endif
 
 // ---------------------------------------------------------------
