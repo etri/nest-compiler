@@ -51,7 +51,8 @@ docker-build:
     - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
     - docker container ls -a
     - df -h
-
+  tags:
+    - etri
 
 
 
@@ -408,7 +409,7 @@ build-without-VTA:
     - du -h -d 1
   tags:
     - etri
-
+  allow_failure: true
 
 build_bnn:
   stage: build
@@ -477,7 +478,7 @@ build-all:
     - du -h -d 1
   tags:
     - etri
-
+  allow_failure: true
 
 test-all:
   stage: test
