@@ -1,7 +1,12 @@
-add_library(Flags
+if(NESTC_WITH_NMP)
+    add_library(Flags
               ${NESTC_ROOT_DIR}/lib/Flags/Flags.cpp)
-target_link_libraries(Flags
-                      PUBLIC
-                        gflags
-                        glog::glog
-                        LLVMSupport)
+else()
+    add_library(Flags
+            ${NESTC_ROOT_DIR}/glow/lib/Flags/Flags.cpp)
+endif()
+    target_link_libraries(Flags
+            PUBLIC
+            gflags
+            glog::glog
+            LLVMSupport)
