@@ -213,8 +213,7 @@ static int8_t *initActivations(const BundleConfig &config) {
 int main(int argc, char **argv) {
   parseCommandLineOptions(argc, argv);
   // Allocate and initialize constant and mutable weights.
-  int8_t *constantWeightVarsAddr =
-          initConstantWeights("vtaElemAddTestBundle.weights.bin", vtaElemAddTestBundle_config);
+  int8_t *constantWeightVarsAddr = nullptr;
   int8_t *mutableWeightVarsAddr = initMutableWeightVars(vtaElemAddTestBundle_config);
   int8_t *activationsAddr = initActivations(vtaElemAddTestBundle_config);
 
