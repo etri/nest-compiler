@@ -613,11 +613,7 @@ void finalizeCtx(struct SaveCtx &Ctx, llvm::StringRef outputDir,
     py.append("\n\t\tlib = relay.build(relay_mod, target,params=params)");
   }
   py.append("\nlib.export_library(\"" + module_rel_path + "/" +
-            (std::string)bundleName + "_tvm.so\"" + export_option + ")        \
-    \n# = lib.get_params()\
-    \n#    for item in b:\
-    \n#        print(item)\
-    \n#        print(item.nbytes)");
+            (std::string)bundleName + "_tvm.so\"" + export_option + ")");
 
   if (debug_mode != "") {
     py.append("\ngraph = lib.get_graph_json() \
@@ -1733,6 +1729,7 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       break;
 
     case Kinded::Kind::InsertTensorInstKind: {
+        pyss << "## InsertTensorInst" << std::endl;
       // InsertTensorInst is not matched with relay.concat perfectly. assume
       // that insertTensor is used only for concat(count=1)
       auto II = static_cast<InsertTensorInst *>(&I);
@@ -1746,37 +1743,56 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
       auto srcT = src->getType();
       auto destT = dest->getType();
 
+//      std::cout << "dest = " << dest->getName().str() << std::endl;
+//      std::cout << "src = " << src->getName().str() << std::endl;
+//      std::cout << "axis = " << axis << std::endl;
+
+      int expAxis = 0, expNum = 0;
+      std::string dimexpshape="(";
+      for(int i = 0; i < srcT->numSizes_; i++) {
+//          std::cout << "srcT->dims()[" << i << "] = " << srcT->dims()[i] << ", destT->dims()[" << i << "]) = " << destT->dims()[i] << std::endl;
+
+          if(srcT->dims()[i] < destT->dims()[i]) {
+              expAxis = i;
+              if(in_count > 1) {
+                  expNum = 0;
+              } else {
+                  expNum = destT->dims()[i] - srcT->dims()[i];
+              }
+              dimexpshape = dimexpshape + (std::to_string(expNum) + ",");
+
+          } else {
+              dimexpshape = dimexpshape + (std::to_string(srcT->dims()[i]) + ",");
+          }
+      }
+      dimexpshape.pop_back();
+      dimexpshape = dimexpshape  + ")";
+
+//      std::cout << "expNum = " << expNum << ", expAxis = " << expAxis << std::endl;
+
+
       if (count != 1) {
         std::cout << "[ERROR] cannot handle with relay.concat" << std::endl;
       }
 
-      if (destT->sizes_[axis] < offsets[axis] + srcT->sizes_[axis]) {
+//      if (destT->sizes_[axis] < offsets[axis] + srcT->sizes_[axis]) {
 //        std::cout << "[ERROR] invalid size" << std::endl;
-      }
-
-//      std::cout << "d:" << destT->sizes_[axis] << "off:" << offsets[axis]
-//                << "src:" << srcT->sizes_[axis] << std::endl;
+//      }
 
       if (offsets[axis] == 0) {
-//        std::cout << (std::string)dest->getName() << " = "
-//                  << (std::string)src->getName() << std::endl;
-        pyss << (std::string)dest->getName() << " = "
-             << (std::string)src->getName() << std::endl;
-      } else {
+//        pyss << "inserted = relay.var(\"inserted\", shape="  << dimexpshape << ", dtype=\"float32\")" << std::endl;
+//        pyss << dest->getName().str() << " = relay.concatenate((" << src->getName().str() << ", inserted), axis=" << expAxis << ")" << std::endl;
 
-//        std::cout << (std::string)dest->getName() << " = relay.concatenate( ["
-//                  << (std::string)dest->getName() << " , "
-//                  << (std::string)src->getName() << "]," << axis << ")"
-//                  << std::endl;
+          pyss << (std::string)dest->getName() << " = "
+               << (std::string)src->getName() << std::endl;
+
+      } else {
         pyss << (std::string)dest->getName() << " = relay.concatenate( ["
              << (std::string)dest->getName() << " , "
              << (std::string)src->getName() << "]," << axis << ")" << std::endl;
       }
-
-//      std::cout << "\n" << I.toString() << std::endl;
-
     }
-    // do nothing
+
     break;
 
     case Kinded::Kind::SoftMaxInstKind: {
@@ -1791,6 +1807,27 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
 
     }
 
+    break;
+
+    case Kinded::Kind::SplatInstKind: {
+        auto II = static_cast<SplatInst *>(&I);
+        auto name = II->getName();
+        auto dest = II->getDest();
+        auto value = II->getValue();
+        auto type = dest->getType();
+
+        pyss << "## SplatInst" << std::endl;
+
+        std::string dimstr = "(";
+        for(int i = 0; i < type->numSizes_; i++) {
+            dimstr = dimstr + (std::to_string(type->dims()[i]) + ",");
+        }
+        dimstr.pop_back();
+        dimstr = dimstr + ")";
+
+        pyss << "fill_value = relay.const(" << value << ",dtype=\"float\")" << std::endl;
+        pyss << (std::string) dest->getName() << " = relay.full(fill_value, shape=" << dimstr << ", dtype=\"float32\")" << std::endl;
+    }
     break;
 
     default:
@@ -1827,11 +1864,11 @@ void Relay::save(Function *F, llvm::StringRef outputDir,
     for (int i = 0; i < procCtx.output_names.size(); i++) {
       pyss << procCtx.output_names[i] << ",";
     }
-    pyss << "])\n\nfunc = "
+    pyss << "])\nfunc = "
             "relay.Function(relay.analysis.free_vars(output_tuples), "
             "output_tuples)";
   } else if (procCtx.output_names.size() == 1) {
-    pyss << "\n\nfunc = relay.Function(relay.analysis.free_vars("
+    pyss << "\nfunc = relay.Function(relay.analysis.free_vars("
          << procCtx.output_names[0] << "), " << procCtx.output_names[0] << ")";
   } else {
 

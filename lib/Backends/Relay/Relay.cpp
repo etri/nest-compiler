@@ -179,6 +179,10 @@ bool Relay::isOpSupported(const NodeInfo &NI) const {
     // These work regardless of the underlying type.
     return true;
 
+  case Kinded::Kind::SplatNodeKind:
+      return true;
+//      return false;
+
   default:
     return false;
   }
