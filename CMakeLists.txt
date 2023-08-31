@@ -11,6 +11,7 @@ project(NESTC C CXX)
 
 option(NESTC_WITH_EVTA "Build the VTA backend" OFF)
 option(NESTC_WITH_NEWTON "Build the Newton backend" OFF)
+option(NESTC_WITH_ENLIGHT "Build the Enlight backend" OFF)
 option(NESTC_WITH_OPENEDGE "Build the openedge backend" OFF)
 option(NESTC_USE_VTASIM "Build the VTASIM" ON)
 option(NESTC_EVTA_RUN_ON_ZCU102 "Run on ZCU102 board" OFF)
@@ -177,6 +178,8 @@ add_custom_target(check_zcu102 COMMAND ${CMAKE_CTEST_COMMAND} -L ZCU102
         DEPENDS ${ZCU102_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_newton COMMAND ${CMAKE_CTEST_COMMAND} -L NEWTON
         DEPENDS ${NEWTON_TEST_DEPENDS} USES_TERMINAL)
+add_custom_target(check_enlight COMMAND ${CMAKE_CTEST_COMMAND} -L ENLIGHT
+        DEPENDS ${ENLIGHT_TEST_DEPENDS} USES_TERMINAL)
 add_custom_target(check_multievta COMMAND ${CMAKE_CTEST_COMMAND} -L MULTIEVTA
         DEPENDS ${MULTIEVTA_TEST_DEPENDS} USES_TERMINAL)
 

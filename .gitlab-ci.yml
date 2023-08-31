@@ -330,8 +330,8 @@ build-openedge:
     - docker volume ls
     - docker ps -a
     - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_OPENEDGE=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet50_openedgeBundle"
+    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_OPENEDGE=ON -DNESTC_WITH_ENLIGHT=ON"
+    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet50_openedgeBundle; ninja enlightConvBundle; ninja onnxYamlParserValTestBunddle"
     - du -h -d 1
   tags:
     - etri

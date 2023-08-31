@@ -1,0 +1,17 @@
+---
+backendName: Enlight
+...
+---
+- NodeOutputName:  'resnetv24_batchnorm0_fwd_mul_coef_res'
+- NodeOutputName:  'resnetv24_batchnorm0_fwd_in_minus_mean'
+- NodeOutputName:  'resnetv24_batchnorm0_fwd_mul_coef'
+- NodeOutputName:  'resnetv24_batchnorm0_fwd_result'
+- NodeOutputName:  'resnetv24_conv0_fwd__1_res'
+- NodeOutputName:  'resnetv24_conv0_fwd__1'
+- NodeOutputName:  'dealloc_resnetv24_batchnorm0_fwd_mul_coef_res'
+- NodeOutputName:  'resnetv24_conv0_fwd__2_res'
+- NodeOutputName:  'resnetv24_conv0_fwd__2'
+- NodeOutputName:  'dealloc_resnetv24_conv0_fwd__1_res'
+- NodeOutputName:  'resnetv24_conv0_fwd__3'
+- NodeOutputName:  'dealloc_resnetv24_conv0_fwd__2_res'
+...
