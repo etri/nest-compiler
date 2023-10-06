@@ -24,6 +24,7 @@ option(NESTC_BNN "Enable BNN mode" OFF)
 option(NESTC_WITH_TVM "Build TVM backend" ON)
 option(NESTC_DEMO "location of Demo project" OFF )
 option(NESTC_WITH_NMP "Build the NMP backend" OFF)
+option(NESTC_USE_NMP_FPGA "Build the NMP backend" OFF)
 
 
 include(CTest)
@@ -81,6 +82,10 @@ if(NESTC_WITH_NMP)
     add_definitions(-DGLOW_WITH_NMP=1)
     option(TENSOR_DIMS_32_BITS "Set the max bitwidth of the tensor dimension and related indices to 32b instead of 64b." ON)
     set(RISCV_NMP_TOOLCHAIN $ENV{RISCV_NMP_TOOLCHAIN})
+    if (NESTC_USE_NMP_FPGA)
+        add_definitions(-DNESTC_USE_NMP_FPGA=1)
+    endif()
+
 endif()
 
 if (NESTC_WITH_NEWTON)

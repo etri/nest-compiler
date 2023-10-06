@@ -22,6 +22,13 @@
 #define NMP_CFG_DFXP_SIZE_D08 (0x1 << 4)
 #define NMP_CFG_DFXP_SIZE_D16 (0x0 << 4)
 #define NMP_BASE_ADDR         0x15000000
+
+#if(NESTC_USE_NMP_FPGA)
+#define NMP_BASE_ADDR         0x80000000
+#else
+#define NMP_BASE_ADDR         0x15000000
+#endif
+
 #define NMP_BASE_DATA_ADDR    (NMP_BASE_ADDR + 0x01000000)
 
 #define NMP_ELTWISE_SUM 0x2
