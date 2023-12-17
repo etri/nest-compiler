@@ -1,548 +1,176 @@
 stages:
   - check
-  - docker-build
   - build
   - publish
   - test
 
 variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_HOST: tcp://docker:2375
   GIT_SUBMODULE_STRATEGY: recursive
-
-before_script:
-  - apk update && apk add python3 git wget
-
+  GIT_DEPTH: 1000
 
 check-dco:
   stage: check
   image: docker:latest
+  before_script:
+    - apk update && apk add python3 git wget
   script:
     - wget https://gitlab.com/yongin.kwon/dco-check/-/raw/master/check-dco.py
-    - chmod +x ./check-dco.py
-    - ls
-    - ./check-dco.py
-  variables:
-    GIT_DEPTH: 1000
+    - python3 check-dco.py
 
-docker-build:
-  stage: docker-build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
-  script:
+.builds:
+  stage: build
+  image: onesai1/nest-compiler-sdk:1.0.0
+  before_script:
+    - echo $CI_PROJECT_DIR
     - pwd
-    - df -h
-    - docker volume ls
-    - echo $PWD
     - ls -al
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - DATE=`date '+%Y%m%d'`
-    - docker images
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE || true
-    - docker images
-    - docker build --cache-from $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE --tag $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE .
-    - docker images
-    - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE
-    - docker tag  $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:$DATE  $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker container ls -a
-    - df -h
+    - mkdir -p build_ci
+    - rm -rf build_ci/*
+    - cd build_ci
+    - export TVM_HOME=$CI_PROJECT_DIR/tvm
+    - export DMLC_CORE=$CI_PROJECT_DIR/tvm/3rdparty/dmlc-core
+    - export TVM_BUILD_PATH=$CI_PROJECT_DIR/build_ci/tvm
+    - export TVM_LIBRARY_PATH=$CI_PROJECT_DIR/build_ci/tvm
+    - export PATH=$CI_PROJECT_DIR/build_ci/tvm:$PATH
+    - export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
   tags:
-    - etri
-
-
+    - etri-compute
 
 build:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON
+    - cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}
+    - cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}
+    - ninja tvm
+    - ninja check_nestc
     - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON"
-    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
-    - du -h -d 1
-  tags:
-    - etri
 
 build_from_aws:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS=ON"
-    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
-    - du -h -d 1
-  tags:
-    - etri
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_USE_PRECOMPILED_BUNDLE_FROM_AWS=ON
+    - cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}
+    - cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}
+    - ninja tvm
+    - ninja check_nestc
   allow_failure: true
 
 build-publish:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - PWD=`pwd`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - rm -rf build_ci/*
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaMxnetResnet18Bundle"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet18RelayOpenCLBundleCPPGen"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet18RelayAarch64BundleCPPGen"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaMxnetResnet18PartitionBundleNet"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaMxnetResnet18RelayEVTAPartitionBundleCPPGen"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaVGG16Cifar10Bundle"
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON
+    - ninja vtaMxnetResnet18Bundle
+    - ninja resnet18RelayOpenCLBundleCPPGen
+    - ninja resnet18RelayAarch64BundleCPPGen
+    - ninja vtaMxnetResnet18PartitionBundleNet
+    - ninja vtaMxnetResnet18RelayEVTAPartitionBundleCPPGen
+    - ninja vtaVGG16Cifar10Bundle
+    - cd ..
     - mkdir -p build_ci2
-    - rm -rf build_ci2/*
-    - docker exec build sh -c "ls;cd build_ci2; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON -DNESTC_EVTA_PROFILE_AUTOTUNE=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv1TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv2TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv3TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv4TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv5TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv6TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv7TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv8TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv9TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci2; ninja vtaResConv10TestBundleProfiling"
+    - cd build_ci2
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON -DNESTC_EVTA_PROFILE_AUTOTUNE=ON
+    - ninja vtaResConv1TestBundleProfiling
+    - ninja vtaResConv2TestBundleProfiling
+    - ninja vtaResConv3TestBundleProfiling
+    - ninja vtaResConv4TestBundleProfiling
+    - ninja vtaResConv5TestBundleProfiling
+    - ninja vtaResConv6TestBundleProfiling
+    - ninja vtaResConv7TestBundleProfiling
+    - ninja vtaResConv8TestBundleProfiling
+    - ninja vtaResConv9TestBundleProfiling
+    - ninja vtaResConv10TestBundleProfiling
+    - cd ..
     - cp build_ci2/* build_ci/ -r
   artifacts:
     paths:
       - build_ci/vta/bundles
       - build_ci/examples
-  tags:
-    - etri
 
 build-autotune-publish:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - PWD=`pwd`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - rm -rf build_ci/*
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON -DNESTC_EVTA_PROFILE_AUTOTUNE=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv1TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv2TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv3TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv4TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv5TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv6TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv7TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv8TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv9TestBundleProfiling"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja vtaResConv10TestBundleProfiling"
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_OPENCL_TEST=ON -DNESTC_RELAY_TARGET_MALI=ON -DNESTC_TARGET_AARCH64=ON -DNESTC_EVTA_PROFILE_AUTOTUNE=ON
+    - ninja vtaResConv1TestBundleProfiling
+    - ninja vtaResConv2TestBundleProfiling
+    - ninja vtaResConv3TestBundleProfiling
+    - ninja vtaResConv4TestBundleProfiling
+    - ninja vtaResConv5TestBundleProfiling
+    - ninja vtaResConv6TestBundleProfiling
+    - ninja vtaResConv7TestBundleProfiling
+    - ninja vtaResConv8TestBundleProfiling
+    - ninja vtaResConv9TestBundleProfiling
+    - ninja vtaResConv10TestBundleProfiling
   when: manual
   artifacts:
     paths:
       - build_ci/vta/bundles
       - build_ci/examples
-  tags:
-    - etri
-
-
 
 build-multievta:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_EVTA_MULTI=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_multievta"
-    - du -h -d 1
-  tags:
-    - etri
-
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_EVTA_MULTI=ON
+    - ninja check_multievta
 
 build-vtaconv:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_EVTA_GRAPH_OPT=ON"
-    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
-    - du -h -d 1
-  tags:
-    - etri
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_EVTA_GRAPH_OPT=ON
+    - cat ../nestc_tests/nestc_vta_bundle_tests.txt | xargs -I {} ninja {}
+    - cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}
+    - ninja check_nestc
 
 build-openedge:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_OPENEDGE=ON -DNESTC_WITH_ENLIGHT=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja resnet50_openedgeBundle; ninja enlightConvBundle; ninja onnxYamlParserValTestBunddle"
-    - du -h -d 1
-  tags:
-    - etri
-
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_OPENEDGE=ON -DNESTC_WITH_ENLIGHT=ON
+    - ninja resnet50_openedgeBundle; ninja enlightConvBundle; ninja onnxYamlParserValTestBunddle
 
 build-debug:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Debug -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_VTA_INTERPRETER_FUSION=ON -DGLOW_VTA_FUSION=ON"
-    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja tvm"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc"
-    - du -h -d 1
-  tags:
-    - etri
-
-
-
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Debug -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_VTA_INTERPRETER_FUSION=ON -DGLOW_VTA_FUSION=ON
+    - cat ../nestc_tests/nestc_build_tests.txt | xargs -I {} ninja {}
+    - ninja tvm
+    - ninja check_nestc
 
 build-without-VTA:
-  stage: build
-  image: docker:latest
-  services:
-    - docker:18.09.7-dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
-    - du -h -d 1
-  tags:
-    - etri
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON
+    - ninja all
   allow_failure: true
 
 build_bnn:
-  stage: build
-  image: docker:latest
-  services:
-    - docker:18.09.7-dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_BNN=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check_nestc;"
-    - du -h -d 1
-
-
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=ON -DNESTC_BNN=ON
+    - ninja check_nestc
 
 build-all:
-  stage: build
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
+  extends: .builds
   script:
-    - df -h
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - DATE=`date '+%Y%m%d'`
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - cd ../../
-    - mkdir -p build_ci
-    - ls
-    - rm -rf build_ci/*
-    - df -h
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker images
-    - docker volume ls
-    - docker ps -a
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
-    - du -h -d 1
-  tags:
-    - etri
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_EVTA=ON -DGLOW_WITH_STC=ON
+    - ninja all
   allow_failure: true
 
 test-all:
+  extends: .builds
   stage: test
-  image: docker:latest
-  services:
-    #    - docker:19.03.7-dind
-    - docker:18.09.7-dind
-  #    - docker:dind
   script:
-    - PWD=`pwd`
-    - echo $PWD
-    - ls -al
-    - cd utils/docker
-    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-    - cd ../../
-    - mkdir -p build_ci
-    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-    - docker start build
-    - docker exec build sh -c "ls;cd build_ci; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_VTA=ON -DGLOW_WITH_STC=ON"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja all;"
-    - docker exec build sh -c ". /root/dev/utils/docker/ev.txt; cd build_ci; ninja check"
+    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_VTA=ON -DGLOW_WITH_STC=ON
+    - ninja all
+    - ninja check
   when: manual
   allow_failure: true
-  tags:
-    - etri
 
 #build-newton:
-#  stage: build
-#  image: docker:latest
-#  services:
-#    #    - docker:19.03.7-dind
-#    - docker:18.09.7-dind
-#  #    - docker:dind
+#  extends: .builds
 #  script:
-#    - git submodule update --init --recursive glow
-#    - git submodule update --init --recursive external_libs/newton
-#    - df -h
-#    - PWD=`pwd`
-#    - echo $PWD
-#    - ls -al
-#    - DATE=`date '+%Y%m%d'`
-#    - cd utils/docker
-#    - docker login registry.gitlab.com -u ${CI_REGISTRY_USER} -p ${CI_REGISTRY_PASSWORD}
-#    - docker pull $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest || true
-#    - docker images
-#    - docker volume ls
-#    - docker ps -a
-#    - cd ../../
-#    - mkdir -p build_ci
-#    - ls
-#    - rm -rf build_ci/*
-#    - df -h
-#    - docker create --name build -i -v $PWD:/root/dev $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_NAME:latest
-#    - docker images
-#    - docker volume ls
-#    - docker ps -a
-#    - docker start build
-#    - docker exec build sh -c "update-alternatives --set cc /usr/bin/gcc; update-alternatives --set c++ /usr/bin/g++"
-#    - docker exec build sh -c "ls;cd build_ci; rm -rf *; cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=OFF -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_NEWTON=ON"
-#    - docker exec build sh -c "cd build_ci; cat ../nestc_tests/nestc_newton_tests.txt | xargs -I {} ninja {}"
-#    - du -h -d 1
-#  tags:
-#    - etri
+#    - update-alternatives --set cc /usr/bin/gcc; update-alternatives --set c++ /usr/bin/g++
+#    - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=OFF -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON -DGLOW_WITH_BUNDLES=ON -DNESTC_WITH_NEWTON=ON
+#    - cat ../nestc_tests/nestc_newton_tests.txt | xargs -I {} ninja {}
 
 publish:
   stage: publish
