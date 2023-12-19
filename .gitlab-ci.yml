@@ -1,5 +1,4 @@
 stages:
-  - temp
   - check
   - build
   - publish
@@ -36,15 +35,6 @@ check-dco:
     - export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
   tags:
     - etri-compute
-
-test-board:
-  stage: temp
-  script:
-    - id
-    - pwd
-    - uname -a
-  tags:
-    - etri-board
 
 build:
   extends: .builds
@@ -174,6 +164,16 @@ test-all:
     - ninja check
   when: manual
   allow_failure: true
+
+# TODO: Add proper command scripts
+test-board:
+  stage: test
+  script:
+    - id
+    - pwd
+    - uname -a
+  tags:
+    - etri-board
 
 #build-newton:
 #  extends: .builds
