@@ -1,4 +1,5 @@
 stages:
+  - temp
   - check
   - build
   - publish
@@ -35,6 +36,15 @@ check-dco:
     - export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
   tags:
     - etri-compute
+
+test-board:
+  stage: temp
+  script:
+    - id
+    - pwd
+    - uname -a
+  tags:
+    - etri-board
 
 build:
   extends: .builds
