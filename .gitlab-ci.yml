@@ -183,7 +183,10 @@ test-board:
     - sudo make check_zcu102
   tags:
     - etri-board
-  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - when: manual
+      allow_failure: true
 
 #build-newton:
 #  extends: .builds
