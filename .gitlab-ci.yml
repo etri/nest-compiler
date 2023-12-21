@@ -24,8 +24,7 @@ check-dco:
     - echo $CI_PROJECT_DIR
     - pwd
     - ls -al
-    - mkdir -p build_ci
-    - rm -rf build_ci/*
+    - mkdir build_ci
     - cd build_ci
     - export TVM_HOME=$CI_PROJECT_DIR/tvm
     - export DMLC_CORE=$CI_PROJECT_DIR/tvm/3rdparty/dmlc-core
@@ -165,15 +164,26 @@ test-all:
   when: manual
   allow_failure: true
 
-# TODO: Add proper command scripts
 test-board:
   stage: test
-  script:
-    - id
+  before_script:
+    - echo $CI_PROJECT_DIR
     - pwd
-    - uname -a
+    - ls -al
+    - mkdir build_ci
+    - cd build_ci
+    - export TVM_HOME=$CI_PROJECT_DIR/tvm
+    - export DMLC_CORE=$CI_PROJECT_DIR/tvm/3rdparty/dmlc-core
+    - export TVM_BUILD_PATH=$CI_PROJECT_DIR/build_ci/tvm
+    - export TVM_LIBRARY_PATH=$CI_PROJECT_DIR/build_ci/tvm
+    - export PATH=$CI_PROJECT_DIR/build_ci/tvm:$PATH
+    - export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
+  script:
+    - cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DCMAKE_BUILD_TYPE=Release -DNESTC_USE_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=ON -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON ..
+    - sudo make check_zcu102
   tags:
     - etri-board
+  allow_failure: true
 
 #build-newton:
 #  extends: .builds
