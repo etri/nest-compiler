@@ -179,14 +179,16 @@ test-board:
     - export PATH=$CI_PROJECT_DIR/build_ci/tvm:$PATH
     - export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
   script:
-    - cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DCMAKE_BUILD_TYPE=Release -DNESTC_USE_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=ON -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON ..
+    - sudo cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DCMAKE_BUILD_TYPE=Release -DNESTC_USE_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=ON -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON ..
     - sudo make check_zcu102
   tags:
     - etri-board
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      when: on_success
-    - when: manual
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+      when: manual
       allow_failure: true
 
 #build-newton:
