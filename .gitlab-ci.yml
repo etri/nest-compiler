@@ -194,9 +194,11 @@ test-board:
   tags:
     - etri-board
   rules:
-    - if: $CI_PIPELINE_SOURCE != "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
       when: manual
-      allow_failure: true
 
 #build-newton:
 #  extends: .builds
