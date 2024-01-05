@@ -4,7 +4,7 @@
 	ignore = dirty
 [submodule "vta/vtalib"]
 	path = vta/vtalib
-	url = ../vta_lib
+	url = https://gitlab.com/ones-ai/vta_lib.git
 	ignore = dirty
 [submodule "tvm"]
 	path = tvm
