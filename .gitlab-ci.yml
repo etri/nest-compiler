@@ -20,7 +20,7 @@ check-dco:
   stage: check
   image: onesai1/dco-check:latest
   script:
-    - python3 check-dco.py
+    - check-dco
 
 .builds:
   stage: build
