@@ -18,11 +18,8 @@ workflow:
 
 check-dco:
   stage: check
-  image: docker:latest
-  before_script:
-    - apk update && apk add python3 git wget
+  image: onesai1/dco-check:latest
   script:
-    - wget https://gitlab.com/yongin.kwon/dco-check/-/raw/master/check-dco.py
     - python3 check-dco.py
 
 .builds:
