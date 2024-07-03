@@ -3,16 +3,13 @@
 
 ## Contacts
 ### PI
-* taehokim@etri.re.kr
+* yongin.kwon@etri.re.kr
 ### Developers
 * msyu@etri.re.kr
 * yongin.kwon@etri.re.kr
 * leejaymin@etri.re.kr
 * jeman@etri.re.kr
     
-## cConf
-
-
 ## Overview  
 
 [![Video Label](https://img.youtube.com/vi/lxHYEtAfhrs/0.jpg)](https://youtu.be/lxHYEtAfhrs?t=0s)
