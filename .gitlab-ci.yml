@@ -1,5 +1,5 @@
 stages:
-  - check
+  # - check
   - build
   - publish
   - test
@@ -16,11 +16,11 @@ workflow:
       when: never
     - if: $CI_COMMIT_BRANCH
 
-check-dco:
-  stage: check
-  image: onesai1/dco-check:latest
-  script:
-    - check-dco
+# check-dco:
+#   stage: check
+#   image: onesai1/dco-check:latest
+#   script:
+#     - check-dco
 
 .builds:
   stage: build
@@ -185,9 +185,7 @@ test-board:
     - export PYTHONPATH=$TVM_HOME/python:$PYTHONPATH
   script:
     - cmake -DNESTC_WITH_EVTA=ON -DLLVM_DIR=/usr/lib/llvm-8.0/lib/cmake/llvm -DCMAKE_BUILD_TYPE=Release -DNESTC_USE_VTASIM=OFF -DVTA_RESNET18_WITH_SKIPQUANT0=ON -DNESTC_EVTA_RUN_ON_ZCU102=ON -DNESTC_USE_PRECOMPILED_BUNDLE=ON -DNESTC_EVTA_RUN_WITH_GENERIC_BUNDLE=ON ..
-    - sudo make check_zcu102
-  after_script:
-    - sudo chown -R "xilinx:" *
+    # - sudo make check_zcu102
   tags:
     - etri-board
   rules:

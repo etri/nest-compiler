@@ -61,10 +61,24 @@ The objective of NEST-C is to generate optimized code for various kinds of Neura
 
 ## Partners
 
-Contributions to NEST-C are welcomed and encouraged! 
+We are proud to collaborate with the following companies on our open-source project:
+
+<a href="https://www.skhynix.com/"><img src="https://mis-prod-koce-skhynixhomepage-cdn-01-ep.azureedge.net/img/content/img_ci01.png" height="80"></a>
+&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://www.openedges.com/"><img src="https://static.wixstatic.com/media/fcd3ed_8d00a2b4d2a544cbbbe4c260c105a0a6~mv2.png/v1/fill/w_322,h_80,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/openEdges_logo_basic2.png" height="50"></a>
+
+<a href="https://neowine.com/"><img src="https://neowine.com/theme/a03/img/logo.gif" height="60"></a>
+&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://www.nextchip.com/"><img src="https://www.nextchip.com/images/common/footer_logo.png" height="60"></a>
+
+<a href="https://aimfuture.ai/"><img src="https://aimfuture.ai/wp-content/uploads/aimlogo_dark.svg" height="30"></a>
+&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://surromind.ai/"><img src="https://surromind.ai/images/common/logoGrayFooter.png" height="30"></a>
+
+We appreciate their support and contributions to our project. Click on the logos to learn more about each partner and their involvement with our project.
+
+Contributions to NEST-C are welcomed and encouraged!
 
 ## License
 
 NEST-C is licensed under the [Apache 2.0 License](LICENSE).
-
-
