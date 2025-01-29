@@ -66,6 +66,10 @@ add_custom_command(
     -model-input=${MODEL_INPUT_NAME},float,[1,1,28,28]
     -backend=CPU -emit-bundle=${QUANTIZED_BUNDLE_OUTPUT_DIRECTORY}
     -bundle-api=static
+    -quantization-schema=symmetric_with_power2_scale
+    -instrument-debug
+    -instrument-debug-format=rawbin
+    -dump-graph-DAG=opt.dot
   DEPENDS
     model-compiler LeNetMnistBundleDir
 )
