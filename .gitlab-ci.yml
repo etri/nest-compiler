@@ -50,7 +50,16 @@ build-mnist:
     - ls ./glow/
     - ls ./glow/bundles/
     - ls ./glow/bundles/quantized_lenet_mnist/
-    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../nest-compiler/glow/tests/images/mnist/5_1087.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/0_1009.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/1_1008.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/2_1065.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/3_1020.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/4_1059.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/5_1087.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/6_1099.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/7_1055.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/8_1026.png
+    - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../glow/tests/images/mnist/9_1088.png
     - ls ../ -al
     - ls -al
 
