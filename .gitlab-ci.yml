@@ -45,6 +45,10 @@ build-mnist:
   script:
     - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=OFF -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON
     - ninja QuantizedLeNetMnistBundleNet
+    - ls ../ -al
+    - ls -al
+    - ls ./glow/
+    - ls ./glow/bundles/
     - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../nest-compiler/glow/tests/images/mnist/5_1087.png
     - ls ../ -al
     - ls -al
