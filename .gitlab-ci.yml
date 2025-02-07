@@ -49,6 +49,7 @@ build-mnist:
     - ls -al
     - ls ./glow/
     - ls ./glow/bundles/
+    - ls ./glow/bundles/quantized_lenet_mnist/
     - ./glow/bundles/quantized_lenet_mnist/QuantizedLeNetMnistBundle ../nest-compiler/glow/tests/images/mnist/5_1087.png
     - ls ../ -al
     - ls -al
