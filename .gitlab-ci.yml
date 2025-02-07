@@ -44,7 +44,7 @@ build-mnist:
   extends: .builds
   script:
     - cmake -G Ninja ../ -DCMAKE_BUILD_TYPE=Release -DNESTC_WITH_EVTA=OFF -DNESTC_EVTA_BUNDLE_TEST=ON -DGLOW_WITH_BUNDLES=ON
-    - ninja QuantizedLeNetMnistBundleNet
+    - ninja QuantizedLeNetMnistBundle
     - ls ../ -al
     - ls -al
     - ls ./glow/
